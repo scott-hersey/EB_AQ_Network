@@ -1,0 +1,203 @@
+
+
+
+New try to merge wind data from site 62 together with general data from site 72. Problem is that timestamps are not the same. 
+
+
+
+loading and preparing data
+```{r}
+library(anytime)
+library(dplyr)
+library(lubridate)
+library(zoo)
+# downloading the two datasets and formatting timeseries
+dev72 <- read.csv("SN00072_26feb19-26feb20.csv", header = TRUE)
+dev62 <- read.csv("WIND_62_26feb19-26feb20.csv", header = TRUE)
+
+# really inefficient way of formating to date-time, find better way?
+dev72$timestamp_local <- anytime(as.factor(dev72$timestamp_local))
+dev62$timestamp_local <- anytime(as.factor(dev62$timestamp_local))
+
+# subsetting relevant data from dev62
+dev62 <- select(filter(dev62, X > 0), c(timestamp_local,wind_speed,wind_dir))
+```
+
+
+plot of dev62 winddata to be compared later
+```{r}
+plot(dev62$timestamp_local,dev62$wind_speed, type = "l")
+```
+
+Further preparations for left join with rounded values
+```{r}
+
+# rounding to minute
+dev62$timestamp_local_min <- round_date(dev62$timestamp_local, unit = "minute")
+
+dev72$timestamp_local_min <- round_date(dev72$timestamp_local, unit = "minute")
+ 
+# removing duplicates, simple approach
+dev62 <- dev62[!duplicated(dev62$timestamp_local_min), ]
+dev72 <- dev72[!duplicated(dev72$timestamp_local_min), ]
+ 
+# controling lack of duplicates
+sum(duplicated(dev62$timestamp_local_min ))
+sum(duplicated(dev72$timestamp_local_min ))
+
+```
+
+Cleaning up data, removing outliers as defined from what is likely
+```{r}
+dev62$wind_dir <- invisible(replace(dev62$wind_dir, dev62$wind_dir > 360, NA))
+summary(dev62$wind_dir)
+
+dev62$wind_speed <- invisible(replace(dev62$wind_speed, dev62$wind_speed > 30, 30))
+dev62$wind_speed <- invisible(replace(dev62$wind_speed, dev62$wind_speed < 0, 0))
+summary(dev62$wind_speed)
+
+dev72$pressure <- invisible(replace(dev72$pressure, dev72$pressure > 120000, 120000))
+dev72$pressure <- invisible(replace(dev72$pressure, dev72$pressure < 90000, 90000))
+summary(dev72$pressure)
+
+dev72$temp_manifold  <- invisible(replace(dev72$temp_manifold , dev72$temp_manifold > 40, 40))
+summary(dev72$temp_manifold)
+
+```
+
+Again plotting wind speed from dev62 after cleaning
+```{r}
+plot(dev62$timestamp_local,dev62$wind_speed, type = "l")
+
+```
+
+
+Direct merge and rounded merge (left joins)
+```{r}
+#direct merge
+merger_direct <-  merge(dev72,
+                        dev62,
+                        by = "timestamp_local",
+                        all.x = TRUE)
+
+"missing timestamps"; sum(is.na(merger_direct$timestamp_local == FALSE))
+"original amount of values"; length(dev62$wind_speed)
+"number of matches"; sum(is.na(merger_direct$wind_dir.y) == FALSE)
+# extremely low number of matches
+
+
+# rounded merge 
+merger_rounded <- merge(dev72,
+                        dev62,
+                        by = "timestamp_local_min",
+                        all.x = TRUE)
+
+"missing timestamps"; sum(is.na(merger_rounded$timestamp_local == FALSE))
+
+"original amount of values"; length(dev62$timestamp_local)
+
+"original amount of values"; length(dev72$timestamp_local)
+
+
+"current amount of values"; length(merger_rounded$timestamp_local.y)
+length(merger_rounded$timestamp_local_min)
+"number of matches"; sum(is.na(merger_rounded$wind_speed.y) == FALSE)
+# much greater retention of data
+```
+
+Removing NAs, carrying forward or filling in leading with 0
+```{r}
+# Filling in wind data blanks with last observer value with na.locf from zoo package
+merger_direct$wind_speed.y <- zoo::na.locf(merger_direct$wind_speed.y, na.rm = FALSE)
+merger_direct$wind_speed.y<-replace(merger_direct$wind_speed.y,
+                                    is.na(merger_direct$wind_speed.y),
+                                    0)
+
+merger_direct$wind_dir.y <- zoo::na.locf(merger_direct$wind_dir.y, na.rm = FALSE)
+merger_direct$wind_dir.y<-replace(merger_direct$wind_dir.y,
+                                    is.na(merger_direct$wind_dir.y),
+                                    0)
+
+merger_rounded$wind_speed.y <- zoo::na.locf(merger_rounded$wind_speed.y, na.rm = FALSE)
+merger_rounded$wind_speed.y<-replace(merger_rounded$wind_speed.y,
+                                    is.na(merger_rounded$wind_speed.y),
+                                    0)
+
+merger_rounded$wind_dir.y <- zoo::na.locf(merger_rounded$wind_dir.y, na.rm = FALSE)
+merger_rounded$wind_dir.y <-replace(merger_rounded$wind_dir.y,
+                                    is.na(merger_rounded$wind_dir.y),
+                                    0)
+
+# are there any NAs left?
+sum(is.na(merger_direct$wind_dir.y))
+sum(is.na(merger_direct$wind_speed.y))
+
+
+sum(is.na(merger_rounded$wind_dir.y))
+sum(is.na(merger_rounded$wind_speed.y))
+
+# no, good.
+
+
+```
+
+plotting series one, examplification of above work
+```{r}
+# original, only dev72 data
+plot(dev72$timestamp_local,dev72$wind_dir, type = "l")
+
+#direct merge, extrapolated with na.locf
+plot(merger_direct$timestamp_local,merger_direct$wind_speed.y, type = "l")
+
+#rounded merge, extrapolated with na.locf
+plot(merger_rounded$timestamp_local.x,merger_rounded$wind_speed.y, type = "l")
+
+
+
+```
+
+Metereological time series plots
+```{r}
+rmf <- merger_rounded
+
+#wind speed, from device 62
+plot(rmf$timestamp_local.x,rmf$wind_speed.y, type = "l")
+
+#wind direction, from device 62
+plot(rmf$timestamp_local.x,rmf$wind_dir.y, type = "l")
+
+# temp manifold
+plot(rmf$timestamp_local.x,rmf$temp_manifold, type = "l")
+
+# pressure
+plot(rmf$timestamp_local.x,rmf$pressure, type = "l")
+
+```
+
+WindRose, polarRose plot
+```{r}
+library(openair)
+
+rmf$ws <- rmf$wind_speed.y 
+rmf$wd <- rmf$wind_dir.y
+
+windRose(rmf, breaks = c(0,2,4,6))
+windRose(rmf, breaks = c(0,2,4,6,8,10))
+windRose(rmf, type = "bin0")
+
+#what are some reasonable breaks?
+
+pollutionRose(rmf, pollutant = "co_we" )
+# the 600-800 interval is vastly the greatest
+
+pollutionRose(rmf, pollutant = "bin0")
+
+
+
+```
+
+polarplot 
+```{r}
+polarPlot(rmf, pollutant = "bin1")
+polarPlot(rmf, pollutant = "co_we")
+```
