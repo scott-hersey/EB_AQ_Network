@@ -215,12 +215,9 @@ data, we also see a spike on December 31st.
 Future Uses
 -----------
 
-I think that these data points should be filtered out for the time
-being. I think that this is the right step, because for Jan 1, we’ve
-identified the source of the abnormality and know that it is not a
-relevant factor for the phenomenon that we’re studying. For now, I think
-we should leave July out as well because of the fact that there’s too
-few points to draw conclusions from it.
+I think we should filter out antropogenic data like January 1st when we do analysis on the dataset as a whole, or as part of a bigger time series. 
+
+Furthermore, when we start doing monthly types of analysis for the whole suite, we should do a summary of each sensor before anything else. This would include : number of data points, the mean, and the standard deviation- all for each month of the data for each sensor. 
 
 ------------------------------------------------------------------------
 
@@ -348,6 +345,8 @@ distributed in all directions. It also seems like where there are high
 co concentrations differs by month. At the moment I don’t think I can
 draw a conclusion from this.
 
+update: it could be evenly distributed because the co data starts at around 300-400, but the plots always start at 0.
+
 Future Uses
 -----------
 
@@ -357,6 +356,8 @@ concentrations.
 
 However, more work needs to be done to understand the PM 2.5 and CO
 plots.
+
+update: Take this analysis with a grain of salt now, because the wind speed and wind direction data might not be accurate, which would change the graphs. 
 
 ------------------------------------------------------------------------
 
