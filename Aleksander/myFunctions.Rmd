@@ -1,0 +1,203 @@
+---
+title: "Comparing devices to downloaded wind data, with functions"
+output: html_notebook
+---
+
+
+
+General function for loading in data
+```{r}
+ 
+get_device <- function(raw.file, final.file, myName){
+  # pulling in raw data
+  myRaw  <- read_csv(raw.file)
+  tz(myRaw$timestamp_local) <- "EST"
+  names(myRaw)[names(myRaw) == "wind_dir"] <- "wd"
+  names(myRaw)[names(myRaw) == "wind_speed"] <- "ws"
+
+  #final data
+  myFinal <- read_csv(final.file)
+  tz(myFinal$timestamp_local) <- "EST"
+
+  #selecting relevant vectors from final file
+  myFinal <- myFinal %>% select(c(timestamp_local,
+                              pm1,
+                              pm25,
+                              pm10))
+  #merging together
+  result <- raw_final_merge(myRaw, myFinal) 
+
+  #adding a "name" column
+  name <- rep(myName, length(result$timestamp_local))
+  result$name <- name
+  
+  return(result)
+}
+
+```
+
+
+Function for left merge of raw and final data for two files. Left merge = the whole first data frame will be conserved.  
+```{r}
+raw_final_merge <- function(d1,d2) { 
+  #requires timestamp_local in both data frames  
+  
+  # merge 
+  d.merge <- merge(d1, 
+                   d2,
+                   by = "timestamp_local",
+                   all.x = TRUE)
+  
+  return(d.merge)
+}
+
+```
+
+
+Function for cleaning wind speed and wind direction data
+```{r}
+wind_clean <- function(df) {
+  # requires wind direction named wd, in degrees
+  # requires wind speed named ws, in m/s 
+  
+  # removing wind direction values  x < 0 , x > 360
+  df$wd <- invisible(replace(df$wd, df$wd > 360,  NA))
+  df$wd <- invisible(replace(df$wd, df$wd < 0,  NA)) 
+  
+  # removing wind speed values x < 0, x > 30
+  df$ws <- invisible(replace(df$ws, df$ws > 30, 0))
+                              
+  df$ws <- invisible(replace(df$ws, df$ws < 0, 0)) 
+  return(df)
+   
+}
+```
+
+
+hour_mean <- creates a new data frame with all columns averaged by hour
+```{r}
+hour_mean <- function(df){
+  library(lubridate)
+  #requires the timestamp_local name by df
+  df$hour <- round_date(df$timestamp_local,  
+                        unit = "hour")
+   
+  myAgg.h <- aggregate(list(df$wd,df$ws), by = list(df$hour), FUN = mean, na.rm = TRUE)
+
+  names(myAgg.h)[1] <- "timestamp_local"
+  names(myAgg.h)[2] <- "wd"
+  names(myAgg.h)[3] <- "ws"  
+  return(myAgg.h)
+}
+
+```
+
+
+time averaging method
+As it is now, does only average ws and wd, more could be added. 
+```{r}
+average_by <- function(df, by = "30 minutes") {
+  # averages a data frame by a given time range, returns new data frame with mean values of averaging
+  # requires name "timestamp_local"
+  
+  # creates column with averaged minute values that can be used in aggregate
+  library(lubridate) 
+  df$mins <- lubridate::round_date(df$timestamp_local, by)
+  
+  # aggregating on above genereated column
+  myAgg <- aggregate(list(df$wd, df$ws), by = list(df$mins), FUN = mean, na.rm = TRUE)
+  
+  names(myAgg)[1] <- "timestamp_local"
+  names(myAgg)[2] <- "wd"
+  names(myAgg)[3] <- "ws"
+
+  return(myAgg)
+}
+
+```
+
+
+Merging a device and downloaded data on timestamps
+```{r}
+dev_down_merge <- function(dev, off) {
+  # should be on the same time interval after proper use of aggregate methods
+  
+  merge(dev,
+        off,
+        by = "timestamp_local"
+        )
+}
+
+
+```
+
+Correlation analysis
+```{r}
+
+correlation <- function(df) {
+# needs two data frames with ws and wd on the same time interval
+# needs a name column from device data frame 
+
+# wind speed  
+mod1.ws <- lm( df$ws.y ~ df$ws.x )
+modsum.ws <- summary(mod1.ws)
+r2.ws <- modsum.ws$adj.r.squared 
+  
+  
+plot(df$ws.x,
+     df$ws.y,
+     xlim = c(0,25),
+     ylim = c(0, 25),
+     main = df$name[1],
+     xlab = "device wind speed  m/s",
+     ylab = "downloaded wind speed m/s",
+     pch = 20,
+     type = 'p') 
+
+grid()
+abline(0,1, col = "red")
+abline(mod1.ws, col = "blue")
+legend(1,25, legend = c("1:1","fitted line"), col = c("red","blue"), lty=1:1, cex = 0.8)
+
+mylabel.ws = bquote(italic(R)^2 == .(format(r2.ws, digits = 3)))
+text(x = 10, y = 23, labels = mylabel.ws)
+
+
+# wind direction
+mod1.wd <- lm( df$wd.y ~ df$wd.x )
+modsum.wd <- summary(mod1.wd)
+r2.wd <- modsum.wd$adj.r.squared 
+
+plot(df$wd.x,
+     df$wd.y,
+     xlim = c(0,400), 
+     ylim = c(0, 400),
+     main = df$name[1],
+     xlab = "device wind direction  degrees",
+     ylab = "downloaded winddirection  degrees",
+     pch = 1,
+     type = 'p') 
+
+grid() 
+abline(0,1, col = "red")
+abline(mod1.wd, col = "blue")
+legend(300,100, legend = c("1:1","fitted line"), col = c("red","blue"), lty=1:1, cex=0.8)
+
+mylabel.wd = bquote(italic(R)^2 == .(format(r2.ws, digits = 3)))
+text(x = 10, y = 23, labels = mylabel.wd)
+
+cor.df <- data.frame(df$ws.x,
+                     df$ws.y,
+                     df$wd.x,
+                     df$wd.y
+                     )
+
+corPlot(cor.df)
+
+}
+
+```
+
+
+
+
