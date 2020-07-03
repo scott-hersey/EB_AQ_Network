@@ -1,0 +1,257 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+# Setting up workspace 
+
+importing necessary packages :
+
+```{r message=FALSE, warning=FALSE}
+library(plyr)  #for importing excel
+library(dplyr)
+library(lubridate) #for time zones
+library(data.table)
+library(openair)
+
+
+#library(dlpR)
+library(astrochron)
+library(signal)
+
+library(ggplot2)
+
+library(plotrix)
+```
+
+
+```{r setup}
+knitr::opts_knit$set(root.dir = 'C:\\Users\\abusa\\Documents') #change this to your own directory
+```
+
+```{r}
+sn45 <- read.csv("sn45.csv") # import
+sn45$date <- ymd_hms(sn45$date) #format
+sn45$X.1 <- NULL #get rid of index columns
+sn45$X <- NULL
+```
+
+# Setting up analysis points 
+
+Below I create sub-datasets of the times that Eben reviewed in his notes to us. 
+
+```{r}
+oct_dat <- selectByDate(
+  sn45,
+  start = "5/10/2019",
+  end = "17/10/2019"
+)
+
+oct_period1 <- selectByDate(sn45,
+                            start = "5/10/2019",
+                            end = "8/10/2019")
+
+oct6 <-selectByDate(sn45, 
+                    start = "6/10/2019",
+                    end="6/10/2019"
+                    ) 
+septoct_period2 <- selectByDate(
+  sn45, 
+  start = "20/9/2019", 
+  end = "11/10/2019"
+)
+
+septoct_period3 <- selectByDate(
+  sn45,
+  start = "20/9/2019",
+  end = "28/9/2019"
+)
+```
+
+# Initial Observations 
+
+calculate hourly mean and std 
+
+```{r}
+sn45$date <- ymd_hms(sn45$date)
+hourly_mean <- timeAverage(
+  sn45[, c("no2", "no", "o3", "date", "rh_manifold", "temp_manifold")],
+  avg.time = "hour",
+  statistic = "mean"
+)
+
+#hourly_mean$month <-  month(ymd_hms(hourly_mean$date)) #creating a month column
+
+hourly_sd <- timeAverage(
+  sn45[, c("no2", "no", "o3", "date", "rh_manifold", "temp_manifold")],
+  avg.time = "hour",
+  statistic = "sd"
+)
+
+#hourly_sd$month <-  month(ymd_hms(hourly_sd$date))
+
+```
+# Plot Slope 
+
+```{r}
+
+sn45$diffrh <- c(0,diff(sn45$rh_manifold))
+sn45$diffno <- c(0,diff(sn45$no))
+
+
+plot(sn45$diffrh, sn45$diffno)
+par(new=TRUE)
+abline(v=5)
+par(new=TRUE)
+abline(h=300)
+par(new=TRUE)
+abline(v=-5)
+par(new=TRUE)
+abline(h=-300)
+
+```
+So, usually, when RH is changing really fast, NO isn't- and viceversa. NO varies a lot more than RH.
+
+```{r}
+plot(sn45$diffrh, sn45$diffno, xlim=c(-7,7), ylim=c(-350,350))
+```
+So, we can see when RH changes by a factor of 2 and above (even 1.5), there is little variation in NO. However, when there is slight variation in RH values, there can be a lot of variation in NO. 
+
+Update: This isn't a method we can use by itself. It shows how variable NO is compared to RH, but it doesn't capture the bigger oscillations which we need to filter out.
+
+
+## Plotting a filter based on the graph from above
+
+
+```{r}
+source("creategraph.R")
+
+#below is one method I used to create a marked "filter this" column
+#later on, I use a better method
+
+sn45$filtered <- seq(0,0,length.out=length(sn45$no2))  # create column of zeros
+sn45$filtered[which(sn45$diffrh > 2 & sn45$diffno < 50)] <- 1 #set variable to 1 if meets the filtering condition
+
+septoct_period3$filtered <- seq(0,0,length.out=length(septoct_period3$no2)) #doing the same for another sub-dataset
+septoct_period3$filtered[which(septoct_period3$diffrh > 2 & septoct_period3$diffno < 50)] <- 1
+
+oct_period1$filtered <- seq(0,0,length.out=length(oct_period1$no2))  #again, for another one
+oct_period1$filtered[which(oct_period1$diffrh > 2 & oct_period1$diffno < 50)] <- 1
+
+#create graphs for validation
+creategraph(sn45)
+creategraph(septoct_period3)
+creategraph(oct_period1)
+```
+
+After seeing that it didn't catch trends, I thought of doing a lag of 50. This doesn't tell the whole story (it will catch steady rises and oscillations the same), so we can't use it.
+
+```{r}
+
+sn45$diffrh50 <- diff(sn45$rh_manifold, lag = 50)
+sn45$diffno50 <- diff(sn45$no, lag= 50)
+
+
+
+```
+Even if we could use this, the length of the vector is different so we would have to work around that. 
+
+
+
+# Let's also try flagging the datapoints' z scores
+
+```{r}
+library(tidyr)
+
+
+#creating df of averaged data
+hourly_mean_P3 <- timeAverage(
+  septoct_period3[, c("no2", "no", "o3", "date", "rh_manifold", "temp_manifold")],
+  avg.time = "hour",
+  statistic = "mean"
+)
+
+
+#creating df of standard deviation of data
+hourly_sd_P3 <- timeAverage(
+  septoct_period3[, c("no2", "no", "o3", "date", "rh_manifold", "temp_manifold")],
+  avg.time = "hour",
+  statistic = "sd"
+)
+
+
+#converting vector types to integer type
+hourly_mean_P3$no2 <- as.double(hourly_mean_P3$no2)
+hourly_mean_P3$no <- as.double(hourly_mean_P3$no)
+hourly_mean_P3$rh_manifold <- as.double(hourly_mean_P3$rh_manifold)
+hourly_mean_P3$temp_manifold <- as.double(hourly_mean_P3$temp_manifold)
+hourly_mean_P3$o3 <- as.double(hourly_mean_P3$o3)
+
+#transforming the df to be 1 minute intervals, and upsample
+hourly_mean_P3 <- hourly_mean_P3 %>%
+  mutate(date = ymd_hms(date)) %>% #make sure date is in right format
+  complete(date = seq(min(date), max(date),  by = "1 min")) %>% #make 1 minute intervals
+  fill(c("no2", "no", "rh_manifold", "temp_manifold", "o3")) %>% # upsample
+  setnames(c('no2', 'no', 'rh_manifold', 'temp_manifold', 'o3'), c('mean_no2', 'mean_no', 'mean_rh', 'mean_temp', 'mean_o3')) #rename
+
+#same for std
+hourly_sd_P3$no2 <- as.double(hourly_sd_P3$no2)
+hourly_sd_P3$no <- as.double(hourly_sd_P3$no)
+hourly_sd_P3$rh_manifold <- as.double(hourly_sd_P3$rh_manifold)
+hourly_sd_P3$temp_manifold <- as.double(hourly_sd_P3$temp_manifold)
+hourly_sd_P3$o3 <- as.double(hourly_sd_P3$o3)
+
+hourly_sd_P3 <- hourly_sd_P3 %>%
+  mutate(date = ymd_hms(date)) %>%
+  complete(date = seq(min(date), max(date),
+    by = "1 min")) %>%
+  fill(c("no2", "no", "rh_manifold", "temp_manifold", "o3")) %>%
+  setnames(c('no2', 'no', 'rh_manifold', 'temp_manifold', 'o3'), c('sd_no2', 'sd_no', 'sd_rh', 'sd_temp', 'sd_o3'))
+
+#make the original dataframe into 1 minute intervals as well
+septoct_period3 <- septoct_period3 %>%
+  mutate(date = ymd_hms(date)) %>%
+  complete(date = seq(min(date), max(date),
+    by = "1 min"))
+  
+```
+
+
+```{r}
+
+septoct_period3$roundeddate <- round_date(septoct_period3$date, unit="minute") #round the data, so that it's exactly at 1 minute intervals
+mergedP3 <- merge(x=hourly_mean_P3, y= septoct_period3, by.x = "date", by.y = "roundeddate", all.y =TRUE) #merge the hourly data with the main df
+mergedP3 <- merge(x=mergedP3, y= hourly_sd_P3, by = "date", all =TRUE) #merge that df with the standard deviation df
+mergedP3 <- mergedP3[!(is.na(mergedP3$mean_no2) | is.na(mergedP3$pressure) ), ] #clean, remove rows with nans
+mergedP3[, c("no_we", "no_ae", "co_ae", "co_we", "o3_we", "o3_ae", "co2_raw", "lat", "long")] <- NULL # excluding variables we're not using, to make working with the df easier
+
+#creating a column that tells you if the rh is above/below one std of the hourly mean and NO is not (ie if a condition is met for filtering)
+mergedP3$filtered <- ifelse(
+    ( 
+        (mergedP3$rh_manifold > (mergedP3$mean_rh + mergedP3$sd_rh) ) &
+        (mergedP3$rh_manifold > (mergedP3$mean_rh - mergedP3$sd_rh) ) &
+        (mergedP3$no < (mergedP3$mean_no - mergedP3$sd_no) ) & 
+        (mergedP3$no < (mergedP3$mean_no + mergedP3$sd_no))
+    ),
+    1,  # if condition is met, put 1
+    0   # else put 0
+)
+
+
+
+```
+
+```{r}
+plot(mergedP3$date, mergedP3$filtered, type = "l")
+source("creategraph.R")
+creategraph(mergedP3)
+```
+
+
+It look like it is filtering a lot of things. This example is all oscillations from RH, so we should look at another graph to get a better idea of its performance in other situations.
+
+
+
+
+
