@@ -1,0 +1,191 @@
+---
+title: "Test File"
+output: html_notebook
+---
+
+The purpose of this file is to test setting up the environment for analysis. 
+
+Update: This file has work that I did to explore the datsets in June, during the time we were writing the introduction. It contains work which I reference later on, like important functions for importing data, as well as creating summary statistics.
+
+# Setting Up Environment
+
+## Installing necessary packages 
+
+
+```{r message=FALSE, warning=FALSE}
+library(plyr)  #for importing excel
+library(dplyr)
+library(tidyr)
+library(lubridate) #for time zones
+library(data.table)
+library(readxl) #for importing excel
+library(tibble)  #for importing excel
+
+library(openair)
+ library(lattice)
+```
+
+## Setting Directory 
+
+```{r setup}
+knitr::opts_knit$set(root.dir = 'C:\\Users\\abusa\\Documents') #change this to your own directory
+```
+
+## Creating the merged meteorology/quantAQ dataset 
+
+```{r}
+source("creating_maindf.R") #call importing and merging file 
+
+sensorpath <- ".\\Final_Customer\\20200519_final_045.csv" #quantaq data
+asospath <- "asos2.csv" #meteorology data taken from this website : https://mesonet.agron.iastate.edu/request/download.phtml?network=MA_ASOS 
+
+maindf <- creating_maindf(sensorpath, asospath) #create df
+
+write.csv(maindf, file="maindf5minres.csv")
+
+```
+
+
+## Creating the Logan summary data
+
+```{r}
+
+source("extract_Logan_summary.R") 
+
+
+#importing the first chunk of data
+flightdf1 = read.csv("Olin2019dataset.csv", header=TRUE, fileEncoding="UTF-8-BOM")
+
+#formatting datetime
+flightdf1$Date <- with(flightdf1, mdy(Date) + hms(Time), tz = "America/New_York") #combining and setting timezone
+flightdf1$Time <- NULL #deleting the time column
+
+#importing the second chunk of data 
+filename2 <- "OlinFebruaryApril2020dataset.xlsx" #needs to be complete path in order to use in function
+flightdf2 <- extract_Logan_summary(filename2)
+
+#Combining them
+setnames(flightdf1, old = c('AC.Type', 'Flight.ID', 'Reg.No.', 'Dest.Orig'), new = c('AC Type', 'Flight ID', 'Reg No.' , 'Dest/Orig')) # Needed to rename columns in order to use rbind
+flightdf <- rbind(flightdf1, flightdf2) #puts the second df right under the first
+
+write.csv(flightdf, "originalflightdf.csv")
+```
+
+
+
+# Creating Regimes 
+
+```{r}
+maindf <- read.csv("maindf5minres.csv", header = TRUE)
+flightdf <- read.csv("originalflightdf.csv", header=TRUE)
+```
+
+## rounding and only taking those that are within the right timeframe 
+
+```{r}
+#setting up the test dataframe, putting variables in the right format
+test1 <- flightdf
+test1$Date <- parse_date_time(test1$Date, "%y-%m-%d %H:%M:%S", tz="America/New_York")
+
+#rounding the flight data to 1 min resolution
+test1$date5min <- round_date(test1$Date, "1 min")
+
+test1$date5min <- as.character(test1$date5min) #formatting in order to merge
+
+#merge the dataframes
+regtest1 <- merge(x = test1, y = maindf, by.x = "date5min", by.y = "date")
+
+#creating dataframes from that merged dataframe, which represent the different regimes
+
+test1_downw_asc <- regtest1 %>%  #downwind and ascending flights overhead
+  filter(RW == "22L" | RW=="33L", wd >= 158 & wd <= 290, Opr=="A" )
+  
+test1_downw_desc <- regtest1 %>% #downwind and descending flights overhead
+  filter(RW == "22L" | RW=="33L",wd >= 158 & wd <= 290, Opr=="D" )
+
+test1_downw <- regtest1 %>% #downwind and no flights overhead
+  filter( RW != "22L" | RW !="33L", wd >= 158 & wd <= 290 )
+  
+
+#upwind
+var1 <- filter(regtest1, wd <= 158)
+var2 <- filter(regtest1, wd >= 290)
+
+test1_upwind <- rbind(var1, var2)
+  
+```
+
+
+## Creating regimes based on +/- 5 minutes of takeoff  (foverlaps method)
+
+Note that this is still a work in progress.
+
+
+```{r}
+# #creating a test dataset with a start and stop time 
+# test2 <- flightdf 
+# test2$Date <- parse_date_time(test2$Date, "%y-%m-%d %H:%M:%S", tz="America/New_York")
+# test2$starttime <- test2$Date + minutes(3)
+# test2$endtime <- test2$Date - minutes(3)
+# 
+# #making it into data tables in order to be able to use the foverlaps function
+# library(data.table)
+# 
+# #this is some code from stackoverflow that I tried implementing. It doesn't work, so I won't add the source now, but in my journal later
+# DT1 <- data.table(maindf)
+# DT2 <- data.table(test2)
+# setkey(DT2, Date, starttime, endtime)
+# DT1[, c("start", "end") := date]  ## I don't know if there's a way around this step...
+# foverlaps(DT1, DT2)
+# foverlaps(DT1, DT2)[, c("Opr", "date", "wd"), with = TRUE]
+
+```
+
+
+# Initial Tests on Data 
+
+These are the summary tests that Scott had mentioned at the end of the spring semester. When you're importing a new dataframe (ie a dataframe of a different sensor), check its summary statistics. Specifically, we're checking:
+- monthly averages
+- monthly standard deviation 
+- monthly and overall number of points 
+
+
+
+```{r}
+(summarystats <- maindf %>%
+  mutate(month = format(date, "%m"), year = format(date, "%y")) %>%
+  group_by(month, year) %>%
+  summarise(
+    count = n(), 
+    monthly_avg_pm1 = mean(pm1 , na.rm = TRUE),
+    monthly_avg_pm25 = mean(pm25, na.rm = TRUE),
+    monthly_avg_temp = mean(temp_manifold, na.rm = TRUE),
+    monthly_avg_ws = mean(ws, na.rm = TRUE),
+    monthly_avg_co2 = mean(co2, na.rm = TRUE),
+    monthly_std_pm1 = sd(pm1 , na.rm = TRUE),
+    monthly_std_pm25 = sd(pm25, na.rm = TRUE),
+    monthly_std_temp = sd(temp_manifold, na.rm = TRUE),
+    monthly_std_ws = sd(ws, na.rm = TRUE),
+    monthly_std_co2 = sd(co2, na.rm = TRUE)
+    
+  ))
+
+```
+## Initial Tests for finding regimes 
+
+First, I'm going to make a polar plot in order to determine what's downwind 
+
+```{r}
+maindf$wd[maindf$wd == "null"] <- NA
+maindf$ws[maindf$ws == "null"] <- NA
+maindf$wd <- as.integer(maindf$wd)   
+maindf$ws <- as.integer(maindf$ws)
+#maindf$nox <- maindf$no2 + maindf$no
+polarPlot(maindf)
+
+```
+
+
+
+
+
