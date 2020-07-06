@@ -19,7 +19,7 @@ library(openair)
 
 ```
 
-Also, from this day forward, I'm going to try using R projects. R projects apparently are directories where you keep all the files for a given R project, and it is convenient because you are able to use relative paths instead of absolute paths (handy for multiple people working on the same project). 
+Also, from this day forward, I'm going to try using R projects. R projects apparently are directories where you keep all the files for a given R project, and it is convenient because you are able to use relative paths instead of absolute paths (handy for multiple people working on the same project). I'm going to use R project based on this chapter, which discusses connecting R projects with Github: https://happygitwithr.com/rstudio-git-github.html. This website has information on how to set up the R project workspace and push to github from RStudio. 
 
 As two checks that we're in the right directory, I'm going to include a line that checks the name of the directory and imports a script using the relative path: 
 
