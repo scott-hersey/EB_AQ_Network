@@ -3,6 +3,8 @@ title: "R Notebook"
 output: html_notebook
 ---
 
+hello world
+
 In this notebook, I try coding the two regime methods that Scott and I talked about. 
 
 ```{r}
