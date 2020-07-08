@@ -44,28 +44,24 @@ sensor = read.csv(sensorpath, header=TRUE, fileEncoding="UTF-8-BOM") #import sen
 asos = read.csv(asospath, header=TRUE, fileEncoding="UTF-8-BOM") #import meteorology file
 
 #getting our sensor data ready
-#setnames(sensor, old = c('timestamp_local'), new = c('date')) #renaming
 sensor$date <- ymd_hms(sensor$date, tz="America/New_York") #parse datetime
 sensor[, c("lat", "long", "X", "X.1")] <- list(NULL) #removing columns for speed
 sensor$date <- round_date(sensor$date, unit="minute")
 
 
-#asos$date <- parse_date_time(asos$date, "%y/%m/%d %H:%M", tz="America/New_York", locale = "C") #ymd doesn't recognize its format, so use parse_datetime
-
-#asos$valid <- strptime(asos$valid, format = "%Y-%m-%d %H:%M",tz="America/New_York") 
-
+#getting met data ready
 asos$date <- as.POSIXct(asos$valid, format = "%Y-%m-%d %H:%M", tz = "America/New_York")
 asos <- asos %>%
   setnames(old = c("drct", "sped"), new = c("wd", "ws")) %>% #rename
   complete(date = seq(from = min(date), to= max(date),  by = "1 min")) %>%#make 1 minute intervals
   fill(c("wd", "ws")) 
   
-asos[!grepl("null", asos$ws),]
+asos[!grepl("null", asos$ws),] #getting rid of met's null data
 asos[!grepl("null", asos$wd),]
-asos$wd <- as.numeric(asos$wd)
+asos$wd <- as.numeric(asos$wd)  #reformatting so it's integers instead of strings
 asos$ws <- as.numeric(asos$ws)
-asos$ws <- asos$ws * (1609/3600)
-asos[,c("tmpc", "valid", "station")] <- list(NULL)
+asos$ws <- asos$ws * (1609/3600) #converting to m/s
+asos[,c("tmpc", "valid", "station")] <- list(NULL) #getting rid of unnecessary variables
 
 
   
@@ -78,7 +74,7 @@ finaldf <- merge(x = sensor, y = asos, by = "date", all = FALSE) #all=FALSE gets
 
 # Analyzing Eben's NO2 Model 
 
-Below, I'll create a script to import and format Eben's NO2 model, then append it to the maind dataframe
+Below, I'll create a script to import and format Eben's NO2 model, then append it to the main dataframe
 
 ```{r}
 no2model <- read.csv("no2_HYBRID_045.txt") 
@@ -88,7 +84,7 @@ no2model$date <-  as_datetime(no2model$timestamp , origin = (sensor$date[1] - no
 no2model$date <- round_date(no2model$date, unit = "minute")   #to merge with finaldf
 no2model$timestamp <- NULL #excluding this variable
 
-no2model <- rename(no2model, c("no2" = "no2model")) #renaming, for the merge
+names(no2model)[names(no2model)=="no2"] <- "no2model"#renaming, for the merge
 
 finaldf <- merge(x = finaldf, y = no2model, by = "date", all = FALSE)
 
@@ -137,7 +133,10 @@ Then, I'll plot it:
 
 source("creategraph.R")
 
-creategraph(sn= finaldf[4000:7000], date = finaldf$date[4000:7000], plot1 = finaldf$rh_manifold[4000:7000], plot2 = finaldf$no[4000:7000], plot3a = finaldf$no2.x[4000:7000], plot3b = finaldf$no2model[4000:7000])
+creategraph(sn= finaldf[4000:7000], date = finaldf$date[4000:7000],
+            plot1 = finaldf$rh_manifold[4000:7000], 
+            plot2 = finaldf$no[4000:7000], 
+            plot3a = finaldf$no2.x[4000:7000], plot3b = finaldf$no2model[4000:7000])
 ```
 
 It does look like it's following no trends, and disregarding RH trends. 
@@ -149,3 +148,5 @@ creategraph(sn= finaldf[17000:20000], date = finaldf$date[17000:20000], plot1 = 
 ```
 
 According to these two examples, the model seems to work well. During the meeting, I'll ask if it needs to be validated in some way that proves it validity (some statistically significant way).
+
+# Working on Regimes 
