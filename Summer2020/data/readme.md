@@ -1,0 +1,1 @@
+You can put all of the files that are on the Google Drive and on DropBox in this folder. The reason why I didn't push the files themselves is because they take up space on the repo, when we already have them stored elsewhere. 
