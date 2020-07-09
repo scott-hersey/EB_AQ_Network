@@ -1,8 +1,5 @@
 ---
 title: "Creating a Dataframe with Upsampled Meteorology and Testing NO2 Model"
-output: 
-  md_document:
-    variant: markdown_github
 ---
 
 # Setting Up Workspace 

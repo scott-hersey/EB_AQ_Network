@@ -1,6 +1,5 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Finalizing dataframes, gutchecking the data and creating some polar plots"
 ---
 
 In this notebook, I'll be finalizing the dataframes, and exporting them to csvs. I'll also be gut checking those dataframes, and making sure that they look how we expect. I'll create the polar plots that exhibit overall behavior. Finally, I'll start working on the scripts that create the regime dataframes. 

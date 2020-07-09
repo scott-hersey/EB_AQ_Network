@@ -1,6 +1,5 @@
 ---
-title: "Test File"
-output: html_notebook
+title: "Preliminary Work from June"
 ---
 
 The purpose of this file is to test setting up the environment for analysis. 

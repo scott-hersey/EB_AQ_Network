@@ -1,11 +1,14 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "First day of work on creating regimes"
 ---
 
-hello world
 
-In this notebook, I try coding the two regime methods that Scott and I talked about. 
+# Overview 
+
+This contains my first few days of work on creating regimes. It does not contain finalized code that creates regimes. 
+
+
+# Setup 
 
 ```{r}
 library(readxl)
@@ -13,8 +16,6 @@ library(plyr)
 library(lubridate)
 ```
 
-
-# Setup 
 
 I accidentally deleted one of my function to make the flightdf from last time, so here I put the code together again.  
 
@@ -93,9 +94,6 @@ hourlyactivityrunway27 <- hourlytally("27")
 
 
 
-
-```
-```{r}
 
 ```
 
