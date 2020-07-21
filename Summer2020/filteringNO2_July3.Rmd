@@ -1,8 +1,10 @@
 ---
 title: "R Notebook"
-output: html_notebook
 ---
 
+# Overview 
+
+This is work I did to try to stop NO sensor oscillations that were products of RH changing (ie unrepresentative data). We didn't end up using any of this work because Eben came up with an ML solution that fixed it. I am including this file in the repo as reference. I also updated the file paths used in this file.
 
 # Setting up workspace 
 
@@ -26,12 +28,9 @@ library(plotrix)
 ```
 
 
-```{r setup}
-knitr::opts_knit$set(root.dir = 'C:\\Users\\abusa\\Documents') #change this to your own directory
-```
 
 ```{r}
-sn45 <- read.csv("sn45.csv") # import
+sn45 <- read.csv("data/sn45.csv") # import modified sensor data, taken from Sensor Data dropbox, and downloaded locally to data folder in this repo
 sn45$date <- ymd_hms(sn45$date) #format
 sn45$X.1 <- NULL #get rid of index columns
 sn45$X <- NULL
@@ -92,6 +91,7 @@ hourly_sd <- timeAverage(
 #hourly_sd$month <-  month(ymd_hms(hourly_sd$date))
 
 ```
+
 # Plot Slope 
 
 ```{r}
@@ -125,7 +125,7 @@ Update: This isn't a method we can use by itself. It shows how variable NO is co
 
 
 ```{r}
-source("creategraph.R")
+source("functions/creategraph.R")
 
 #below is one method I used to create a marked "filter this" column
 #later on, I use a better method
@@ -140,22 +140,12 @@ oct_period1$filtered <- seq(0,0,length.out=length(oct_period1$no2))  #again, for
 oct_period1$filtered[which(oct_period1$diffrh > 2 & oct_period1$diffno < 50)] <- 1
 
 #create graphs for validation
-creategraph(sn45)
-creategraph(septoct_period3)
-creategraph(oct_period1)
+creategraph(sn45, sn45$date, sn45$o3, sn45$no2, sn45$no, sn45$rh_manifold)
+creategraph(septoct_period3, septoct_period3$date, septoct_period3$o3, septoct_period3$no2, septoct_period3$no, septoct_period3$rh_manifold)
+creategraph(oct_period1, oct_period1$date, oct_period1$o3, oct_period1$no2, oct_period1$no, oct_period1$rh_manifold)
 ```
 
 After seeing that it didn't catch trends, I thought of doing a lag of 50. This doesn't tell the whole story (it will catch steady rises and oscillations the same), so we can't use it.
-
-```{r}
-
-sn45$diffrh50 <- diff(sn45$rh_manifold, lag = 50)
-sn45$diffno50 <- diff(sn45$no, lag= 50)
-
-
-
-```
-Even if we could use this, the length of the vector is different so we would have to work around that. 
 
 
 

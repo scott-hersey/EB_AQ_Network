@@ -2,6 +2,10 @@
 title: "Creating a Dataframe with Upsampled Meteorology and Testing NO2 Model"
 ---
 
+# Overview : 
+
+In this notebook, I created a dataframe with upsampled meteorological data and tested the NO2 model. This was initial work I did in order to figure out how to implement these things, but the finalized versions of these are in finalizingDF-gutcheck1-polarplots-July7.Rmd. Therefore, the purpose of this notebook is just as a record. 
+
 # Setting Up Workspace 
 
 First, we're going to import the libraries we need 
@@ -32,8 +36,8 @@ source("changebins.R")
 In this section, I will create a dataframe which merges sensor data and meteorological data, by upsampling the meteorological data. 
 
 ```{r}
-sensorpath <- "sn45.csv"
-asospath <- "asos2.csv"
+sensorpath <- "data/sn45.csv" #modified sensor data, taken from Sensor Data dropbox, saved locally in data folder of this repo
+asospath <- "data/metdata.csv" #original meteorology data, taken from sensor data dropbox
 
 #This function imports the data, gets the two datasets ready to merge, sets the timezone and merges them
 
@@ -74,7 +78,8 @@ finaldf <- merge(x = sensor, y = asos, by = "date", all = FALSE) #all=FALSE gets
 Below, I'll create a script to import and format Eben's NO2 model, then append it to the main dataframe
 
 ```{r}
-no2model <- read.csv("no2_HYBRID_045.txt") 
+no2model <- read.csv("no2_HYBRID_045.txt") #taken from Eben's dropbox, which he sent via email 
+
 # the timestamp is given as seconds from some origin, so I'll deduce the origin
 (sensor$date[1] - no2model$timestamp[1]) # it looks like these two df have the same length, so the origin should be the date subtracted by this
 no2model$date <-  as_datetime(no2model$timestamp , origin = (sensor$date[1] - no2model$timestamp[1])) 
@@ -145,5 +150,3 @@ creategraph(sn= finaldf[17000:20000], date = finaldf$date[17000:20000], plot1 = 
 ```
 
 According to these two examples, the model seems to work well. During the meeting, I'll ask if it needs to be validated in some way that proves it validity (some statistically significant way).
-
-# Working on Regimes 
