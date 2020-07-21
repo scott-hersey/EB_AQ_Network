@@ -84,10 +84,11 @@ Next, I'll be running that function on all the sensor data. Note that I have all
 
 
 ```{r}
-source("createsensordf.R")
-metdata <- createmetdf("metdata.csv")
+source("functions/createsensordf.R")
+metdata <- createmetdf("data/metdata.csv") #this is the meteorology data from ASOS website. This file can be found on the Sensor Data DropBox folder
 
-sn45 <- createsensordf("Final_Customer/20200519_final_045.csv", "Final_Customer/no2_HYBRID_045.txt", metdata)
+#the following files come from Eben's dropbox that he emailed us
+sn45 <- createsensordf("Final_Customer/20200519_final_045.csv", "Final_Customer/no2_HYBRID_045.txt", metdata) 
 sn49 <- createsensordf("Final_Customer/20200519_final_049.csv", "Final_Customer/no2_HYBRID_049.txt", metdata)
 start_time <- Sys.time()
 sn62 <- createsensordf("Final_Customer/20200519_final_062.csv", "Final_Customer/no2_HYBRID_062.txt", metdata)
@@ -127,19 +128,19 @@ I had originally just started making plots and generating summary statistics. Bu
 Note: I read this back in one at a time, and then did each analysis for them, instead of importing them in all at once. I did this, so that I could delete the dataset after I used it, and that way, save memory. 
 
 ```{r}
-sn67 <- read.csv("sn67.csv")
+sn67 <- read.csv("data/sn67.csv") #since we're storing all data in the data folder, we're going to call these modified sensor dataframes from that folder
 sn67$X <- NULL
 sn67$date <- ymd_hms(sn67$date)
 
-sn62 <- read.csv("sn62.csv")
+sn62 <- read.csv("data/sn62.csv")
 sn62$X <- NULL
 sn62$date <- ymd_hms(sn62$date)
 
-sn49 <- read.csv("sn49.csv")
+sn49 <- read.csv("data/sn49.csv")
 sn49$X <- NULL
 sn49$date <- ymd_hms(sn49$date)
 
-sn45 <- read.csv("sn45.csv")
+sn45 <- read.csv("data/sn45.csv")
 sn45$X <- NULL
 sn45$date <- ymd_hms(sn45$date)
 
@@ -151,14 +152,14 @@ generate_summary <- function(sn){
     mutate(month = format(date, "%m"), year = format(date, "%y")) %>%
     group_by(month, year) %>%
     summarise(
-      count = n(), 
+      count = n(),
+      monthly_avg_no = mean(no, na.rm = TRUE),
       monthly_avg_pm1 = mean(pm1 , na.rm = TRUE),
       monthly_avg_pm25 = mean(pm25, na.rm = TRUE),
       monthly_avg_temp = mean(temp_manifold, na.rm = TRUE),
       monthly_avg_ws = mean(ws, na.rm = TRUE),
       monthly_avg_co2 = mean(co2, na.rm = TRUE),
       monthly_avg_no2model = mean(no2model, na.rm = TRUE),
-      monthly_avg_no = mean(no, na.rm = TRUE),
       monthly_std_pm1 = sd(pm1 , na.rm = TRUE),
       monthly_std_pm25 = sd(pm25, na.rm = TRUE),
       monthly_std_temp = sd(temp_manifold, na.rm = TRUE),
