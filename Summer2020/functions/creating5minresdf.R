@@ -10,8 +10,9 @@ creating5minresdf <- function(sensorpath, asospath){
   #getting our sensor data ready
   setnames(sensor, old = c('timestamp_local'), new = c('date')) #renaming
   sensor$date <- ymd_hms(sensor$date, tz="America/New_York") #parse datetime
-  sensor <- sensor[,c("date", "temp_manifold", "no", "co2", "co", "pm1", "pm25", "pm10", "lat", "lon", "o3")] #extracting relevant parameters, to increase speed
+  sensor <- sensor[,c("date", "temp_manifold", "no", "co2", "co", "pm1", "pm25", "pm10",  "o3")] #extracting relevant parameters, to increase speed
   
+  sensor <- mutate(sensor, originaldate = date)
   sensor$date5min <- round_date(sensor$date, "5 mins") #rounds to 5 from halfway, ie 02:40 -> 0:00, 02:50 -> 05:00
   sensor<- aggregate(sensor[,names(sensor) != "date5min"], by = list(sensor$date5min), FUN = mean, na.rm = TRUE) #takes mean of everything based on date5min
   colnames(sensor)[1:2] <- c("date", "olddate") #renaming, for merging
