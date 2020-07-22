@@ -1,0 +1,1148 @@
+---
+title: "Report Out on Baseline Findings"
+---
+
+# Setup 
+
+```{r message=FALSE, warning=FALSE}
+library(lubridate)
+library(openair)
+library(data.table)
+library(dplyr)
+library(baseline)
+library(Rmisc)
+```
+
+```{r}
+#importing sensor data
+sn45 <- read.csv("data/sn45.csv") # modified sensor data, can be found in Sensor Data dropbox and downloaded locally to data folder in this repo
+sn45$X <- NULL 
+sn45$date <- ymd_hms(sn45$date, tz="America/New_York")
+sn45 <- sn45[!duplicated(sn45), ] 
+sn45 <- sn45[, c("date", "no", "no_ae")] #getting rid of other variables to save space
+
+```
+
+```{r}
+#importing no_ae filter function
+no_ae_filter <- function(sn, mag){
+  #create a vector that shows the derivatives 
+  no_ae_derivative <- c(0,diff(sn$no_ae, na.rm = TRUE))
+  #creating logical vector to pick which things to get rid of 
+  logical_vec <- abs(no_ae_derivative) < abs(mag*(sd(no_ae_derivative, na.rm=TRUE)))
+
+  # if logical_vec is true, then set the NO value to NA 
+  sn$no <- sn$no * logical_vec
+  replace(sn$no, 0, NA)
+  
+  return(sn)
+
+} 
+
+sn45F <- no_ae_filter(sn45, 2.5)
+```
+
+
+
+# Index stays 
+
+```{r}
+baselinetest2 <- selectByDate(sn45F, start = "14/5/2020", end = "15/5/2020")
+baselinetest2.t <- t(baselinetest2$no)
+BT2.fillPeaks <- baseline(baselinetest2.t)
+plot(BT2.fillPeaks)
+baselineBT2 <- getBaseline(BT2.fillPeaks)
+correctedBT2 <- getCorrected(BT2.fillPeaks)
+spectrumBT2 <- getSpectra(BT2.fillPeaks)
+
+```
+```{r}
+plot(baselinetest2$date, baselinetest2$no, type="l")
+plot(baselinetest2$date, spectrumBT2, type = "l")
+plot(baselinetest2$date, correctedBT2, type = "l")
+```
+
+
+```{r}
+baselinetest3 <- selectByDate(sn45F, start = "14/5/2020", end = "21/5/2020")
+baselinetest3.t <- t(baselinetest3$no)
+BT3.fillPeaks <- baseline(baselinetest3.t)
+plot(BT3.fillPeaks)
+baselineBT3 <- getBaseline(BT3.fillPeaks)
+correctedBT3 <- getCorrected(BT3.fillPeaks)
+spectrumBT3 <- getSpectra(BT3.fillPeaks)
+plot(baselinetest3$date, baselinetest3$no, type="l")
+plot(baselinetest3$date, correctedBT3, type = "l")
+```
+
+
+# There's a GUI that lets you look at different corrections and parameters 
+
+```{r}
+ex1 <- selectByDate(sn45F, start = "14/5/2020", end="16/5/2020") #choose date
+tz(ex1$date) <- "America/New_York"
+datestoreplace_ex1 <- ex1[ex1$no <= 0, "date"] #select which dates to replace later 
+#datestoreplace_ex1_trial <- ex1[ex1$no < 0, c("date", "no")] #select which dates to replace later 
+ex1$noZERO <- replace(ex1$no, ex1$no > 0, 0 ) #set all positive to zero 
+ex1 <- ex1[, c("date", "no", "noZERO")]
+ex1$filter <- ifelse(
+    ( 
+        (ex1$date %in% datestoreplace_ex1)
+
+    ),
+    1,  # if condition is met, put 1
+    0   # else put 0
+)
+
+
+
+ex1.t <- t(ex1$noZERO) #prepare no data for baseline 
+baselineGUI(ex1.t)
+```
+
+
+
+# Putting in the whole timeframe vs the negative values 
+
+Using example 1, which was the whole baseline 
+```{r}
+bc.peakDetection <- baseline(ex1.t, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(ex1.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+
+corrected <- getCorrected(bc.peakDetection) #get corrected baseline
+ex1$corrected <- t(corrected) #append it 
+sn45F$correctedex1 <- ifelse(sn45F$date %in% datestoreplace_ex1, ex1$corrected, sn45$no) #see how the data now looks 
+
+sn45F$corrected2 <- ifelse(sn45F$date %in% datestoreplace_ex1, ex1$corrected, 0) 
+
+
+timePlot(selectByDate(sn45F, start = "14/5/2020", end = "16/5/2020"), pollutant = c("correctedex1", "no"), main = "NO vs Time for SN45")
+```
+
+Using example 2, which was just the negative values 
+
+```{r}
+ex2 <- selectByDate(sn45F, start = "14/5/2020", end="16/5/2020") #choose date
+tz(ex2) <- "America/New_York"
+ex2 <- ex2[ex2$no < 0, c("date", "no")]
+ex2.t <- t(ex2$no) #prepare no data for baseline 
+bc.peakDetection <- baseline(ex2.t, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(nodate2.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+
+corrected <- getCorrected(bc.peakDetection) #get corrected baseline
+ex2$corrected <- t(corrected) #append it 
+sn45F$correctedex2 <- ifelse(sn45F$date %in% ex2$date, ex2$corrected, sn45F$no) #see how the data now looks 
+```
+
+```{r}
+timePlot(selectByDate(sn45F, start = "14/5/2020", end = "16/5/2020"), pollutant = c("correctedex2", "no"), main = "NO vs Time for SN45")
+timePlot(selectByDate(sn45F, start = "14/5/2020", end = "16/5/2020"), pollutant = c("correctedex1", "correctedex2"), main = "NO vs Time for SN45")
+timePlot(selectByDate(sn45F, start = "14/5/2020", end = "16/5/2020"), pollutant = c("correctedex1", "correctedex2", "no"), main = "NO vs Time for SN45")
+timePlot(selectByDate(sn45F, start = "14/5/2020", end = "16/5/2020"), pollutant = c("correctedex2", "no"), main = "NO vs Time for SN45", 
+         ref.y = list(h = 0, lty = 1, col = "green"), 
+         ref.x = list(v = ex2$date, lty = 3, col = "tan2"))
+```
+
+
+# Different Timescales 
+
+```{r}
+#a day
+timescale1 <- selectByDate(sn45F, start = "14/5/2020", end="15/5/2020") #choose date
+timescale1$no <- replace(timescale1$no, which(timescale1$no > 0), 0 ) #set all positive to zero 
+timescale1.t <- t(timescale1$no) #prepare no data for baseline 
+bc.peakDetection <- baseline(timescale1.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+
+# a few days
+timescale2 <- selectByDate(sn45F, start = "10/5/2020", end="16/5/2020") #choose date
+timescale2$no <- replace(timescale2$no, which(timescale2$no > 0), 0 ) #set all positive to zero 
+timescale2.t <- t(timescale2$no) #prepare no data for baseline 
+bc.peakDetection <- baseline(timescale2.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+
+#a half month
+timescale3 <- selectByDate(sn45F, start = "1/5/2020", end="18/5/2020") #choose date
+timescale3$no <- replace(timescale3$no, which(timescale3$no > 0), 0 ) #set all positive to zero 
+timescale3.t <- t(timescale3$no) #prepare no data for baseline 
+bc.peakDetection <- baseline(timescale3.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+
+
+#whole time 
+timescale4 <- selectByDate(sn45F, start = "6/9/2019", end="16/5/2020") #choose date
+timescale4$no <- replace(timescale4$no, which(timescale4$no > 0), 0 ) #set all positive to zero 
+timescale4.t <- t(timescale4$no) #prepare no data for baseline 
+bc.peakDetection <- baseline(timescale4.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+```
+```{r}
+NOonly <- sn45F[sn45F$no < 0, c("date", "no")]
+
+#a day
+timescale1 <- selectByDate(NOonly, start = "14/5/2020", end="15/5/2020") #choose date
+timescale1.t <- t(timescale1$no) #prepare no data for baseline 
+bc.peakDetection <- baseline(timescale1.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+
+# a few days
+timescale2 <- selectByDate(NOonly, start = "10/5/2020", end="16/5/2020") #choose date
+timescale2.t <- t(timescale2$no) #prepare no data for baseline 
+bc.peakDetection <- baseline(timescale2.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+
+#a half month
+timescale3 <- selectByDate(NOonly, start = "1/5/2020", end="18/5/2020") #choose date
+timescale3.t <- t(timescale3$no) #prepare no data for baseline 
+bc.peakDetection <- baseline(timescale3.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+
+
+#whole time 
+
+timescale4 <- selectByDate(NOonly, start = "6/9/2019", end="16/5/2020") #choose date
+timescale4.t <- t(timescale4$no) #prepare no data for baseline 
+bc.peakDetection <- baseline(timescale4.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+```
+# Checking which dates are being replaced when adjusting whole timeframe 
+
+```{r}
+#timePlot(selectByDate(sn45F, start = "14/5/2020", end = "16/5/2020"), pollutant = c("correctedex1", "no"), main = "NO vs Time for SN45") 
+sn45F$checkfilter <- seq(0,0,length.out=length(sn45$no))  # create column of zeros
+sn45F$checkfilter <- replace(sn45F$checkfilter, sn45F$date %in% datestoreplace_ex1,  1 )
+
+ex1$checkfilter <- seq(0,0,length.out=length(ex1$no))  # create column of zeros
+ex1$checkfilter <- replace(ex1$checkfilter, ex1$date %in% datestoreplace_ex1,  1 )
+
+
+```
+```{r}
+#par(new=T)
+plot(sn45F[289805:294117, "date"], sn45F[289805:294117, "no"], axes=F, xlab="", ylab="", type="l",col="black")
+axis(2, col="black")
+mtext("NO ",side=2,line=2.5)
+box()
+abline(h = 0 , untf = FALSE)
+
+par(new=T)
+
+plot(sn45F[289805:294117, "date"], sn45F[289805:294117, "checkfilter"],xlab="", ylab="",  axes=F, type="l", col="red")
+mtext("Filtered",side=4,col="red",line=2.5)
+axis(4, col="red",col.axis="red")
+
+#par(new=T)
+
+
+
+```
+```{r}
+plot(sn45F[289805:294117, "date"], sn45F[289805:294117, "no"], axes=F, xlab="", ylab="", type="l",col="black")
+axis(2, col="black")
+mtext("NO ",side=2,line=2.5)
+box()
+abline(h = 0 , untf = FALSE)
+
+par(new=T)
+
+plot(sn45F[289805:294117, "date"], sn45F[289805:294117, "checkfilter"],xlab="", ylab="",  axes=F, type="l", col="red")
+mtext("Filtered",side=4,col="red",line=2.5)
+axis(4, col="red",col.axis="red")
+```
+
+```{r}
+plot(ex1$date, ex1$corrected, type="l")
+abline(h = 0 , untf = FALSE)
+par(new=T)
+plot(ex1$date, ex1$filter, type="l", col="red")
+
+
+```
+
+```{r}
+timePlot(selectByDate(sn45F, start = "14/5/2020", end = "16/5/2020"), pollutant = c("correctedex1", "no"), main = "NO vs Time for SN45", 
+         ref.y = list(h = 0, lty = 1, col = "green"), 
+         ref.x = list(v = datestoreplace_ex1, lty = 3, col = "tan2"))
+
+timePlot(selectByDate(sn45F, start = "14/5/2020", end = "16/5/2020"), pollutant = c("corrected2", "no"), main = "NO vs Time for SN45", 
+         ref.y = list(h = 0, lty = 1, col = "green"), 
+         ref.x = list(v = datestoreplace_ex1, lty = 3, col = "tan2"))
+
+```
+
+
+# Finalized Code with right input method 
+
+
+```{r}
+
+ex1 <- selectByDate(sn45F, start = "14/5/2020", end="14/5/2020") #choose date
+tz(ex1$date) <- "America/New_York"
+datestoreplace_ex1 <- ex1[ex1$no <= 0, "date"] #select which dates to replace later 
+#datestoreplace_ex1_trial <- ex1[ex1$no < 0, c("date", "no")] #select which dates to replace later 
+ex1$noZERO <- replace(ex1$no, ex1$no > 0, 0 ) #set all positive to zero 
+ex1 <- ex1[, c("date", "no", "noZERO")]
+ex1$filter <- ifelse(
+    ( 
+        (ex1$date %in% datestoreplace_ex1)
+
+    ),
+    1,  # if condition is met, put 1
+    0   # else put 0
+)
+
+
+
+ex1.t <- t(ex1$noZERO) #prepare no data for baseline 
+
+bc.peakDetection <- baseline(ex1.t, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(ex1.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+
+corrected <- getCorrected(bc.peakDetection) #get corrected baseline
+ex1$corrected <- t(corrected) #append it 
+
+sn45F$correctedex1 <- sn45F$no
+ex1$corrected <- c(getCorrected(bc.peakDetection))
+sn45F$correctedex1[sn45F$date %in% datestoreplace_ex1] <- ex1$corrected[ex1$date %in% datestoreplace_ex1]
+
+#sn45F$correctedex1 <- ifelse(sn45F$date %in% datestoreplace_ex1, ex1$corrected, sn45F$no) #see how the data now looks 
+
+#sn45F$corrected2 <- ifelse(sn45F$date %in% datestoreplace_ex1, ex1$corrected, 0) 
+
+
+timePlot(selectByDate(sn45F, start = "14/5/2020", end = "14/5/2020"), pollutant = c("correctedex1", "no"), main = "NO vs Time for SN45")
+timePlot(selectByDate(sn45F, start = "14/5/2020", end = "14/5/2020"), pollutant = c("correctedex1", "correctedex2", "no"), main = "NO vs Time for SN45", 
+         ref.y = list(h = 0, lty = 1, col = "green"))
+
+
+
+
+```
+
+```{r}
+plot(ex1$date[700:1400], ex1$corrected[700:1400], type="l")
+abline(v = datestoreplace_ex1, lty = 3, col = "tan2")
+```
+```{r}
+plot(sn45F$date[289805:291242], sn45F$correctedex1[289805:291242], type="l")
+abline(v = datestoreplace_ex1, lty = 3, col = "tan2")
+
+plot(sn45F$date[290500:291242], sn45F$correctedex1[290500:291242], type="l")
+abline(v = datestoreplace_ex1, lty = 3, col = "tan2")
+
+plot(sn45F$date[290500:291242], sn45F$corrected2[290500:291242], type="l")
+abline(v = datestoreplace_ex1, lty = 3, col = "tan2")
+```
+
+
+
+# Creating a function that returns stats 
+
+Next, I'll create a function that returns information about the output of the function. It will return 
+-number of negative data points before the function  & number of negative data points after the function 
+- max negative number before & after 
+- mean negative number before & after 
+- 95th intervals before and after
+
+```{r}
+get_stats <- function(sn45F){
+  cat(sprintf("Number of negative data points before and after: %d & %d", sum(sn45F$no < 0, na.rm = TRUE), sum(sn45F$corrected < 0, na.rm = TRUE)))
+  cat("\n")
+  cat(sprintf("Pecent of data that is negative before and after: %f & %f", ((length(sn45F$no) - sum(sn45F$no < 0, na.rm = TRUE)) / length(sn45F$no)), (length(sn45F$corrected) - sum(sn45F$corrected < 0, na.rm = TRUE)) / length(sn45F$no)))
+  cat("\n")
+  cat(sprintf("Minimum value before and after: %f & %f", min(sn45F$no, na.rm = TRUE), min(sn45F$corrected, na.rm = TRUE)))
+  cat("\n")
+  cat(sprintf("Mean negative value before and after: %f & %f", mean(sn45F$no[sn45F$no < 0], na.rm = TRUE), mean(sn45F$corrected[sn45F$corrected < 0], na.rm = TRUE)))
+  cat("\n")
+ # sprintf("95 % confidence interval of negative data before and after: %f & %f", CI(sn45F$no[sn45F$no < 0], ci=0.95), CI(sn45F$corrected[sn45F$corrected < 0], ci=0.95))
+  cat(sprintf("Mean, Median & Max of the overall data before: %f & %f & %f", mean(sn45F$no, na.rm=TRUE), median(sn45F$no, na.rm = TRUE), max(sn45F$no, na.rm = TRUE)))
+  cat("\n")
+  cat(sprintf("Mean, Median & Max of the overall data after: %f & %f & %f", mean(sn45F$corrected, na.rm=TRUE), median(sn45F$corrected, na.rm=TRUE), max(sn45F$corrected, na.rm=TRUE)))
+}
+```
+
+
+
+```{r}
+no_2019 <- selectByDate(sn45F, start = "7/9/2019", end="9/9/2019")
+no_2019 <- no_2019[no_2019$no < 0, c("no", "date")]
+no_2019 <- na.omit(no_2019)
+no_2019.t <- t(no_2019$no)#prepare no data for baseline 
+bc.fulltimescale  <- baseline(no_2019.t, method='peakDetection',left=300, right=300, lwin=50, rwin=50)
+
+
+
+# sn45F$corrected <- seq(0, 0, length.out = length(sn45F$date))
+# for (time in 1:length(no_2019$date)){
+#   if (no_2019$date[time] %in% sn45F$date){
+#     sn45$corrected[sn45F$date == no_2019$date[time]] <- no_2019$no[time]
+#   }
+# }
+sn45F$corrected <- sn45F$no
+no_2019$corrected <- c(getCorrected(bc.fulltimescale))
+sn45F$corrected[sn45F$date %in% no_2019$date] <- no_2019$corrected[sn45F$date %in% no_2019$date]
+#sn45$corrected[as.POSIXlt(x)$mday != 29] <- NA
+#sn45F$corrected <- ifelse(sn45F$date %in% no_2019$date, c(getCorrected(bc.fulltimescale)), sn45F$no) 
+#sn45F$corrected[186:sum(186+length(no_2019))] <- c(getCorrected(bc.fulltimescale))
+
+get_stats(sn45F[186:sum(186+length(no_2019$date)),])
+
+```
+```{r}
+plot(sn45F$date[186:sum(186+length(no_2019$no))], sn45F$corrected[186:sum(186+length(no_2019$no))], type = "l")
+abline(h = 30)
+
+plot(sn45F$date[186:sum(186+length(no_2019$no))], sn45F$no[186:sum(186+length(no_2019$no))], type = "l")
+abline(h = 30)
+
+plot(bc.fulltimescale)
+
+```
+
+# Finalized Code 
+
+Below, I include an example where I look at using baseline correction for a week using two different methods.
+
+```{r}
+#preparing ex1 
+
+ex1 <- selectByDate(sn45F, start = "7/9/2019", end="14/9/2019") #choose date
+tz(ex1$date) <- "America/New_York"
+datestoreplace_ex1 <- ex1[ex1$no <= 0, "date"] #select which dates to replace later 
+ 
+ex1$noZERO <- replace(ex1$no, ex1$no > 0, 0 ) #set all positive to zero 
+ex1 <- ex1[, c("date", "no", "noZERO")]
+ex1 <- na.omit(ex1)
+
+ex1.t <- t(ex1$noZERO) #prepare no data for baseline 
+
+bc.peakDetection <- baseline(ex1.t, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(ex1.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection) 
+
+
+sn45F$correctedex1 <- sn45F$no
+ex1$corrected <- c(getCorrected(bc.peakDetection))
+sn45F$correctedex1[sn45F$date %in% datestoreplace_ex1] <- ex1$corrected[ex1$date %in% datestoreplace_ex1]
+
+#preparing ex2
+
+ex2 <- selectByDate(sn45F, start = "7/9/2019", end="14/9/2019") #choose date
+tz(ex2$date) <- "America/New_York"
+datestoreplace_ex2 <- ex2[ex2$no < 0, "date"] #select which dates to replace later 
+ 
+ex2$noZERO <- replace(ex2$no, ex2$no > 0, 0 ) #set all positive to zero 
+ex2 <- ex2[, c("date", "no", "noZERO")]
+ex2 <- na.omit(ex2)
+
+ex2.t <- t(ex2$no[ex2$no < 0]) #prepare no data for baseline 
+
+bc.peakDetection2 <- baseline(ex1.t, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(ex1.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection2) 
+
+
+sn45F$correctedex2 <- sn45F$no
+ex2$corrected <- c(getCorrected(bc.peakDetection2))
+sn45F$correctedex2[sn45F$date %in% datestoreplace_ex2] <- ex2$corrected[ex2$date %in% datestoreplace_ex2]
+
+
+```
+
+```{r}
+# plotting
+
+
+timePlot(selectByDate(sn45F,  start = "7/9/2019", end="14/9/2019"), pollutant = c("correctedex1", "no"), main = "NO vs Time for SN45", name.pol = c("Method 1 Baseline Correction", "Original NO") , ylab = "")
+pdf("img1.pdf")
+timePlot(selectByDate(sn45F,  start = "7/9/2019", end="14/9/2019"), pollutant = c("correctedex1", "correctedex2", "no"), main = "NO vs Time for SN45", 
+         ref.y = list(h = 0, lty = 1, col = "green"),  name.pol = c("Method 1 Baseline Correction", "Method 2 Baseline Correction" , "Original NO") , ylab = "")
+dev.off()
+
+```
+
+
+```{r}
+
+first_interval <- match(datestoreplace_ex1[1], sn45F$date)
+second_interval <- match(tail(datestoreplace_ex1[-1], n=1), sn45F$date)
+
+cat(sprintf("Number of negative data points before and after: %d & %d", sum(sn45F$no[first_interval: second_interval] < 0, na.rm = TRUE), sum(sn45F$correctedex1[first_interval: second_interval] < 0, na.rm = TRUE)))
+cat("\n")
+cat(sprintf("Pecent of data that is negative before and after: %f & %f", 
+            (sum(sn45F$no[first_interval: second_interval] < 0, na.rm = TRUE)) / length(sn45F$no[first_interval: second_interval]), 
+            
+            (sum(sn45F$correctedex1[first_interval: second_interval] < 0, na.rm = TRUE)) / length(sn45F$no[first_interval: second_interval])
+            ))
+cat("\n")
+
+cat(sprintf("Minimum value before and after: %f & %f", min(sn45F$no[first_interval: second_interval], na.rm = TRUE), min(sn45F$correctedex1[first_interval: second_interval], na.rm = TRUE)))
+cat("\n")
+#cat(sprintf("Mean negative value before and after: %f & %f", mean(sn45F$no[sn45F$no < 0 & sn45F$date %in% datestoreplace_ex2], na.rm = TRUE), mean(sn45F$correctedex2[sn45F$correctedex2 < 0  & sn45F$date %in% datestoreplace_ex2], na.rm = TRUE)))
+#cat("\n")
+# sprintf("95 % confidence interval of negative data before and after: %f & %f", CI(sn45F$no[sn45F$no < 0], ci=0.95), CI(sn45F$correctedex1[sn45F$correctedex1 < 0], ci=0.95))
+
+cat(sprintf("Mean, Median & Max of the overall data before: %f & %f & %f", mean(sn45F$no[first_interval: second_interval], na.rm=TRUE), median(sn45F$no[first_interval: second_interval], na.rm = TRUE), max(sn45F$no[first_interval: second_interval], na.rm = TRUE)))
+cat("\n")
+
+cat(sprintf("Mean, Median & Max of the overall data after: %f & %f & %f", mean(sn45F$correctedex1[first_interval: second_interval], na.rm=TRUE), median(sn45F$correctedex1[first_interval: second_interval], na.rm=TRUE), max(sn45F$correctedex1[first_interval: second_interval], na.rm=TRUE)))
+
+
+```
+So, of all the values that were converted, the max doesn't reach over 30 (the RMSE). 
+
+```{r}
+
+first_interval <- match(datestoreplace_ex2[1], sn45F$date)
+second_interval <- match(tail(datestoreplace_ex2[-1], n=1), sn45F$date)
+
+cat(sprintf("Number of negative data points before and after: %d & %d", sum(sn45F$no[first_interval: second_interval] < 0, na.rm = TRUE), sum(sn45F$correctedex2[first_interval: second_interval] < 0, na.rm = TRUE)))
+cat("\n")
+cat(sprintf("Pecent of data that is negative before and after: %f & %f", 
+            (sum(sn45F$no[first_interval: second_interval] < 0, na.rm = TRUE)) / length(sn45F$no[first_interval: second_interval]), 
+            
+            (sum(sn45F$correctedex2[first_interval: second_interval] < 0, na.rm = TRUE)) / length(sn45F$no[first_interval: second_interval])
+            ))
+cat("\n")
+
+cat(sprintf("Minimum value before and after: %f & %f", min(sn45F$no[first_interval: second_interval], na.rm = TRUE), min(sn45F$correctedex2[first_interval: second_interval], na.rm = TRUE)))
+cat("\n")
+#cat(sprintf("Mean negative value before and after: %f & %f", mean(sn45F$no[sn45F$no < 0 & sn45F$date %in% datestoreplace_ex2], na.rm = TRUE), mean(sn45F$correctedex2[sn45F$correctedex2 < 0  & sn45F$date %in% datestoreplace_ex2], na.rm = TRUE)))
+#cat("\n")
+# sprintf("95 % confidence interval of negative data before and after: %f & %f", CI(sn45F$no[sn45F$no < 0], ci=0.95), CI(sn45F$correctedex1[sn45F$correctedex1 < 0], ci=0.95))
+
+cat(sprintf("Mean, Median & Max of the overall data before: %f & %f & %f", mean(sn45F$no[first_interval: second_interval], na.rm=TRUE), median(sn45F$no[first_interval: second_interval], na.rm = TRUE), max(sn45F$no[first_interval: second_interval], na.rm = TRUE)))
+cat("\n")
+
+cat(sprintf("Mean, Median & Max of the overall data after: %f & %f & %f", mean(sn45F$correctedex2[first_interval: second_interval], na.rm=TRUE), median(sn45F$correctedex2[first_interval: second_interval], na.rm=TRUE), max(sn45F$correctedex2[first_interval: second_interval], na.rm=TRUE)))
+
+
+```
+
+### Unit test: most negative data value 
+
+```{r}
+which.min(sn45F$no)
+```
+Apart from when the sensors were turned on, the next minimum value happens at: 
+
+```{r}
+which.min(sn45F$no[100:length(sn45F$no)])
+```
+
+So, we can try this again at those indices 
+
+```{r}
+ex3 <- selectByDate(sn45F, start = "21/2/2020", end="28/2/2020") #choose date
+tz(ex3$date) <- "America/New_York"
+datestoreplace_ex3 <- ex3[ex3$no <= 0, "date"] #select which dates to replace later 
+ 
+ex3$noZERO <- replace(ex3$no, ex3$no > 0, 0 ) #set all positive to zero 
+ex3 <- ex3[, c("date", "no", "noZERO")]
+ex3 <- na.omit(ex3)
+
+ex3.t <- t(ex3$noZERO) #prepare no data for baseline 
+
+bc.peakDetection3 <- baseline(ex3.t, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(ex1.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection3) 
+
+
+sn45F$correctedex3 <- sn45F$no
+ex3$corrected <- c(getCorrected(bc.peakDetection3))
+sn45F$correctedex3[sn45F$date %in% datestoreplace_ex3] <- ex3$corrected[ex3$date %in% datestoreplace_ex3]
+
+#preparing ex2
+
+ex4 <- selectByDate(sn45F, start = "21/2/2020", end="28/2/2020") #choose date
+tz(ex4$date) <- "America/New_York"
+datestoreplace_ex4 <- ex4[ex3$no < 0, "date"] #select which dates to replace later 
+ 
+ex4$noZERO <- replace(ex4$no, ex4$no > 0, 0 ) #set all positive to zero 
+ex4 <- ex4[, c("date", "no", "noZERO")]
+ex4 <- na.omit(ex4)
+
+ex4.t <- t(ex4$no[ex4$no < 0]) #prepare no data for baseline 
+
+bc.peakDetection4 <- baseline(ex4.t, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(ex1.t, wm=70, ws=60,method='rollingBall')
+plot(bc.peakDetection4) 
+
+
+sn45F$correctedex4 <- sn45F$no
+ex4$corrected <- c(getCorrected(bc.peakDetection4))
+sn45F$correctedex4[sn45F$date %in% datestoreplace_ex4] <- ex4$corrected[ex4$date %in% datestoreplace_ex4]
+
+```
+
+```{r}
+
+timePlot(selectByDate(sn45F,  start = "26/2/2020", end="26/2/2020"), pollutant = c("correctedex3", "no"), main = "NO vs Time for SN45", name.pol = c("Method 1 Baseline Correction", "Original NO") , ylab = "")
+pdf("img2.pdf")
+timePlot(selectByDate(sn45F,  start = "26/2/2020", end="26/2/2020"), pollutant = c("correctedex3", "correctedex2", "no"), main = "NO vs Time for SN45", 
+         ref.y = list(h = 0, lty = 1, col = "green"),  name.pol = c("Method 1 Baseline Correction", "Method 2 Baseline Correction" , "Original NO") , ylab = "")
+dev.off()
+```
+
+
+```{r}
+timePlot(selectByDate(sn45F,  start = "26/2/2020", end="26/2/2020"), pollutant = c("correctedex1", "no"), main = "NO vs Time for SN45")
+```
+
+
+So, it's a little above 30 ppb (about 40 ppb), but that's the greatest value that this correction will produce. 
+
+
+# Tests based on Monday 7/20 meeting 
+
+### Flagging power cycle 
+
+In order to make baseline corrections easier, first we'll try to remove blips in the data from power cycle activity. 
+
+The first way we're going to try to approach this is by monitoring the flags given at each data point. 
+
+The flag values present in the dataset are: 
+
+```{r}
+sort(unique(sn45F$flag))
+unique(sn45F$device_state)
+sum(sn45F$device_state == "CALIBRATION")
+```
+This is a little strange, because based on the [page that Eben sent us](https://www.notion.so/ARISense-v200-3bf344b2dbba43e8a7799532aef6bf61), there's only 11 possible flag values, that are all multiples of 2 and the greatest of which should be 512. Perhaps we can ask about this later. 
+
+For now, out of the flag values that are present, 16 represents NO data errors, and their reccomendation is for us to discard it. However, I was expecting to see flag 1, which signifies that the device is starting up.
+
+About a third of the data is in the calibration state too, and I wnder if we could use this as well. 
+
+First, I'll check where NO is flagged visually. 
+
+```{r}
+flags_vec <- sn45F$date[which(sn45F$flag == 16)]
+
+sept_nov <- selectByDate(sn45F, start = "6/9/2019", end="6/11/2019")
+sept_nov <- sept_nov[,c("date", "no")]
+tz(sept_nov$date) <- "America/New_York"
+```
+
+```{r}
+plot(sept_nov$date[1:2000], sept_nov$no[1:2000], type="l") 
+
+plot(sept_nov$date[1:2000], sept_nov$no[1:2000], type="l")
+abline(v = flags_vec, col = "red", lty=3, lwd = 0.25)
+```
+
+So it seems to highlight gaps in data. 
+
+Let's see how many of these are there and what effect getting rid of +/- 2 minutes from the event does: 
+
+```{r}
+flags_vec_before <- flags_vec - 2*60 
+cat(print(head(flags_vec_before)))
+cat(print(head(flags_vec) ))
+flags_vec_after <- flags_vec + 2*60
+
+#removing duplicates
+flags_vec_before <- flags_vec_before[!flags_vec_before %in% flags_vec]
+flags_vec_after <- flags_vec_after[!flags_vec_after %in% flags_vec]
+```
+
+So it subtracts by seconds
+
+```{r}
+plot(sept_nov$date[1:200], sept_nov$no[1:200], type="l")
+
+abline(v = flags_vec_before, col = "grey", lty=3, lwd = 0.25)
+abline(v = flags_vec_after, col = "grey", lty=3, lwd = 0.25)
+abline(v = flags_vec, col = "red", lty=1, lwd = 0.25)
+```
+
+Now, I'll remove these values and see how it affected the data statistically. 
+
+```{r}
+cat(sprintf("Summary Statistics Before \n"))
+
+cat(sprintf("Number of negative values: %d \n", sum(sn45F$no < 0, na.rm = TRUE) ))
+
+cat(sprintf("Percent negative values to total data: %f \n", (sum(sn45F$no < 0, na.rm = TRUE) / length(sn45F$no) )))
+
+cat(sprintf("Mean & median : %f , %f \n", mean(sn45F$no, na.rm = TRUE), median(sn45F$no, na.rm = TRUE) ))
+
+cat(sprintf("Max & min : %f , %f \n", max(sn45F$no, na.rm = TRUE), min(sn45F$no, na.rm = TRUE) ))
+
+
+cat(sprintf("Standard Deviation %f \n", sd(sn45F$no, na.rm = TRUE) ))
+
+```
+
+```{r}
+sn45F$no_filt <- ifelse(
+    ( 
+        (sn45F$flag == 16)
+    ),
+    NA,
+    sn45F$no
+)
+
+cat(sprintf("Summary Statistics After \n"))
+
+cat(sprintf("Number of negative values: %d \n", sum(sn45F$no_filt < 0, na.rm = TRUE) ))
+
+cat(sprintf("Percent negative values to total data: %f \n", (sum(sn45F$no_filt < 0, na.rm = TRUE) / length(sn45F$no_filt) )))
+
+cat(sprintf("Mean & median : %f , %f \n", mean(sn45F$no_filt, na.rm = TRUE), median(sn45F$no_filt, na.rm = TRUE) ))
+
+cat(sprintf("Max & min : %f , %f \n", max(sn45F$no_filt, na.rm = TRUE), min(sn45F$no_filt, na.rm = TRUE) ))
+
+
+cat(sprintf("Standard Deviation %f \n", sd(sn45F$no_filt, na.rm = TRUE) ))
+
+```
+
+So, it seems that when the flag == 16, the no data is already NA, therefore, one thing we can try is making the gaps larger
+
+```{r}
+sn45F$no_filt <- ifelse(
+    ( 
+        (sn45F$flag == 16) & 
+          
+        (sn45F$date == flags_vec_before) & 
+          
+        (sn45F$date == flags_vec_after)
+    ),
+    NA,
+    sn45F$no
+)
+
+cat(sprintf("Summary Statistics After \n"))
+
+cat(sprintf("Number of negative values: %d \n", sum(sn45F$no_filt < 0, na.rm = TRUE) ))
+
+cat(sprintf("Percent negative values to total data: %f \n", (sum(sn45F$no_filt < 0, na.rm = TRUE) / length(sn45F$no_filt) )))
+
+cat(sprintf("Mean & median : %f , %f \n", mean(sn45F$no_filt, na.rm = TRUE), median(sn45F$no_filt, na.rm = TRUE) ))
+
+cat(sprintf("Max & min : %f , %f \n", max(sn45F$no_filt, na.rm = TRUE), min(sn45F$no_filt, na.rm = TRUE) ))
+
+
+cat(sprintf("Standard Deviation %f \n", sd(sn45F$no_filt, na.rm = TRUE) ))
+```
+
+```{r}
+# flags_vec_before1 <- flags_vec - 5*60 
+# flags_vec_before2 <- flags_vec - 4*60 
+# flags_vec_before3 <- flags_vec - 3*60 
+# flags_vec_before4 <- flags_vec - 6*60 
+# flags_vec_before5 <- flags_vec - 7*60 
+# 
+# flags_vec_after1 <- flags_vec + 5*60
+# flags_vec_after2 <- flags_vec + 4*60
+# flags_vec_after3 <- flags_vec + 3*60
+# flags_vec_after4 <- flags_vec + 6*60
+# flags_vec_after5 <- flags_vec + 7*60
+# 
+# illegal_dates <- list(flags_vec_before1, flags_vec_before2, flags_vec_before3, flags_vec_before4, flags_vec_before5,
+#                       flags_vec_after1, flags_vec_after2, flags_vec_after3, flags_vec_after4, flags_vec_after5)
+intervals_list <- list()
+sn45F$no_filt <- sn45F$no
+#intervals <- interval(start = (flags_vec[1] - 8*60), end = (flags_vec[1] + 8*60), tz = "America/New_York")
+for (i in 1:length(flags_vec)){
+  intervals_list <- c(intervals_list, list(interval(start = (flags_vec[i] - 8*60), end = (flags_vec[i] + 8*60), tz = "America/New_York")))
+}
+
+for (i in 1: length(intervals_list)){
+  sn45F[(which(sn45F$date %within% intervals_list[i])), "no_filt"] <- NA
+}
+```
+
+```{r}
+#no_filt <- subset(sn45F, date> "2014-12-03" & date < "2014-12-05")
+
+cat(sprintf("Summary Statistics After \n"))
+
+cat(sprintf("Number of negative values: %d \n", sum(sn45F$no_filt < 0, na.rm = TRUE) ))
+
+cat(sprintf("Percent negative values to total data: %f \n", (sum(sn45F$no_filt < 0, na.rm = TRUE) / length(sn45F$no_filt) )))
+
+cat(sprintf("Mean & median : %f , %f \n", mean(sn45F$no_filt, na.rm = TRUE), median(sn45F$no_filt, na.rm = TRUE) ))
+
+cat(sprintf("Max & min : %f , %f \n", max(sn45F$no_filt, na.rm = TRUE), min(sn45F$no_filt, na.rm = TRUE) ))
+
+
+cat(sprintf("Standard Deviation %f \n", sd(sn45F$no_filt, na.rm = TRUE) ))
+```
+
+This only slightly decreased the amount of negative data. I'll try with 10 minutes 
+
+```{r}
+intervals_list <- list()
+sn45F$no_filt <- sn45F$no
+#intervals <- interval(start = (flags_vec[1] - 8*60), end = (flags_vec[1] + 8*60), tz = "America/New_York")
+for (i in 1:length(flags_vec)){
+  intervals_list <- c(intervals_list, list(interval(start = (flags_vec[i] - 10*60), end = (flags_vec[i] + 10*60), tz = "America/New_York")))
+}
+
+for (i in 1: length(intervals_list)){
+  sn45F[(which(sn45F$date %within% intervals_list[i])), "no_filt"] <- NA
+}
+```
+```{r}
+cat(sprintf("Summary Statistics After \n"))
+
+cat(sprintf("Number of negative values: %d \n", sum(sn45F$no_filt < 0, na.rm = TRUE) ))
+
+cat(sprintf("Percent negative values to total data: %f \n", (sum(sn45F$no_filt < 0, na.rm = TRUE) / length(sn45F$no_filt) )))
+
+cat(sprintf("Mean & median : %f , %f \n", mean(sn45F$no_filt, na.rm = TRUE), median(sn45F$no_filt, na.rm = TRUE) ))
+
+cat(sprintf("Max & min : %f , %f \n", max(sn45F$no_filt, na.rm = TRUE), min(sn45F$no_filt, na.rm = TRUE) ))
+
+
+cat(sprintf("Standard Deviation %f \n", sd(sn45F$no_filt, na.rm = TRUE) ))
+```
+
+Let's check periods that we know have power cycles 
+
+```{r}
+timePlot(selectByDate(sn45F, start = "6/9/2019", end="7/9/2019"), pollutant = c("no_filt", "no"), y.relation = "free")
+```
+
+```{r}
+timePlot(selectByDate(sn45F, start = "26/2/2020", end="26/2/2020"), pollutant = c("no_filt", "no"), y.relation = "free")
+```
+
+And around the intervals that were chosen
+
+```{r}
+timePlot(selectByDate(sn45F, start = "14/10/2019", end="14/10/2019"), pollutant = c("no_filt", "no"), y.relation = "free")
+timePlot(selectByDate(sn45F, start = "8/9/2019", end="8/9/2019"), pollutant = c("no_filt", "no"), y.relation = "free")
+timePlot(selectByDate(sn45F, start = "1/11/2019", end="14/11/2019"), pollutant = c("no_filt", "no"), y.relation = "free")
+timePlot(selectByDate(sn45F, start = "9/12/2019", end="9/12/2019"), pollutant = c("no_filt", "no"), y.relation = "free")
+timePlot(selectByDate(sn45F, start = "20/12/2019", end="20/12/2019"), pollutant = c("no_filt", "no"), y.relation = "free")
+
+
+```
+
+```{r}
+timePlot(selectByDate(sn45F, start = "14/1/2020", end="14/1/2020"), pollutant = c("no_filt", "no"), y.relation = "free")
+
+timePlot(selectByDate(sn45F, start = "19/1/2020", end="19/1/2020"), pollutant = c("no_filt", "no"), y.relation = "free")
+
+timePlot(selectByDate(sn45F, start = "20/1/2020", end="24/1/2020"), pollutant = c("no_filt", "no"), y.relation = "free")
+
+
+```
+
+```{r}
+timePlot(selectByDate(sn45F, start = "20/4/2020", end="24/4/2020"), pollutant = c("no_filt", "no"), y.relation = "free")
+
+```
+
+## Plotting all the NO data
+
+```{r warning=FALSE, error=FALSE}
+for (i in seq(1,290000,5000)){
+  
+  timePlot(sn45F[i:sum(i+5000), ], pollutant = "no")
+}
+
+
+
+```
+
+## Using the whole baseline 
+
+#### Example 1
+
+Generating peak detection for the whole baseline
+
+
+First, we designate a period of time:
+```{r}
+period1 <- selectByDate(sn45F, start = "14/5/2020", end = "16/5/2020")
+tz(period1$date) <- "America/New_York"
+```
+
+Doing the correction only on negative values (the method I started with):
+```{r}
+
+datestoreplace_ex1 <- period1[period1$no <= 0, "date"] #select which dates to replace later 
+period1$noZERO <- replace(period1$no, period1$no > 0, 0 ) #set all positive to zero 
+period1 <- period1[, c("date", "no", "noZERO")]
+
+method1.t <- t(period1$noZERO) #prepare no data for baseline 
+
+negativebase.peakDetection <- baseline(method1.t, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(ex1.t, wm=70, ws=60,method='rollingBall')
+plot(negativebase.peakDetection) 
+
+
+sn45F$somebase <- sn45F$no
+period1$corrected <- c(getCorrected(negativebase.peakDetection))
+sn45F$somebase[sn45F$date %in% datestoreplace_ex1] <- period1$corrected[period1$date %in% datestoreplace_ex1]
+```
+
+
+Doing the whole baseline:
+```{r}
+
+wholebase <- t(period1$no)
+wholebase.peakDetection <- baseline(wholebase, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(ex1.t, wm=70, ws=60,method='rollingBall')
+plot(wholebase.peakDetection) 
+
+sn45F$wholebase <- sn45F$no
+sn45F$wholebase[which(sn45F$date == period1$date[1]): which(sn45$date == tail(period1$date, n=1))] <- c(getCorrected(wholebase.peakDetection))
+
+
+```
+
+```{r}
+timePlot(selectByDate(sn45F, start = "14/5/2020", end = "16/5/2020"), pollutant = c("wholebase", "somebase", "no"), main = "NO vs Time for SN45")
+```
+It looks good, but it's still losing some trends. Perhaps if we change the parameters it would help. 
+
+#### Example 2 
+
+First, we designate a period of time:
+```{r}
+period2 <- selectByDate(sn45F, start = "7/9/2019", end = "14/9/2019")
+tz(period2$date) <- "America/New_York"
+period2 <- period2[!(duplicated(period2$date)), ]
+period2 <- na.omit(period2)
+```
+
+Doing the correction only on negative values (the method I started with):
+```{r}
+
+datestoreplace_ex2 <- period2[period2$no <= 0, "date"] #select which dates to replace later 
+period2$noZERO <- replace(period2$no, period2$no > 0, 0 ) #set all positive to zero 
+period2 <- period2[, c("date", "no", "noZERO")]
+
+method2.t <- t(period2$noZERO) #prepare no data for baseline 
+
+negativebase2.peakDetection <- baseline(method2.t, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(ex2.t, wm=70, ws=60,method='rollingBall')
+plot(negativebase2.peakDetection) 
+
+
+#sn45F$somebase2 <- sn45F$no
+period2$somebase <- c(getCorrected(negativebase2.peakDetection))
+#sn45F$somebase2[sn45F$date %in% datestoreplace_ex2] <- period2$corrected[period2$date %in% datestoreplace_ex2]
+```
+
+Doing the whole baseline:
+```{r}
+
+wholebase2 <- t(period2$no)
+wholebase2.peakDetection <- baseline(wholebase2, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+#bc.peakDetection <- baseline(ex2.t, wm=70, ws=60,method='rollingBall')
+plot(wholebase2.peakDetection) 
+
+period2$wholebase <- c(getCorrected(wholebase2.peakDetection))
+#sn45F$wholebase2 <- sn45F$no
+#sn45F$wholebase2[which(sn45F$date == period2$date[2]): which(sn45$date == tail(period2$date, n=1))] <- c(getCorrected(wholebase2.peakDetection))
+
+
+```
+
+```{r}
+#pdf("septweek.pdf")
+timePlot(selectByDate(period2, start = "7/9/2019", end = "14/9/2019"), pollutant = c("wholebase", "somebase", "no"), main = "NO vs Time for SN45 : Negative Correction and Whole Baseline Correction",
+         name.pol = c("Whole Baseline Corr.", "Negative Baseline Corr.", "Original", 
+                      y.relation = "free")
+         )
+#dev.off()
+```
+I would say that looks better! 
+
+#### Example 3 
+
+Let's try an edge case now, where the baseline rises but that might be how it should be. 
+
+```{r}
+period3 <- selectByDate(sn45F, start = "15/12/2019", end = "17/12/2019")
+tz(period3$date) <- "America/New_York"
+period4 <- selectByDate(sn45F, start = "28/11/2019", end = "30/11/2019")
+tz(period4$date) <- "America/New_York"
+period5 <- selectByDate(sn45F, start = "18/2/2020", end = "20/2/2020")
+tz(period5$date) <- "America/New_York"
+```
+
+```{r}
+plotcorrection <- function(period,  startstring, endstring){
+  wholebase <- t(period$no)
+  wholebase.peakDetection <- baseline(wholebase, method='peakDetection',left=300, right=300, lwin=50, rwin=50) #run baseline change 
+  plot(wholebase.peakDetection) 
+  
+  period$wholebase <- c(getCorrected(wholebase.peakDetection))
+   
+  timePlot(selectByDate(period, start = startstring, end = endstring), pollutant = c("wholebase", "no"), main = "NO vs Time for SN45: Whole Baseline Correction", 
+           name.pol = c("Corrected", "Original"), y.relation = "free")
+
+  return(period)
+}
+
+```
+
+```{r}
+period3 <- plotcorrection(period3, startstring = "15/12/2019", endstring = "17/12/2019")
+```
+
+```{r}
+period4 <- plotcorrection(period4, startstring = "28/11/2019", endstring = "30/11/2019")
+
+```
+
+```{r}
+pdf("wholebaselinecorrRESAVE.pdf")
+period5 <- plotcorrection(period5, start = "18/2/2020", end = "20/2/2020")
+dev.off()
+```
+#### Summmary Statistics
+
+```{r}
+cat(sprintf("Whole Baseline correction for 9/7/2019 - 9/14/2019: \n"))
+cat(sprintf("Number of negative points : %d \n", sum(period2$wholebase < 0 , na.rm = TRUE)))
+cat(sprintf("Mean and Median Before and After: %f and %f vs %f and %f \n", 
+            mean(period2$no, na.rm = TRUE), median(period2$no, na.rm = TRUE), mean(period2$wholebase, na.rm = TRUE), median(period2$wholebase, na.rm = TRUE) ))
+
+
+```
+# Tweak parameters 
+
+```{r}
+baselineGUI( t(period2$no))
+```
+```{r}
+period6 <- selectByDate(sn45F, start = "20/2/2020", end="26/2/2020")
+baselineGUI( t(period6$no))
+```
+
+```{r}
+period7 <- selectByDate(sn45F, start = "5/5/2020", end="10/5/2020")
+baselineGUI( t(period7$no))
+```
+
+# Selecting the time frame 
+
+To select the best time frame, I will do the following : 
+
+- pick time frames which could be problematic, because they are more irregularly shaped and have more rapid changes
+-subsection the data so that it would be a day, +/- 3 days, a week and 2 weeks around this period of not smooth data (chosen in previous step).
+-just graphically compare the outputs from these timeframes 
+-do the same three steps for different periods in the data as well (ie data that looks different)
+
+Below, I subsection the data: 
+
+```{r}
+#shortest time frames 
+TF1_short <- selectByDate(sn45F, start="7/5/2020", end="9/5/2020")
+tz(TF1_short) <- "America/New_York"
+
+TF2_short <- selectByDate(sn45F, start="28/4/2020", end="30/4/2020")
+tz(TF2_short) <- "America/New_York"
+
+TF3_short <- selectByDate(sn45F, start="10/3/2020", end="12/3/2020")
+tz(TF3_short) <- "America/New_York"
+
+# Week long time frame 
+
+TF1_week <- selectByDate(sn45F, start="3/5/2020", end="13/5/2020")
+tz(TF1_week) <- "America/New_York"
+
+TF2_week <- selectByDate(sn45F, start="24/4/2020", end="4/5/2020")
+tz(TF2_week) <- "America/New_York"
+
+TF3_week <- selectByDate(sn45F, start="6/3/2020", end="16/3/2020")
+tz(TF3_week) <- "America/New_York"
+
+# 2 week long time frame
+
+TF1_2week <- selectByDate(sn45F, start="30/4/2020", end="15/5/2020")
+tz(TF1_2week) <- "America/New_York"
+
+TF2_2week <- selectByDate(sn45F, start="23/4/2020", end="9/5/2020")
+tz(TF2_2week) <- "America/New_York"
+
+TF3_2week <- selectByDate(sn45F, start="28/2/2020", end="24/3/2020")
+tz(TF3_2week) <- "America/New_York"
+```
+
+Plotting the first time frame example : 
+
+```{r}
+#pdf("tftest1.pdf")
+TF1_short <- plotcorrection(TF1_short, startstring="7/5/2020", endstring="9/5/2020")
+TF1_week <- plotcorrection(TF1_week, startstring="3/5/2020",endstring="13/5/2020")
+TF1_2week <- plotcorrection(TF1_2week,startstring="30/4/2020",endstring="15/5/2020")
+TF1_short$week <- TF1_week$wholebase[which(TF1_week$date == TF1_short$date[1]): which(TF1_week$date == tail(TF1_short$date, n = 1))]
+TF1_short$week2 <- TF1_2week$wholebase[which(TF1_2week$date == TF1_short$date[1]): which(TF1_2week$date == tail(TF1_short$date, n = 1))]
+timePlot(TF1_short, pollutant = c("wholebase", "week", "week2", "no"), 
+         main = "NO vs Time for SN45: Comparing 3 Baseline Corr. Timeframes",
+         y.relation = "free", 
+         name.pol = c("Short Corr.", "Week Corr.", "2 Week Corr.", "Original"))
+#dev.off()
+```
+```{r}
+pdf("tftest1-1.pdf")
+timePlot(TF1_short, pollutant = c("wholebase", "week", "week2", "no"), 
+         main = "NO vs Time for SN45: Comparing 3 Baseline Corr. Timeframes",
+         y.relation = "free", 
+         ylab = "",
+         name.pol = c("Short Corr.", "Week Corr.", "2 Week Corr.", "Original"))
+dev.off()
+```
+
+```{r}
+TF2_short <- plotcorrection(TF2_short,  startstring="28/4/2020", endstring="30/4/2020")
+TF2_week <- plotcorrection(TF2_week, startstring="24/4/2020",endstring="4/5/2020")
+TF2_2week <- plotcorrection(TF2_2week, startstring="23/4/2020",endstring="9/5/2020")
+```
+
+```{r}
+TF2_short$week <- TF2_week$wholebase[which(TF2_week$date == TF2_short$date[1]): which(TF2_week$date == tail(TF2_short$date, n = 1))]
+TF2_short$week2 <- TF2_2week$wholebase[which(TF2_2week$date == TF2_short$date[1]): which(TF2_2week$date == tail(TF2_short$date, n = 1))]
+timePlot(TF2_short, pollutant = c("wholebase", "week", "week2", "no"), 
+         main = "NO vs Time for SN45: Comparing 3 Baseline Corr. Timeframes",
+         y.relation = "free", 
+         name.pol = c("Short Corr.", "Week Corr.", "2 Week Corr.", "Original"))
+```
+```{r}
+pdf("tftest2.pdf")
+timePlot(TF2_short, pollutant = c("wholebase", "week", "week2", "no"), 
+         main = "NO vs Time for SN45: Comparing 3 Baseline Corr. Timeframes",
+         y.relation = "free", 
+         ylab = "",
+         name.pol = c("Short Corr.", "Week Corr.", "2 Week Corr.", "Original"))
+dev.off()
+```
+
+
+
+```{r}
+TF3_short <- plotcorrection(TF3_short, startstring="10/3/2020",endstring="12/3/2020")
+TF3_week <- plotcorrection(TF3_week,startstring="6/3/2020",endstring="16/3/2020")
+TF3_2week <- plotcorrection(TF3_2week,  startstring="28/2/2020", endstring="24/3/2020")
+```
+```{r}
+TF3_short$week <- TF3_week$wholebase[which(TF3_week$date == TF3_short$date[1]): which(TF3_week$date == tail(TF3_short$date, n = 1))]
+TF3_short$week2 <- TF3_2week$wholebase[which(TF3_2week$date == TF3_short$date[1]): which(TF3_2week$date == tail(TF3_short$date, n = 1))]
+timePlot(TF3_short, pollutant = c("wholebase", "week", "week2", "no"), 
+         main = "NO vs Time for SN45: Comparing 3 Baseline Corr. Timeframes",
+         y.relation = "free", 
+         name.pol = c("Short Corr.", "Week Corr.", "2 Week Corr.", "Original"))
+```
+
+```{r}
+pdf("tftest3.pdf")
+timePlot(TF3_short, pollutant = c("wholebase", "week", "week2", "no"), 
+         main = "NO vs Time for SN45: Comparing 3 Baseline Corr. Timeframes",
+         y.relation = "free", 
+         ylab = "",
+         name.pol = c("Short Corr.", "Week Corr.", "2 Week Corr.", "Original"))
+dev.off()
+```
+
