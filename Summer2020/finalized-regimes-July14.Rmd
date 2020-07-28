@@ -22,13 +22,12 @@ library(data.table)
 ```{r}
 sn45 <- read.csv("data/sn45.csv") #this is the modified sensor data for SN 45, locally I am storing it in the data folder but it can be found on the Sensor Data dropbox
 sn45$X <- NULL 
-sn45$date <- ymd_hms(sn45$date, tz="America/New_York")
+sn45$date <- as.POSIXct(sn45$date, format="%m/%d/%Y %H:%M",  tz = "America/New_York")
 sn45 <- sn45[!(duplicated(sn45$date)), ]
 ```
 
 ```{r}
 flightdf <- read.csv("data/finalflightdf.csv") #this is the modified and finalized dataframe with the flight data from FAA. This can also be found on the Sensor Data dropbox
-flightdf$X <- NULL
 flightdf$Date <- ymd_hms(flightdf$Date, tz = "America/New_York")
 ```
 
@@ -162,19 +161,19 @@ intervals_arrival <- filter(intervals, Opr == "A") #filter time ranges by arriva
 intervals_departures <- filter(intervals, Opr == "D") #same for departures
 intervals_other <- filter(intervals, Opr == "Other") #same for departures
  
-sn_arrivals <- sn45[sn45$date %within% intervals_arrival$intervals_list[1] , ] #extracting all the sensor data in the first interval
+sn_arrivals <- sn45[which(sn45$date %within% intervals_arrival$intervals_list[1]) , ] #extracting all the sensor data in the first interval
 for (indx in 2:length(intervals_arrival$intervals_list)){
-  sn_arrivals <- rbind(sn_arrivals, sn45[sn45$date %within% intervals_arrival$intervals_list[indx] , ]) 
+  sn_arrivals <- rbind(sn_arrivals, sn45[which(sn45$date %within% intervals_arrival$intervals_list[indx]) , ]) 
 }
 
-sn_departures <- sn45[sn45$date %within% intervals_departures$intervals_list[1] , ]
+sn_departures <- sn45[which(sn45$date %within% intervals_departures$intervals_list[1] ), ]
 for (indx in 2:length(intervals_departures$intervals_list)){
-  sn_departures <- rbind(sn_departures, sn45[sn45$date %within% intervals_departures$intervals_list[indx] , ]) 
+  sn_departures <- rbind(sn_departures, sn45[which(sn45$date %within% intervals_departures$intervals_list[indx]) , ]) 
 }
 
-sn_other <- sn45[sn45$date %within% intervals_other$intervals_list[1] , ]
+sn_other <- sn45[which(sn45$date %within% intervals_other$intervals_list[1] ), ]
 for (indx in 2:length(intervals_other$intervals_list)){
-  sn_other <- rbind(sn_other, sn45[sn45$date %within% intervals_other$intervals_list[indx] , ]) 
+  sn_other <- rbind(sn_other, sn45[which(sn45$date %within% intervals_other$intervals_list[indx] ), ]) 
 }
 ```
 
@@ -184,23 +183,24 @@ sn_reg4 <- setdiff(sn_other, sn_reg1)
 ```
 
 ```{r}
-write.csv(sn_reg1, "sn45_reg1.csv")
-write.csv(sn_departures, "sn45_reg2_D.csv")
-write.csv(sn_arrivals, "sn45_reg3_A.csv")
-write.csv(sn_reg4, "sn45_reg4.csv")
+write.csv(sn_reg1, "sn45_reg1.csv", row.names = F)
+write.csv(sn_departures, "sn45_reg2_D.csv", row.names = F)
+write.csv(sn_arrivals, "sn45_reg3_A.csv", row.names = F)
+write.csv(sn_reg4, "sn45_reg4.csv", row.names = F)
 ```
 
 Gut check that regimes are sound (they don't overlap and include all the datapoints):
 
 ```{r}
 #check that all datapoints are included
-length(sn45$date) == sum(length(sn_departures$date) + length(sn_arrivals$date) + length(sn_reg1$date) + length(sn_reg4$date))
-length(sn45$date) == sum(length(sn_departures$date) + length(sn_arrivals$date) + length(sn_other$date) )
+print((nrow(selectByDate(sn45, start = "6/9/2019", end = "28/4/2020")) - nrow(sn45[which(sn45$date == "2020-04-28 21:56:00 EDT") : which(sn45$date == "2020-04-28 23:59:00 EDT"), ]) ) - (nrow(sn_departures) + nrow(sn_arrivals) + nrow(sn_reg1) + nrow(sn_reg4)))
+#check nothing was lost when separating sn_other 
+nrow(sn_other) == (nrow(sn_reg1) + nrow(sn_reg4))
+
 #check that there's no overlap
 Reduce(intersect, list(sn_departures$date,sn_arrivals$date, sn_reg1$date, sn_reg4$date ))
 
 ```
-
 
 
 
