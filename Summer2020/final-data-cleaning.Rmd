@@ -5,151 +5,13 @@ title: "R Notebook"
 
 # Importing Packages 
 
-```{r warning = FALSE, error=FALSE}
-library(lubridate)
-library(tidyverse)
+```{r}
 library(data.table)
-library(baseline)
+library(dplyr)
 library(openair)
+library(baseline)
 ```
 
-# Supporting Functions 
-
-## Formatting Time 
-
-```{r}
-format_SNtime <- function(sn){
-  sensor <- sn
-  sensor$date <- ymd_hms(sensor$timestamp_local, tz="America/New_York") #parse datetime
-  sensor[, c("X1","X", "sn" )] <- list(NULL) #removing unused variables
-  sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
-  sensor$date <- round_date(ymd_hms(sensor$date, tz="America/New_York"), unit="minute") #round date for merging
-  sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
-  return(sensor)
-}
-```
-
-
-```{r}
-format_NO2modeltime <- function(no2model, sensor){
-  no2model <- no2model[order(no2model$timestamp),]
-  # the timestamp is given as seconds from some origin, so I'll deduce the origin
-  no2model$date <-  as_datetime(no2model$timestamp , tz="America/New_York",  origin = (sensor$originaldate[1] - no2model$timestamp[1])) 
-  no2model$date <- round_date(no2model$date, unit = "minute")   #to merge with finaldf
-  tz(no2model$date) <- "America/new_York"
-  no2model$timestamp <- NULL #excluding this variable
-  
-  names(no2model)[names(no2model)=="no2"] <- "no2model"#renaming, for the merge
-  
-  return(no2model)
-}
-```
-
-```{r}
-format_METtime <- function(metdata){
-  metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M", tz = "America/New_York") #setting datetime, using correct timezone
-  metdata <- metdata %>%
-    setnames(old = c("drct", "sped"), new = c("wd", "ws")) %>% #rename
-    complete(date = seq(from = min(date), to= max(date),  by = "1 min")) %>%#make 1 minute intervals
-    fill(c("wd", "ws")) #fill those new 1 minute interval rows 
-    
-  metdata <- metdata[!grepl("null", metdata$ws),] #getting rid of met's null data
-  metdata <- metdata[!grepl("null", metdata$wd),]
-  metdata$wd <- as.numeric(metdata$wd)  #reformatting so it's integers instead of strings
-  metdata$ws <- as.numeric(metdata$ws)
-  metdata$ws <- metdata$ws * (1609/3600) #converting to m/s
-  metdata[,c("tmpc", "valid", "station")] <- list(NULL) #getting rid of unnecessary variables
-  
-  return(metdata)
-}
-```
-
-
-## Set data.table and Merge 
-```{r}
-setDT_merge <- function(sensor, no2model, metdf){
-  #assuming metdf is already DT
-  setDT(sensor, key = "date") 
-  setDT(no2model, key = "date")
-  joined.sn.no2 <- sensor[no2model]
-  finaldf <- metdf[joined.sn.no2]
-  return(list("finaldf"=finaldf, "sensor" = sensor, "no2model" = no2model))
-}
-
-```
-
-
-## Filtering NO based on NO_ae 
-
-## Filtering Negative O3 
-
-This function only takes one line, so I will just call it directly in the final function. I am including it here to explain it.
-
-```{r eval = FALSE}
-sn45$o3 <- replace(sn45$o3, sn45$o3 < 0, 0)
-```
-
-
-
-## No Baseline Correction 
-
-
-```{r}
-NO_baselinecorr <- function(sensor){
-  tz(sensor$date) <- "America/New_York"
-  # create day column
-  sensor[, day := as.Date(date, format="%Y-%m-%d", tz = "America/New_York")]
-  # create corrected column 
-  sensor[, correctedNO := seq(0,0,length.out= length(sensor$no))]
-  
-  #length(unique(sensor$day, na.rm=TRUE))
-  unique_days <- c(unique(sensor$day, na.rm=TRUE))
-  
-  #sensor <- sensor[!duplicated(sensor), ] 
-  #sensor<- drop_na(sensor)
-  start.time <- Sys.time()
-  for (i in 2:(length(unique_days)-1)){
-    temp <- subset(sensor, day %in% unique_days[i], c("day", "no", "date"))
-  
-    wholebase.peakDetection <- baseline(t(temp$no), method='peakDetection',left=25, right=25, lwin=5, rwin=5) #run 
-    sensor$correctedNO[which(sensor$date == temp$date[1]): which(sensor$date == tail(temp$date, n=1))] <-  
-      c(getCorrected(wholebase.peakDetection))
-    
-  }
-  
-  end.time <- Sys.time()
-  time.taken <- end.time - start.time
-  print(time.taken)
-  
-  #deleting temp variables to save memory
-  unique_days <- NULL
-  i <- NULL
-  
-  return(sensor)
-  
-}
-
-```
-
-
-
-
-# Final Function 
-
-```{r}
-run_all_cleaning <- function(sensor, metdata, no2model){
-  sensor <- format_SNtime(sensor)
-  no2model <- format_NO2modeltime(no2model, sensor)
-  merged_df <- setDT_merge(sensor, no2model, metdata)
-  #merged_df <- filter_noae(merged_df)
-  merged_df$o3 <- replace(merged_df$o3, merged_df$o3 < 0, 0)
-  merged_df <- NO_baselinecorr(merged_df)
-  return(merged_df)
-}
-```
-
-
-# Applied Final Function 
 
 ## Set Up Meterological Data 
 
@@ -181,19 +43,71 @@ setDT(metdata, key = "date")
 
 
 
-## Call 
+## Create Dataframes
+
+In this section, I use the data cleaning steps (in the final_data_cleaning function) to create datasets for the sensors.
 
 ```{r}
 sn45 = read.csv("Final_Customer/20200519_final_045.csv",  header=TRUE, fileEncoding="UTF-8-BOM")
 sn45no2model <- read.csv("Final_Customer/no2_HYBRID_045.txt") 
 
-#source("functions/final_data_cleaning.R")
-#sn45 <- final_data_cleaning(sn45, metdata, sn45no2model)
+source("functions/final_data_cleaning.R")
+sn45 <- final_data_cleaning(sn45, metdata, sn45no2model)
+write.csv(sn45, "sn45.csv", row.names = FALSE)
 ```
 
 ```{r}
-sensor <- sn45 
-no2model <- sn45no2model
+rm(sn45)
+rm(sn45no2model)
+gc()
+
+sn49 = read.csv("Final_Customer/20200519_final_049.csv",  header=TRUE, fileEncoding="UTF-8-BOM")
+sn49no2model <- read.csv("Final_Customer/no2_HYBRID_049.txt") 
+
+sn49 <- final_data_cleaning(sn49, metdata, sn49no2model)
+write.csv(sn49, "sn49.csv", row.names = FALSE)
+```
+
+```{r}
+rm(sn49)
+rm(sn49no2model)
+
+sn62 = read.csv("Final_Customer/20200519_final_062.csv",  header=TRUE, fileEncoding="UTF-8-BOM")
+sn62no2model <- read.csv("Final_Customer/no2_HYBRID_062.txt") 
+
+write.csv(sn62, "sn62.csv", row.names = FALSE)
+```
+
+```{r}
+rm(sn62)
+rm(sn62no2model)
+
+sn67 = read.csv("Final_Customer/20200519_final_067.csv",  header=TRUE, fileEncoding="UTF-8-BOM")
+sn67no2model <- read.csv("Final_Customer/no2_HYBRID_067.txt") 
+
+sn67 <- final_data_cleaning(sn67, metdata, sn67no2model)
+write.csv(sn67, "sn67.csv", row.names = FALSE)
+```
+
+Note that SN 72 data cleaning isn't currently working.
+```{r}
+rm(sn67)
+rm(sn67no2model)
+
+sn72 = read.csv("Final_Customer/20200519_final_072.csv",  header=TRUE, fileEncoding="UTF-8-BOM")
+sn72no2model <- read.csv("Final_Customer/no2_HYBRID_072.txt") 
+
+sn72 <- final_data_cleaning(sn72, metdata, sn72no2model)
+write.csv(sn72, "sn72.csv", row.names = FALSE)
+```
+
+## Final Data Cleaning Function 
+
+Even though I call the final data cleaning function from a separate file above, I also include it here for testing and debugging purposes. 
+
+```{r}
+sensor <- sn72 
+no2model <- sn72no2model
 
 ## PREPARE DATES and DATAFRAMES
 
@@ -249,7 +163,7 @@ tz(sensor$date) <- "America/New_York"
 sensor[, day := as.Date(date, format="%Y-%m-%d", tz = "America/New_York")]
 # create corrected column 
 sensor[, correctedNO := seq(0,0,length.out= length(sensor$no))]
-sensor$correctedNO <- replace(sensor$correctedNO, 0, NA) #set them actually to NA
+sensor$correctedNO[sensor$correctedNO == 0] <- NA  #set them actually to NA
 
 dropNAsensor<- sensor[!is.na(sensor$no), ] # drop NO NAs
 
@@ -258,10 +172,20 @@ unique_days <- c(unique(dropNAsensor$day, na.rm=TRUE)) #get all of the unique da
 for (i in 2:(length(unique_days)-1)){ #for all days
   temp <- subset(dropNAsensor, day %in% unique_days[i], c("day", "no", "date")) #create temp dataset
 
-  wholebase.peakDetection <- baseline(t(temp$no), method='peakDetection',left=50, right=50, lwin=10, rwin=10) #baseline correction
+  if (nrow(temp) > 550){
+    wholebase.peakDetection <- baseline(t(temp$no), method='peakDetection',left=50, right=50, lwin=10, rwin=10) #baseline correction
   
   #replace the correctedNO column values with the baseline correction from earlier
   dropNAsensor$correctedNO[which(dropNAsensor$date == temp$date[1]): which(dropNAsensor$date == tail(temp$date, n=1))] <-    c(getCorrected(wholebase.peakDetection))
+  }
+  
+  else{
+    if (sum(temp$no < 0, na.rm = TRUE) / nrow(temp) < 0.25){
+      dropNAsensor$correctedNO[which(dropNAsensor$date == temp$date[1]): which(dropNAsensor$date == tail(temp$date, n=1))] <-    
+        sensor$no[which(sensor$date == temp$date[1]): which(sensor$date == tail(temp$date, n=1))]
+    }
+
+  }
   
 }
 
@@ -270,13 +194,13 @@ sensor$correctedNO[which(sensor$date %in% dropNAsensor$date)] <- dropNAsensor$co
 ```
 
 # Creating Graphs
+
+Below I include the code I wrote to check the data cleaning results
+
+
 ```{r}
-#library(openair)
 sensor <- sn45
-sensor$co2diff <- c(0, diff(sensor$co2))
-```
-```{r}
-pdf("SN45_filtered.pdf")
+#pdf("SN45_filtered.pdf")
 timePlot(selectByDate(sensor, start = "9/9/2019", end = "9/11/2019"), pollutant = c("wd", "ws", "no", "no2model", "co", "co2",  "co2diff",  "o3", "rh_manifold", "temp_manifold"), y.relation = "free")
 
 timePlot(selectByDate(sensor, start = "9/11/2019", end = "1/1/2020"), pollutant = c("wd", "ws", "no", "no2model", "co", "co2",  "co2diff", "o3", "rh_manifold", "temp_manifold"), y.relation = "free")
@@ -286,15 +210,16 @@ timePlot(selectByDate(sensor, start = "2/1/2020", end = "1/4/2020"), pollutant =
 
 timePlot(selectByDate(sensor, start = "1/4/2020", end = "15/5/2020"), pollutant = c("wd", "ws", "no", "no2model", "co", "co2",  "co2diff", "o3", "rh_manifold", "temp_manifold"), y.relation = "free")
 
-dev.off()
+#dev.off()
 ```
 
+Including sub-dataframes from the cleaning function. This one checks that baseline function worked :
 ```{r}
 timePlot(selectByDate(dropNAsensor, start = "9/9/2019", end = "9/11/2019"), pollutant = c("correctedNO", "no"))
 ```
 
+Using these graphs, I tested whether O3 drops when NO has a peak: 
 ```{r}
-#library(openair)
 timePlot(selectByDate(sensor,start = "2/1/2020", end = "2/1/2020"), pollutant = c("o3", "no", "temp_manifold"), y.relation = "free")
 timePlot(selectByDate(sensor,start = "2/2/2020", end = "2/2/2020"), pollutant = c("no","o3", "temp_manifold"), y.relation = "free")
 timePlot(selectByDate(sensor,start = "2/3/2020", end = "3/3/2020"), pollutant = c("no","o3", "temp_manifold"), y.relation = "free")
@@ -304,43 +229,15 @@ timePlot(selectByDate(sensor,start = "2/2/2020", end = "6/2/2020"), pollutant = 
 timePlot(selectByDate(sensor,start = "2/3/2020", end = "6/3/2020"), pollutant = "o3", y.relation = "free")
 ```
 
+With these graphs, I checked if O3 has an afternoon peak:
 ```{r}
-#timeVariation(sensor, pollutant = "o3", local.tz = "America/New_York")
-library(openair)
-#timeVariation(sensor, pollutant = "o3", type = "season")
-pdf("diurnal-o3-trends.pdf")
+timeVariation(sensor, pollutant = "o3", local.tz = "America/New_York")
+timeVariation(sensor, pollutant = "o3", type = "season")
+#pdf("diurnal-o3-trends.pdf")
 timeVariation(sensor, pollutant = "o3")
-dev.off()
-
-```
-```{r}
-tz(sensor$date)
+#dev.off()
+tz(sensor$date) # checking time zone of the sensor
 ```
 
-# Checks 
 
-## Check that NO values are being replaced correctly 
-```{r}
-# check 
-# sensor$correctedNO[which(sensor$date %in% dropNAsensor$date)] <- dropNAsensor$correctedNO # replace values based on date 
-```
-
-## Checks on Merge 
-
-For this, I ran the code to prepare the two datasets for merging, just as it is above. I'm doing these trials instead of the merging code above. 
-
-```{r}
-#trying the inner join, which sets no match to NA
-joined.sn.no2 <- no2model[sensor, nomatch = NA]
-
-# 
-trial1 <- metdata[joined.sn.no2, nomatch = NA]
-trial2 <- joined.sn.no2[metdata, nomatch = NA]
-trial3 <- joined.sn.no2[metdata, nomatch = 0]
-
-#
-trial3a <- no2model[sensor, nomatch = 0]
-trial3b <- trial3a[metdata, nomatch = 0]
-trial3c <- metdata[trial3a, nomatch = 0]
-```
 
