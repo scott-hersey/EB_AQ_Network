@@ -201,7 +201,249 @@ nrow(sn_other) == (nrow(sn_reg1) + nrow(sn_reg4))
 Reduce(intersect, list(sn_departures$date,sn_arrivals$date, sn_reg1$date, sn_reg4$date ))
 
 ```
+## Generalized Function and Application 
 
+```{r}
+gen_regime <- function(sn, runwaystring, flightdf, wd1, wd2){
+temp_runway <- flightdf %>%   filter(RW == runwaystring) # extracting flights from just the right runway
+
+#setting up variables
+curr_reg <- temp_runway$Opr[1] #current regime
+intervals_list <- list() #list of intervals
+opr_list <- list() #list of corresponding intervals
+curr_start <- temp_runway$Date[1] #current time
+i <- 1 # counter
+
+#this for loop goes through each flight, and determines whether to create a new time range or keep going 
+
+for (flightindex in 2:length(temp_runway$Date)){ #for each of the flights, starting at the second
+  #first var to check : time 
+  if (difftime(temp_runway[flightindex, "Date"], temp_runway[flightindex - 1, "Date"], units="mins")  <  30){
+    #second check : operation 
+    
+      #first check if operation is the same 
+      if (temp_runway[flightindex, "Opr"] == curr_reg){ # if it's the same regime, keep going
+      next
+      } 
+      #if it's not, but it's only one plane making a difference 
+      else{
+        if(temp_runway[flightindex+1, "Opr"] == curr_reg | temp_runway[flightindex+2, "Opr"] == curr_reg){ #if there's only one, two or three of that given opr
+        next #keep going
+      }
+      
+      else{ #otherwise, record this time range and start recording the next one
+      intervals_list<- c(intervals_list, list(interval(start=curr_start, end=temp_runway[flightindex-1, "Date"], tz = "America/New_York"))) # record what the interval is
+      opr_list <- c(opr_list, curr_reg) #record which operation this interval corresponds to 
+      #update variables
+      i <- i+ 1  
+      curr_start <- temp_runway[flightindex , "Date"]
+      curr_reg <- temp_runway[flightindex , "Opr"] 
+      }
+        } 
+      }
+
+
+    
+  else{ #if there's a gap in time
+      intervals_list<- c(intervals_list, list(interval(start=curr_start, end=temp_runway[flightindex-1, "Date"], tz = "America/New_York"))) # record what the interval is
+      opr_list <- c(opr_list, curr_reg) #record which operation this interval corresponds to  
+      intervals_list<- c(intervals_list, list(interval(start=temp_runway[flightindex-1, "Date"], end=temp_runway[flightindex, "Date"], tz = "America/New_York"))) # record what the interval is
+      opr_list <- c(opr_list, "Other") #record which operation this interval corresponds to 
+      #update variables
+      i <- i+ 1  
+      curr_start <- temp_runway[flightindex , "Date"]
+      curr_reg <- temp_runway[flightindex , "Opr"] 
+
+  }
+}
+  
+
+(intervals <-  do.call(rbind, Map(data.frame, intervals_list=intervals_list, Opr=opr_list))) #put the interval and operation lists together
+print(intervals)
+
+intervals_arrival <- filter(intervals, Opr == "A") #filter time ranges by arrivals
+intervals_departures <- filter(intervals, Opr == "D") #same for departures
+intervals_other <- filter(intervals, Opr == "Other") #same for departures
+ 
+sn_arrivals <- sn[which(sn45$date %within% intervals_arrival$intervals_list[1]) , ] #extracting all the sensor data in the first interval
+for (indx in 2:length(intervals_arrival$intervals_list)){
+  sn_arrivals <- rbind(sn_arrivals, sn[which(sn$date %within% intervals_arrival$intervals_list[indx]) , ]) 
+}
+
+sn_departures <- sn[which(sn$date %within% intervals_departures$intervals_list[1] ), ]
+for (indx in 2:length(intervals_departures$intervals_list)){
+  sn_departures <- rbind(sn_departures, sn[which(sn$date %within% intervals_departures$intervals_list[indx]) , ]) 
+}
+
+sn_other <- sn[which(sn$date %within% intervals_other$intervals_list[1] ), ]
+for (indx in 2:length(intervals_other$intervals_list)){
+  sn_other <- rbind(sn_other, sn[which(sn$date %within% intervals_other$intervals_list[indx] ), ]) 
+}
+
+sn_reg1 <- filter(sn_other, wd > wd1 & wd < wd2)
+sn_reg4 <- setdiff(sn_other, sn_reg1)
+
+return(list("reg1" = sn_reg1, "reg2" = sn_departures, "reg3" = sn_arrivals, "reg4" = sn_reg4))
+}
+```
+
+
+
+```{r}
+gen_regime_norunway <- function(sn, wd1, wd2){
+
+sn_reg1 <- filter(sn, wd > wd1 & wd < wd2)
+sn_reg2 <- setdiff(sn, sn_reg1)
+
+return(list("reg1" = sn_reg1, "reg2" = sn_reg2))
+}
+```
+
+## Application 
+
+
+45 & 72 
+```{r}
+sn45 <- read.csv("data/sn45filt.csv")
+sn45$date <- ymd_hms(sn45$date, tz = "America/New_York")
+gen_regime_45 <- gen_regime(sn45, "22R", flightdf, 170,240)
+write.csv(gen_regime_45$reg1, "sn45-reg1.csv", row.names = FALSE)
+write.csv(gen_regime_45$reg2, "sn45-reg2.csv", row.names = FALSE)
+write.csv(gen_regime_45$reg3, "sn45-reg3.csv", row.names = FALSE)
+write.csv(gen_regime_45$reg4, "sn45-reg4.csv", row.names = FALSE)
+#gen_regime <- function(sn, runwaystring, df, wd1, wd2)
+```
+
+49 & 62
+
+```{r}
+sn49 <- read.csv("data/sn49filt.csv")
+sn49$date <- ymd_hms(sn49$date, tz = "America/New_York")
+reg49 <- gen_regime_norunway(sn49, 210, 320)
+
+```
+
+```{r}
+write.csv(reg49$reg1, "SN49-reg1.csv", row.names = FALSE)
+write.csv(reg49$reg2, "SN49-reg2.csv", row.names = FALSE)
+```
+
+```{r}
+sn62 <- read.csv("data/sn62filt.csv")
+sn62$date <- ymd_hms(sn62$date, tz = "America/New_York")
+reg62<- gen_regime_norunway(sn62, 50, 140)
+write.csv(reg62$reg1, "SN62-reg1.csv", row.names = FALSE)
+write.csv(reg62$reg2, "SN62-reg2.csv", row.names = FALSE)
+```
+
+67 
+
+```{r}
+sn67 <- read.csv("data/sn67filt.csv")
+sn67$date <- ymd_hms(sn67$date, tz = "America/New_York")
+```
+
+
+```{r}
+temp_runway <- flightdf %>%   filter(RW == "9" | RW == "27") # extracting flights from just the right runway
+
+#setting up variables
+curr_reg <- temp_runway$Opr[1] #current regime
+intervals_list <- list() #list of intervals
+opr_list <- list() #list of corresponding intervals
+curr_start <- temp_runway$Date[1] #current time
+curr_RW <- temp_runway$RW[1]
+rw_list <- list()
+i <- 1 # counter
+
+#this for loop goes through each flight, and determines whether to create a new time range or keep going 
+
+for (flightindex in 2:length(temp_runway$Date)){ #for each of the flights, starting at the second
+  #first var to check : time 
+  if (difftime(temp_runway[flightindex, "Date"], temp_runway[flightindex - 1, "Date"], units="mins")  <  30){
+    #second check : operation 
+    
+      #first check if operation is the same 
+      if (temp_runway[flightindex, "Opr"] == curr_reg){ # if it's the same regime, keep going
+      next
+      } 
+      #if it's not, but it's only one plane making a difference 
+      else{
+        if(temp_runway[flightindex+1, "Opr"] == curr_reg | temp_runway[flightindex+2, "Opr"] == curr_reg){ #if there's only one, two or three of that given opr
+        next #keep going
+      }
+      
+      else{ #otherwise, record this time range and start recording the next one
+      intervals_list<- c(intervals_list, list(interval(start=curr_start, end=temp_runway[flightindex-1, "Date"], tz = "America/New_York"))) # record what the interval is
+      opr_list <- c(opr_list, curr_reg) #record which operation this interval corresponds to 
+      rw_list <- c(rw_list, curr_RW)
+      #update variables
+      i <- i+ 1  
+      curr_start <- temp_runway[flightindex , "Date"]
+      curr_reg <- temp_runway[flightindex , "Opr"] 
+      curr_RW <- temp_runway[flightindex , "RW"] 
+      }
+        } 
+      }
+
+
+    
+  else{ #if there's a gap in time
+      intervals_list<- c(intervals_list, list(interval(start=curr_start, end=temp_runway[flightindex-1, "Date"], tz = "America/New_York"))) # record what the interval is
+      opr_list <- c(opr_list, curr_reg) #record which operation this interval corresponds to  
+      rw_list <- c(rw_list, curr_RW)
+      intervals_list<- c(intervals_list, list(interval(start=temp_runway[flightindex-1, "Date"], end=temp_runway[flightindex, "Date"], tz = "America/New_York"))) # record what the interval is
+      opr_list <- c(opr_list, "Other") #record which operation this interval corresponds to 
+      rw_list <- c(rw_list, "None")
+      #update variables
+      i <- i+ 1  
+      curr_start <- temp_runway[flightindex , "Date"]
+      curr_reg <- temp_runway[flightindex , "Opr"] 
+      curr_RW <- temp_runway[flightindex , "RW"] 
+
+  }
+}
+  
+
+(intervals <-  do.call(rbind, Map(data.frame, intervals_list=intervals_list, Opr=opr_list, RW= rw_list) ) )#put the interval and operation lists together
+print(intervals)
+
+intervals_arrival <- filter(intervals, Opr == "A") #filter time ranges by arrivals
+intervals_departures <- filter(intervals, Opr == "D") #same for departures
+intervals_other <- filter(intervals, Opr == "Other") #same for departures
+ 
+sn_arrivals <- sn67[which(sn67$date %within% intervals_arrival$intervals_list[1]) , ] #extracting all the sensor data in the first interval
+sn_arrivals$RW <- seq(intervals_arrival$RW[1], intervals_arrival$RW[1], length.out = nrow(sn_arrivals) )
+for (indx in 2:length(intervals_arrival$intervals_list)){
+  ar_temp <- sn67[which(sn67$date %within% intervals_arrival$intervals_list[indx]) , ]
+  ar_temp$RW <- seq(intervals_arrival$RW[1], intervals_arrival$RW[1], length.out = nrow(ar_temp) )
+  sn_arrivals <- rbind(sn_arrivals, ar_temp) 
+}
+
+sn_departures <- sn67[which(sn67$date %within% intervals_departures$intervals_list[1] ), ]
+sn_departures$RW <- seq(intervals_departures$RW[1], intervals_departures$RW[1], length.out = nrow(sn_departures) )
+for (indx in 2:length(intervals_departures$intervals_list)){
+  dep_temp <- sn67[which(sn67$date %within% intervals_departures$intervals_list[indx]), ]
+  dep_temp$RW <-  seq(intervals_departures$RW[1], intervals_departures$RW[1], length.out = nrow(dep_temp) )
+  sn_departures <- rbind(sn_departures, dep_temp) 
+}
+
+sn_other <- sn67[which(sn67$date %within% intervals_other$intervals_list[1] ), ]
+for (indx in 2:length(intervals_other$intervals_list)){
+  sn_other <- rbind(sn_other, sn67[which(sn67$date %within% intervals_other$intervals_list[indx] ), ]) 
+}
+
+sn_reg1 <- filter(sn_other, wd > 240 & wd < 300)
+sn_reg4 <- setdiff(sn_other, sn_reg1)
+
+sn_full <- list("reg1" = sn_reg1, "reg2" = sn_departures, "reg3" = sn_arrivals, "reg4" = sn_reg4)
+```
+```{r}
+write.csv(sn_full$reg1, "sn67-reg1.csv", row.names = FALSE)
+write.csv(sn_full$reg2, "sn67-reg2.csv", row.names = FALSE)
+write.csv(sn_full$reg3, "sn67-reg3.csv", row.names = FALSE)
+write.csv(sn_full$reg4, "sn67-reg4.csv", row.names = FALSE)
+```
 
 
 # Version 3: Hourly regimes 
