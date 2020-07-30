@@ -53,9 +53,9 @@ createsensordf <- function(sensorpath, no2modelpath, metdf){
   
   sensor = read.csv(sensorpath, header=TRUE, fileEncoding="UTF-8-BOM") #import sensor file
   #getting our sensor data ready
-  sensor$date <- ymd_hms(sensor$date, tz="America/New_York") #parse datetime
-  sensor[, c("lat", "long", "X", "X.1")] <- list(NULL) #removing columns for speed
-  mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
+  sensor$date <- ymd_hms(sensor$timestamp_local, tz="America/New_York") #parse datetime
+  sensor[, c("lat", "lon", "X", "X.1", "sn")] <- list(NULL) #removing columns for speed
+  sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
   sensor$date <- round_date(sensor$date, unit="minute")
   
   #merging
