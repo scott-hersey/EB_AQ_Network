@@ -6,6 +6,7 @@ title: "R Notebook"
 # Importing Packages 
 
 ```{r}
+library(tidyr)
 library(data.table)
 library(lubridate)
 library(dplyr)
@@ -46,19 +47,41 @@ setDT(metdata, key = "date")
 
 ## Create Dataframes
 
+### Additional Functions Based on Testing 
+
+I created the function below, because, through testing, I found that when the bin values should be negative, they're actually all zero. This function corrects that: 
+
+```{r}
+clean_bins <- function(sn){
+  sn[which(sn$bin0 == 0 & 
+             sn$bin1 == 0 & 
+             sn$bin2 == 0 & 
+             sn$bin3 == 0 & 
+             sn$bin4 == 0 & 
+             sn$bin5 == 0), c("bin0", "bin1", "bin2", "bin3", "bin4", "bin5")] <- NA
+  snfilt <- sn 
+  return(snfilt)
+}
+```
+
+### Creating Dataframes
+
 In this section, I use the data cleaning steps (in the final_data_cleaning function) to create datasets for the sensors.
 
 ```{r}
-sn45 = read.csv("Final_Customer/20200519_final_045.csv",  header=TRUE, fileEncoding="UTF-8-BOM")
-sn45no2model <- read.csv("Final_Customer/no2_HYBRID_045.txt") 
+sn45 = read.csv("Final_Customer/20200519_final_045.csv",  header=TRUE, fileEncoding="UTF-8-BOM") #importing file that Eben sent via dropbox
+sn45no2model <- read.csv("Final_Customer/no2_HYBRID_045.txt") #also file from dropbox
 
-source("functions/final_data_cleaning.R")
+source("functions/final_data_cleaning.R") #run the filtering function
 sn45 <- final_data_cleaning(sn45, metdata, sn45no2model)
-write.csv(sn45, "sn45.csv", row.names = FALSE)
+source("functions/bincorrection.R") #change 15 bins to 6 
+sn45 <- change_bins(sn45)
+sn45 <- clean_bins(sn45) 
+write.csv(sn45, "sn45filt.csv", row.names = FALSE)
 ```
 
 ```{r}
-rm(sn45)
+rm(sn45) #to save memory, delete already created dataframes
 rm(sn45no2model)
 gc()
 
@@ -66,17 +89,35 @@ sn49 = read.csv("Final_Customer/20200519_final_049.csv",  header=TRUE, fileEncod
 sn49no2model <- read.csv("Final_Customer/no2_HYBRID_049.txt") 
 
 sn49 <- final_data_cleaning(sn49, metdata, sn49no2model)
-write.csv(sn49, "sn49.csv", row.names = FALSE)
+source("functions/bincorrection.R")
+sn49 <- change_bins(sn49)
+sn49 <- clean_bins(sn49)
+
+#check suspicious CO spike  Oct 14 to oct 21
+timePlot(selectByDate(sn49, start = "14/10/2019", end = "21/10/2019"), pollutant = "co")
+#pdf("sn49-suspicious-CO-spike.pdf")
+#timePlot(selectByDate(sn49, start = "17/10/2019", end = "17/10/2019"), pollutant = "co")
+#dev.off()
+sn49[which(sn49$date == "2019-10-17 06:00:00"): which(sn49$date == "2019-10-17 15:50:00"), "co"] <- NA #removing spike
+write.csv(sn49, "sn49filt.csv", row.names = FALSE)
 ```
 
 ```{r}
 rm(sn49)
 rm(sn49no2model)
+gc()
 
 sn62 = read.csv("Final_Customer/20200519_final_062.csv",  header=TRUE, fileEncoding="UTF-8-BOM")
 sn62no2model <- read.csv("Final_Customer/no2_HYBRID_062.txt") 
-
-write.csv(sn62, "sn62.csv", row.names = FALSE)
+sn62 <- final_data_cleaning(sn62, metdata, sn62no2model)
+sn62 <- change_bins(sn62)
+sn62 <- clean_bins(sn62)
+#Check for first few days , suspicious activity
+timePlot(selectByDate(sn62, start = "11/9/2019", end = "11/9/2019"), pollutant = c("wd", "ws", "co", "o3"  , "no", "correctedNO", "no2model", "bin0", "bin1", "bin2", "bin3", "bin4", "bin5"), y.relation = "free")
+timePlot(selectByDate(sn62, start = "11/9/2019", end = "11/9/2019"), pollutant = "co")
+sn62 <- sn62[which(sn62$date == "2019-09-11 18:00:00"): which(sn62$date == tail(sn62$date, n = 1)), ] #remove those days
+tz(sn62$date) <- "America/New_York" #making sure timezone didn't change
+write.csv(sn62, "sn62filt.csv", row.names = FALSE)
 ```
 
 ```{r}
@@ -87,8 +128,26 @@ sn67 = read.csv("Final_Customer/20200519_final_067.csv",  header=TRUE, fileEncod
 sn67no2model <- read.csv("Final_Customer/no2_HYBRID_067.txt") 
 
 sn67 <- final_data_cleaning(sn67, metdata, sn67no2model)
-write.csv(sn67, "sn67.csv", row.names = FALSE)
+sn67 <- change_bins(sn67)
+sn67 <- clean_bins(sn67)
+#checking and removing suspicious peaks
+timePlot(selectByDate(sn67, start = "7/2/2020", end = "9/2/2020"), pollutant = c("o3"  , "no", "correctedNO"))
+sn67[which(sn67$date == "2019-10-07 12:00:00"): which(sn67$date == "2020-02-09 00:00:00"), "co"] <- NA
+sn67[which(sn67$date == "2020-02-07 12:00:00"): which(sn67$date == "2020-02-09 00:00:00"), "o3"] <- NA
+indx1 <- which(sn67$date == "2019-10-13 07:31:00") 
+indx2 <- which(sn67$date == "2019-10-13 08:01:00")
+plot(sn67$date[indx1:indx2], sn67$co[indx1:indx2], type = "l")
+sn67[indx1:indx2, "co"] <- NA
+
+write.csv(sn67, "sn67filt.csv", row.names = FALSE)
 ```
+I recorded the peak I wasn't sure about with this code:
+```{r}
+pdf("notsure-co-spike-sn67.pdf")
+timePlot(selectByDate(sn67, start = "13/10/2019", end = "13/10/2019"), pollutant = "co")
+dev.off()
+```
+
 
 Note that SN 72 data cleaning isn't currently working.
 ```{r}
@@ -196,7 +255,7 @@ sensor$correctedNO[which(sensor$date %in% dropNAsensor$date)] <- dropNAsensor$co
 
 # Creating Graphs
 
-Below I include the code I wrote to check the data cleaning results
+Below I include the code I wrote to check some of the data cleaning results
 
 
 ```{r}
