@@ -1,0 +1,163 @@
+---
+title: "Fall 2020 Ntbk 1: Defining Downwind"
+---
+
+# Setup 
+
+```{r message=FALSE, warning=FALSE}
+library(lubridate)
+library(openair)
+library(data.table)
+library(dplyr)
+library(baseline)
+library(Rmisc)
+```
+
+```{r}
+sn45 <- fread("data/sn45filt.csv", sep = ",")
+sn45$date <- ymd_hms(sn45$date, tz = "America/New_York")
+
+```
+
+
+
+# Background / Reasoning 
+
+
+- We are already conceptually downwind based on what we've seen in the polar plots
+- Instead of guessing what downwind could be, we can quantify what we saw in the polar plot
+
+
+```{r}
+polarPlot(sn45, pollutant = "co2", wd = "wd")
+
+polarPlot(sn45, pollutant = "no2model", wd = "wd")
+
+polarPlot(sn45, pollutant = "no", wd = "wd")
+
+#pdf("coplot.pdf") 
+
+polarPlot(sn45, pollutant = "co", wd = "wd")
+
+#dev.off()
+```
+
+
+```{r}
+max(sn45$no2model)
+min(sn45$no2model)
+```
+
+So, it looks like the color bar does not go from the min value to the max value
+
+```{r}
+output <- polarPlot(sn45, pollutant = "no2model", wd = "wd")
+```
+It looks like the numbers shown here are the mean values from each wind speed & wind direction bin. I think it might be easier just to extract the data from the polar plot than generate it ourselve 
+
+
+```{r}
+library(plotrix)
+testlen<-c(rnorm(36)*2+5)
+ testpos<-seq(0,350,by=10)
+ polar.plot(testlen,testpos,main="Test Polar Plot",lwd=3,line.col=4)
+ oldpar<-polar.plot(testlen,testpos,main="Test Clockwise Polar Plot",
+  radial.lim=c(0,15),start=90,clockwise=TRUE,lwd=3,line.col=4)
+```
+```{r}
+wanted_seq <- seq(0,360, by = 10)
+
+```
+
+## 
+
+```{r}
+polarFreq(sn45, pollutant = "co", statistic = "weighted.mean")
+polarFreq(sn45, pollutant = "no2model", statistic = "weighted.mean")
+polarFreq(sn45, pollutant = "co")
+polarFreq(sn45, pollutant = "no2model")
+pollutionRose(sn45, pollutant = "co", seg = 1)
+pollutionRose(sn45, pollutant = "no2model", seg = 5)
+
+```
+```{r}
+polarAnnulus(sn45, pollutant = "no2model", period = "trend")
+polarAnnulus(sn45, pollutant = "no", period = "trend")
+polarAnnulus(sn45, pollutant = "co2", period = "trend")
+pdf("polarannulus.pdf")
+polarAnnulus(sn45, pollutant = "no2model",period = "hour", main = "No2 conc. by wind direction and hour")
+dev.off()
+polarAnnulus(sn45, pollutant = "co",period = "hour", main = "Hour")
+```
+```{r}
+pdf("polarannulus.pdf")
+polarAnnulus(sn45, pollutant = "no2model",period = "hour", main = "No2 conc. by wind direction and hour")
+dev.off()
+```
+# Create polar plots 
+
+```{r}
+sn45 <- read.csv("data/sn45filt.csv", header= TRUE)
+sn45$date <- ymd_hms(sn45$date,  tz = "America/New_York")
+
+sn49 <- fread("data/sn49filt.csv", sep = ",")
+sn49$date <- ymd_hms(sn49$date, tz = "America/New_York")
+
+sn62 <- read.csv("data/sn62filt.csv", header= TRUE)
+sn62$date <- ymd_hms(sn62$date,  tz = "America/New_York")
+
+sn67 <- read.csv("data/sn67filt.csv", header= TRUE)
+sn67$date <- ymd_hms(sn67$date,  tz = "America/New_York")
+```
+
+
+```{r}
+generate_overall_polarplots <- function(sn){
+  #generates the polar plots for the variables we are interested in 
+  polarPlot(sn, pollutant = "correctedNO")
+  polarPlot(sn, pollutant = "no2model")
+  polarPlot(sn, pollutant = "co")
+}
+
+generate_overall_polarplots_2 <- function(sn){
+  #generates the polar plots for the variables we are interested in 
+  polarPlot(sn, pollutant = "correctedNO")
+  polarPlot(sn, pollutant = "no2model")
+  polarPlot(sn, pollutant = "co")
+  polarPlot(sn, pollutant = "bin0")
+  polarPlot(sn, pollutant = "bin3")
+  polarPlot(sn, pollutant = "bin5")
+  polarPlot(sn, pollutant = "pm1")
+  polarPlot(sn, pollutant = "pm25")
+  polarPlot(sn, pollutant = "pm10")
+  
+}
+```
+
+```{r}
+generate_overall_polarplots(sn49)
+generate_overall_polarplots_2(sn49)
+```
+
+use co or bin 0 
+
+```{r}
+generate_overall_polarplots_2(sn62)
+```
+
+```{r}
+generate_overall_polarplots_2(sn67)
+```
+```{r}
+pdf("sn49_co.pdf")
+polarPlot(sn49, pollutant = "co")
+dev.off()
+pdf("sn62_co.pdf")
+polarPlot(sn62, pollutant = "co")
+dev.off()
+pdf("sn67_co.pdf")
+polarPlot(sn67, pollutant = "co")
+dev.off()
+```
+
+
