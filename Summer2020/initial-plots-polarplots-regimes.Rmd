@@ -11,6 +11,7 @@ After completing the data cleaning, I use this document to create the initial gr
 ```{r}
 library(lubridate)
 library(openair)
+library(data.table)
 ```
 
 
@@ -18,8 +19,8 @@ library(openair)
 sn45 <- read.csv("data/sn45filt.csv", header= TRUE)
 sn45$date <- ymd_hms(sn45$date,  tz = "America/New_York")
 
-sn49 <- read.csv("data/sn49filt.csv", header= TRUE)
-sn49$date <- ymd_hms(sn49$date,  tz = "America/New_York")
+sn49 <- fread("data/sn49filt.csv", sep = ",")
+sn49$date <- ymd_hms(sn49$date, tz = "America/New_York")
 
 sn62 <- read.csv("data/sn62filt.csv", header= TRUE)
 sn62$date <- ymd_hms(sn62$date,  tz = "America/New_York")
@@ -65,7 +66,9 @@ dev.off()
 ```
 
 ```{r}
+pdf("polar-percentile-plots-sn49.pdf")
 generate_overall_polarplots(sn49)
+dev.off()
 ```
 
 ```{r}

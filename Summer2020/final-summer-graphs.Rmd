@@ -1,0 +1,339 @@
+---
+title: "Final Summer Graphs"
+---
+
+# Overview 
+
+In this notebook, I create the final graphs for the summer research 
+
+# Box Plots 
+
+For the box plots, I'm going to use ggplot 
+
+```{r}
+library(ggplot2)
+```
+
+## Attempt 1 
+
+First, I'm just going to try to make one portion of the box: one regimes of one sensor, for one variable 
+
+```{r}
+#import regimes 
+library(data.table)
+
+sn45temp = list("data/sn45-reg1.csv", "data/sn45-reg2.csv", "data/sn45-reg3.csv", "data/sn45-reg4.csv") 
+sn45regs = lapply(sn45temp, fread)
+rm(sn45temp)
+
+sn49temp = list("data/SN49-reg1.csv", "data/SN49-reg2.csv") 
+sn49regs = lapply(sn49temp, fread)
+rm(sn49temp)
+
+sn62temp = list("data/SN62-reg1.csv", "data/SN62-reg2.csv") 
+sn62regs = lapply(sn62temp, fread)
+rm(sn62temp)
+
+sn67temp = list("data/sn67-reg1.csv", "data/sn67-reg2.csv", "data/sn67-reg3.csv", "data/sn67-reg4.csv") 
+sn67regs = lapply(sn67temp, fread)
+rm(sn67temp)
+```
+
+## Initial Attempt
+
+
+```{r}
+ggplot(sn45regs[[1]], aes(x="PM1", y=pm1))+geom_boxplot()
+```
+
+## Converting Data into Long format 
+
+
+```{r}
+
+sn45reg1.melt <- melt(sn45regs[[1]], id.vars = "date", measure.vars = c("bin0", "bin1", "bin2", "bin3",
+                                                                     "pm1", "co", "no2model", "correctedNO" ))
+sn45reg2.melt <- melt(sn45regs[[2]], id.vars = "date", measure.vars = c("bin0", "bin1", "bin2", "bin3",
+                                                                     "pm1", "co", "no2model", "correctedNO" ))
+sn45reg3.melt <- melt(sn45regs[[3]], id.vars = "date", measure.vars = c("bin0", "bin1", "bin2", "bin3",
+                                                                     "pm1", "co", "no2model", "correctedNO" ))
+sn45reg4.melt <- melt(sn45regs[[4]], id.vars = "date", measure.vars = c("bin0", "bin1", "bin2", "bin3",
+                                                                     "pm1", "co", "no2model", "correctedNO" ))
+```
+
+```{r}
+sn45reg1.melt$reg <- rep("reg1",nrow(sn45reg1.melt))
+sn45reg2.melt$reg <- rep("reg2",nrow(sn45reg2.melt))
+sn45reg3.melt$reg <- rep("reg3",nrow(sn45reg3.melt))
+sn45reg4.melt$reg <- rep("reg4",nrow(sn45reg4.melt))
+```
+
+```{r}
+sn45regsLDF <- rbind(sn45reg1.melt, sn45reg2.melt, sn45reg3.melt, sn45reg4.melt)
+```
+
+```{r}
+
+sn45reg1plot <- ggplot(sn45reg1.melt, aes(x="", y=value)) + 
+    geom_boxplot() +
+    facet_wrap(~variable, scale = "free")
+
+sn45plots <- ggplot(sn45regsLDF, aes(x=reg, y=value, fill=reg)) + 
+    geom_boxplot() +
+    facet_wrap(~variable, scale = "free")
+print(sn45plots + ggtitle("SN45 Regimes"))
+```
+
+```{r}
+p <- ggplot(sn45regsLDF, aes(factor(variable), value)) 
+p + geom_boxplot() + facet_grid(. ~ reg)
+```
+
+
+```{r}
+ ggplot(data = sn45regsLDF, aes(x = reg, y = value, 
+         color = factor(reg))) + 
+         stat_summary(fun.data=median_hilow) +
+         facet_wrap(.~variable, scale = "free")
+```
+## Automating the process 
+
+```{r}
+four_reg_plots <- function(snregs){
+  
+  snreg1.melt <- melt(snregs[[1]], id.vars = "date", measure.vars = c("bin0", "bin1", "bin2", "bin3",
+                                                                       "pm1", "co", "no2model", "correctedNO" ))
+  snreg2.melt <- melt(snregs[[2]], id.vars = "date", measure.vars = c("bin0", "bin1", "bin2", "bin3",
+                                                                       "pm1", "co", "no2model", "correctedNO" ))
+  snreg3.melt <- melt(snregs[[3]], id.vars = "date", measure.vars = c("bin0", "bin1", "bin2", "bin3",
+                                                                       "pm1", "co", "no2model", "correctedNO" ))
+  snreg4.melt <- melt(snregs[[4]], id.vars = "date", measure.vars = c("bin0", "bin1", "bin2", "bin3",
+                                                                          "pm1", "co", "no2model", "correctedNO" ))
+  
+  snreg1.melt$reg <- rep("reg1",nrow(snreg1.melt))
+  snreg2.melt$reg <- rep("reg2",nrow(snreg2.melt))
+  snreg3.melt$reg <- rep("reg3",nrow(snreg3.melt))
+  snreg4.melt$reg <- rep("reg4",nrow(snreg4.melt))
+  
+  snregsLDF <- rbind(snreg1.melt, snreg2.melt, snreg3.melt, snreg4.melt)
+  
+  return(snregsLDF)
+  }
+```
+
+```{r}
+two_reg_plots <- function(snregs){
+  
+  snreg1.melt <- melt(snregs[[1]], id.vars = "date", measure.vars = c("bin0", "bin1", "bin2", "bin3",
+                                                                       "pm1", "co", "no2model", "correctedNO" ))
+  snreg4.melt <- melt(snregs[[2]], id.vars = "date", measure.vars = c("bin0", "bin1", "bin2", "bin3",
+                                                                       "pm1", "co", "no2model", "correctedNO" ))
+  
+  snreg1.melt$reg <- rep("reg1",nrow(snreg1.melt))
+  snreg4.melt$reg <- rep("reg4",nrow(snreg4.melt))
+
+  
+  snregsLDF <- rbind(snreg1.melt, snreg4.melt)
+  
+  return(snregsLDF)
+  }
+```
+
+```{r}
+sn45regsLDF <- four_reg_plots(sn45regs)
+sn67regsLDF <- four_reg_plots(sn67regs)
+sn62regsLDF <- two_reg_plots(sn62regs)
+sn49regsLDF <- two_reg_plots(sn49regs)
+rm(sn62regs, sn67regs, sn49regs, sn45regs)
+
+```
+
+## Applying to Overall Data
+
+```{r}
+sn45regsLDF$sn <- rep("sn45",nrow(sn45regsLDF))
+sn49regsLDF$sn <- rep("sn49",nrow(sn49regsLDF))
+sn62regsLDF$sn <- rep("sn62",nrow(sn62regsLDF))
+sn67regsLDF$sn <- rep("sn67",nrow(sn67regsLDF))
+```
+
+```{r}
+totalLDF <- rbind(sn45regsLDF,sn49regsLDF, sn62regsLDF, sn67regsLDF )
+```
+
+```{r}
+P <-  ggplot(data = totalLDF, aes(x = reg, y = value, 
+         color = factor(reg))) + 
+         stat_summary(fun.data=median_hilow) 
+
+
+facet_wrap(c("variable" , "sn"), scale = "free")
+```
+```{r}
+p2 <- ggplot(data = totalLDF, aes(x = sn~ reg, y = value, 
+         color = factor(sn))) + 
+         stat_summary(fun.data=median_hilow) 
+p2 + facet_wrap(totalLDF$variable, scale = "free")
+```
+
+```{r}
+totalLDF$f1f2 <- interaction(totalLDF$sn, totalLDF$reg)
+```
+
+```{r}
+p <- ggplot(aes(y = value, x = f1f2), data = totalLDF) + geom_boxplot() 
+
+p + facet_wrap(totalLDF$variable, scale = "free", nrow = 8)
+```
+
+```{r}
+ggplot(aes(y = value, x = sn, fill = reg), data = totalLDF) + geom_boxplot() + facet_wrap(totalLDF$variable, scales = "free")
+```
+```{r}
+ggplot(aes(y = value, x = sn, fill = reg),data=totalLDF) + geom_violin(na.rm = TRUE) + facet_wrap(totalLDF$variable, scales = "free", nrow = 8) + 
+  theme(legend.position="bottom",
+        legend.spacing.x = unit(0, 'cm'))
+ggsave("violinplot1.pdf", width = 25, height = 120, units = "cm")
+```
+
+```{r}
+ggplot(aes(y = value, x = sn, fill = reg),data=totalLDF) + geom_boxplot(na.rm = TRUE) + facet_wrap(totalLDF$variable, scales = "free", nrow = 8) + 
+  theme(legend.position="bottom",
+        legend.spacing.x = unit(0, 'cm'))
+ggsave("boxplot1.pdf", width = 25, height = 120, units = "cm")
+```
+
+
+
+# Time Series to Match Herndon's 
+
+## Find where there's a lot of LTOs 
+
+-get average num LTO per hour 
+- find all hours where it's greater than that 
+
+```{r}
+library(data.table)
+flightdf <- fread("data/finalflightdf.csv")
+```
+
+
+```{r}
+library(openair)
+library(lubridate)
+setnames(flightdf, "Date", "date") #openair formatting
+flightdf$date <- ymd_hms(flightdf$date, tz = "America/New_York")
+```
+
+```{r}
+sn45flights <- flightdf %>%
+  filter(RW == "22R") %>%
+  mutate(hourly = format(date, format="%Y-%m-%d %H")) %>% #create datetime object that shows the hour
+  group_by(hourly) %>% #group by hour and operation
+  summarise(count = n() ) 
+```
+```{r}
+plot(as.Date(sn45flights$hourly), sn45flights$count, type = "l")
+```
+```{r}
+flightdf %>%
+  filter(RW == "22R") %>%
+  mutate(hourly = format(date, format="%Y-%m-%d %H")) %>% #create datetime object that shows the hour
+  group_by(hourly) %>% #group by hour and operation
+  summarise(count = n() ) 
+
+```
+
+Just by visual inspection I see that October 7th had above 40 flights every hour between 6 am and 10 am. 
+
+Let's plot that time period 
+
+```{r}
+sn45 <- fread("data/sn45filt.csv", sep = ",")
+sn45$date <- ymd_hms(sn45$date, tz = "America/New_York")
+```
+
+
+```{r}
+pdf("timePlot-Oct7.pdf")
+timePlot(selectByDate(sn45, start = "2019/10/07", end = "2019/10.07"), pollutant = c("no2model", "correctedNO", "co", "bin0"))
+dev.off()
+```
+
+If we look at the whole day, we do see an increase of NOx and CO during those hours
+
+```{r}
+Oct7sn45 <- subset(sn45, date> "2019-10-07 06:00:00"& date< "2019-10-07 11:00:00")
+Oct7flights <- subset(flightdf, date> "2019-10-07 06:00:00"& date< "2019-10-07 11:00:00" & RW == "22R")
+
+tz(Oct7flights$date) <- "UTC" #bc timePlot converts to UTC
+
+pdf("Oct7-busierperiod-RW22R-SN45.pdf")
+timePlot(Oct7sn45, pollutant = c("no2model", "correctedNO", "co", "bin0"), group = TRUE, y.relation = "free", lty = 1,  main = "Pollutant Concentrations During Busy Period (Oct 7)", 
+         xlab = "Time", 
+         ref.x = list(v = Oct7flights$date, lty = 3, col = "orange"))
+
+timePlot(Oct7sn45[1:25, ], pollutant = c("no2model", "correctedNO", "co"), group = TRUE, y.relation = "free", 
+         cols = c("green", "red", "blue"),lty = 1, main = "Pollutant Concentrations During Busy Period (Oct 7)", 
+         xlab = "Time", 
+         ref.x = list(v = Oct7flights$date, lty = 3, col = "orange"))
+dev.off()
+```
+
+Let's try another time frame 
+
+```{r}
+Oct1sn45 <- subset(sn45, date> "2019-10-01 18:00:00"& date< "2019-10-02 00:00:00")
+Oct1flights <- subset(flightdf, date> "2019-10-01 18:00:00"& date< "2019-10-02 00:00:00" & RW == "22R")
+
+Oct1flights$tz <- Oct1flights$date
+tz(Oct1flights$tz) <- "UTC" #bc timePlot converts to UTC
+pdf("Oct1-busierperiod-RW22R-SN45.pdf")
+timePlot(Oct1sn45, pollutant = c("no2model", "correctedNO", "co", "bin0"), group = TRUE, y.relation = "free", lty = 1, 
+         main = "Pollutant Concentrations During Busy Period (Oct 1)", 
+         xlab = "Time", 
+         ref.x = list(v = Oct1flights$tz, lty = 3,  col = "orange"))
+
+timePlot(Oct1sn45[1:25, ], pollutant = c("no2model", "correctedNO", "co"), group = TRUE, y.relation = "free", 
+         cols = c("green", "red", "blue"), lty = 1, main = "Pollutant Concentrations During Busy Period (Oct 1)", 
+         xlab = "Time", 
+         ref.x = list(v = Oct1flights$tz, lty = 3, col = "orange"))
+    
+dev.off()
+```
+
+
+```{r}
+tz(Oct1flights$date) <- "America/New_York"
+Oct1sn45$originaldate <- ymd_hms(Oct1sn45$originaldate, tz = "America/New_York")
+plot(Oct1sn45$originaldate, Oct1sn45$correctedNO, type = "l", col = "blue")
+lines(Oct1sn45$originaldate, Oct1sn45$no2model, col = "green")
+abline(v = Oct1flights$date, lty = 3, col= "yellow")
+
+```
+```{r}
+cat(print(tz(Oct1sn45$originaldate)))
+cat(print(tz(Oct1flights$date)))
+```
+```{r}
+randomflights <- subset(flightdf, date> "2020-01-10 00:00:00"& date< "2020-01-11 00:00:00" & RW == "22R")
+
+tz(randomflights$date) <- "UTC" #bc timePlot converts to UTC
+timePlot(selectByDate(sn45, start = "2020-01-10", end = "2020-01-10"), pollutant = c("no2model", "correctedNO", "co"), group = TRUE, y.relation = "free", 
+         ref.x = list(v = randomflights$date, lty = 3,  col = "yellow"))
+```
+```{r}
+randomflights <- subset(flightdf, date> "2020-02-10 00:00:00"& date< "2020-02-11 00:00:00" & RW == "22R")
+
+tz(randomflights$date) <- "UTC" #bc timePlot converts to UTC
+timePlot(selectByDate(sn45, start = "2020-02-10", end = "2020-02-10"), pollutant = c("no2model", "correctedNO", "co"), group = TRUE, y.relation = "free", 
+         ref.x = list(v = randomflights$date, lty = 3,  col = "yellow"))
+```
+
+```{r}
+randomflights <- subset(flightdf, date> "2019-11-15 00:00:00"& date< "2019-11-16 00:00:00" & RW == "22R")
+
+tz(randomflights$date) <- "UTC" #bc timePlot converts to UTC
+timePlot(selectByDate(sn45, start = "2019-11-15", end = "2019-11-15"), pollutant = c("no2model", "correctedNO"), group = TRUE, y.relation = "free", 
+         ref.x = list(v = randomflights$date, lty = 3,  col = "yellow"))
+```

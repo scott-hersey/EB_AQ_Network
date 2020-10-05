@@ -1,0 +1,450 @@
+---
+title: "Plotting concentration vs LTO activity"
+
+---
+
+# averaged hourly LTO filtered sensor data vs # of flights per hour 
+
+## Create hourly dataframe that records # flights per hour, for all hours which num_flights > 10
+
+```{r}
+library(lubridate)
+flightdf <- fread("data/finalflightdf.csv")
+flightdf$Date <- ymd_hms(flightdf$Date , tz = "America/New_York")
+
+hourlyLTO <- flightdf %>%
+  mutate(hourly = format(Date, format="%Y-%m-%d %H", tz = "America/New_York")) %>% #create datetime object that shows the hour
+  group_by(hourly) %>% #group by hour 
+  count(hourly, name = "num_flights")
+
+LTOactivity <- subset(hourlyLTO, hourlyLTO$num_flights > 10)
+```
+
+```{r}
+create_hourly_flightdf <- function(flightdf, runwaystr){
+  newdf <- flightdf %>%
+    filter(flightdf$RW == runwaystr & flightdf$Opr == "D") %>%
+    mutate(hourly = format(Date, format="%Y-%m-%d %H", tz = "America/New_York")) %>% #create datetime object that shows the hour
+    group_by(hourly) %>% #group by hour 
+    count(hourly, name = "num_flights") #%>% 
+    #subset(num_flights > 10)
+  return(newdf)
+}
+sn45flights <- create_hourly_flightdf(flightdf, "22R")
+```
+
+```{r}
+
+sn67flights <- flightdf %>%
+    filter(flightdf$RW == "9" | flightdf$RW == "27") %>%
+    mutate(hourly = format(Date, format="%Y-%m-%d %H", tz = "America/New_York")) %>% #create datetime object that shows the hour
+    group_by(hourly) %>% #group by hour 
+    count(hourly, name = "num_flights") %>% 
+    subset(num_flights > 10)
+```
+
+## Create hourly dataset from sensor dataframes 
+
+
+
+First, we import and format SN data
+
+```{r warning=FALSE}
+library(data.table)
+library(lubridate)
+
+sn45 <- fread("data/sn45filt.csv", sep = ",")
+sn45$date <- ymd_hms(sn45$date, tz = "America/New_York")
+
+sn49 <- fread("data/sn49filt.csv", sep = ",")
+sn49$date <- ymd_hms(sn49$date, tz = "America/New_York")
+
+sn62 <- fread("data/sn62filt.csv", sep = ",")
+sn62$date <- ymd_hms(sn62$date, tz = "America/New_York")
+
+sn67 <- fread("data/sn67filt.csv", sep = ",")
+sn67$date <- ymd_hms(sn67$date, tz = "America/New_York")
+```
+
+Next, we use openair's timeAvg function to average all of the pollutants to hourly values. We also add an "hourly" column to make merging with the flight df easier later. In this step, we also filter so that only downwind data stays (based on old regime definition).
+
+```{r}
+library(dplyr)
+sn45Avg <- sn45 %>% 
+  #dplyr::filter(.data$wd > 170 & .data$wd < 240) %>%
+  dplyr::select(.data$co, .data$correctedNO, .data$no2model, .data$bin0, .data$date) %>%
+  openair::timeAverage(avg.time = "1 hour", tz = "America/New_York") %>% 
+  mutate(date = ymd_hms(.data$date, tz = "America/New_York")) %>% #timeAverage reverts to GMT
+  mutate(hourly = format(date, format="%Y-%m-%d %H", tz = "America/New_York"))
+
+sn49Avg <- sn49 %>% 
+  dplyr::filter(.data$wd > 210 & .data$wd < 320) %>%
+  dplyr::select(.data$co, .data$correctedNO, .data$no2model, .data$bin0, .data$date) %>%
+  openair::timeAverage(avg.time = "1 hour") %>% 
+  mutate(date = ymd_hms(.data$date, tz = "America/New_York")) %>%
+  mutate(hourly = format(date, format="%Y-%m-%d %H", tz = "America/New_York"))
+
+sn62Avg <- sn62 %>% 
+  dplyr::filter(.data$wd > 50 & .data$wd < 140) %>%
+  dplyr::select(.data$co, .data$correctedNO, .data$no2model, .data$bin0, .data$date) %>%
+  openair::timeAverage(avg.time = "1 hour") %>% 
+  mutate(date = ymd_hms(.data$date, tz = "America/New_York")) %>%
+  mutate(hourly = format(date, format="%Y-%m-%d %H", tz = "America/New_York"))
+
+sn67Avg <- sn67 %>% 
+  dplyr::filter(.data$wd > 240 & .data$wd < 300) %>%
+  dplyr::select(.data$co, .data$correctedNO, .data$no2model, .data$bin0, .data$date) %>%
+  openair::timeAverage(avg.time = "1 hour") %>% 
+  mutate(date = ymd_hms(.data$date, tz = "America/New_York")) %>%
+  mutate(hourly = format(date, format="%Y-%m-%d %H", tz = "America/New_York"))
+```
+
+
+
+
+## Merge the datasets 
+
+We'll merge the sensor data with the filtered hourly flight data, so only points that are downwind AND happen during noticeable LTO activity stay, and they are accompanied by how many LTOs happened that hour . 
+
+
+
+```{r}
+setDT(LTOactivity, key = "hourly")
+
+setDT(sn45Avg, key = "hourly")
+sn45F <- LTOactivity[sn45Avg, nomatch = 0]
+
+setDT(sn49Avg, key = "hourly")
+sn49F <- sn49Avg[LTOactivity, nomatch = 0]
+
+setDT(sn62Avg, key = "hourly")
+sn62F <- sn62Avg[LTOactivity, nomatch = 0]
+
+setDT(sn67Avg, key = "hourly")
+sn67F <- LTOactivity[sn67Avg, nomatch = 0]
+```
+
+```{r}
+setDT(hourlyLTO, key = "hourly")
+setDT(LTOactivity, key = "hourly")
+
+setDT(sn45Avg, key = "hourly")
+sn45F <- hourlyLTO[sn45Avg, nomatch = 0]
+sn45F <- na.omit(sn45F)
+sn45F <- sn45F[ !is.nan(sn45F$correctedNO), ]
+sn45F <- sn45F[ !is.nan(sn45F$no2model), ]
+#sn67F <- na.omit(sn67F)
+#library(stats)
+stats::cor(sn45F$num_flights, sn45F$co, 
+    method = "pearson")
+cor(sn45F$num_flights, sn45F$correctedNO,
+    method = "pearson")
+cor(sn45F$num_flights, sn45F$no2model,
+    method = "pearson")
+```
+
+
+## Plot concencentrations vs LTO activity
+
+```{r}
+library(ggplot2)
+pdf("Concentrations-vs-FlightsperHour-NoRunwayFiltering-Originaldownwind.pdf")
+df = sn45F 
+ggplot(aes(x = num_flights, y = co), data = df) + geom_point(na.rm = TRUE)  + ggtitle("Hourly Averaged CO concentration vs. Number of Flights per Hour, for SN 45")
+ggplot(aes(x = num_flights, y = no2model), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO2 concentration vs. Number of Flights per Hour, for SN 45")
+ggplot(aes(x = num_flights, y = correctedNO), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO concentration vs. Number of Flights per Hour, for SN 45")
+
+df = sn49F 
+ggplot(aes(x = num_flights, y = co), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged CO concentration vs. Number of Flights per Hour, for SN 49")
+ggplot(aes(x = num_flights, y = no2model), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO2 concentration vs. Number of Flights per Hour, for SN 49")
+ggplot(aes(x = num_flights, y = correctedNO), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO concentration vs. Number of Flights per Hour, for SN 49")
+
+df = sn62F 
+ggplot(aes(x = num_flights, y = co), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged CO concentration vs. Number of Flights per Hour, for SN 62")
+ggplot(aes(x = num_flights, y = no2model), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO2 concentration vs. Number of Flights per Hour, for SN 62")
+ggplot(aes(x = num_flights, y = correctedNO), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO concentration vs. Number of Flights per Hour, for SN 62")
+
+df = sn67F 
+ggplot(aes(x = num_flights, y = co), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged CO concentration vs. Number of Flights per Hour, for SN 67")
+ggplot(aes(x = num_flights, y = no2model), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO2 concentration vs. Number of Flights per Hour, for SN 67")
+ggplot(aes(x = num_flights, y = correctedNO), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO concentration vs. Number of Flights per Hour, for SN 67")
+
+dev.off()
+```
+## Compare for sn45 and sn67 when the LTO activity is happening at their runway 
+
+```{r}
+setDT(sn45flights, key = "hourly")
+sn45F2 <- sn45flights[sn45Avg, nomatch = 0]
+
+#setDT(sn67flights, key = "hourly")
+#sn67F2 <- sn67Avg[sn67flights, nomatch = 0]
+```
+
+```{r}
+pdf("hourlyconcentrations-vs-flightsperhour-oldDownwind-runwaysSelected.pdf")
+df = sn45F2 
+ggplot(aes(x = num_flights, y = co), data = df) + geom_point(na.rm = TRUE)  + ggtitle("Hourly Averaged CO concentration vs. Number of Flights per Hour, for SN 45")
+ggplot(aes(x = num_flights, y = no2model), data = df) + geom_point(na.rm = TRUE)  + ggtitle("Hourly Averaged NO2 concentration vs. Number of Flights per Hour, for SN 45")
+ggplot(aes(x = num_flights, y = correctedNO), data = df) + geom_point(na.rm = TRUE)  + ggtitle("Hourly Averaged NO concentration vs. Number of Flights per Hour, for SN 45")
+
+df = sn67F2 
+ggplot(aes(x = num_flights, y = co), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged CO concentration vs. Number of Flights per Hour, for SN 67")
+ggplot(aes(x = num_flights, y = no2model), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO2 concentration vs. Number of Flights per Hour, for SN 67")
+ggplot(aes(x = num_flights, y = correctedNO), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO concentration vs. Number of Flights per Hour, for SN 67")
+dev.off()
+```
+
+
+```{r}
+sn45F2 <- na.omit(sn45F2)
+sn45F2 <- sn45F2[ !is.nan(sn45F2$correctedNO), ]
+sn45F2 <- sn45F2[ !is.nan(sn45F2$no2model), ]
+#sn67F <- na.omit(sn67F)
+#library(stats)
+stats::cor(sn45F2$num_flights, sn45F2$co, 
+    method = "pearson")
+cor(sn45F2$num_flights, sn45F2$correctedNO,
+    method = "pearson")
+cor(sn45F2$num_flights, sn45F2$no2model,
+    method = "pearson")
+```
+
+
+## Compare to new regime descriptions 
+
+
+```{r}
+sn45Avg2 <- sn45 %>% 
+  dplyr::filter(.data$wd > 140 & .data$wd < 270) %>%
+  dplyr::select(.data$co, .data$correctedNO, .data$no2model, .data$bin0, .data$date) %>%
+  openair::timeAverage(avg.time = "1 hour", tz = "America/New_York") %>% 
+  mutate(date = ymd_hms(.data$date, tz = "America/New_York")) %>% #timeAverage reverts to GMT
+  mutate(hourly = format(date, format="%Y-%m-%d %H", tz = "America/New_York"))
+
+sn49Avg2 <- sn49 %>% 
+  dplyr::filter(.data$wd > 140 & .data$wd < 360) %>%
+  dplyr::select(.data$co, .data$correctedNO, .data$no2model, .data$bin0, .data$date) %>%
+  openair::timeAverage(avg.time = "1 hour") %>% 
+  mutate(date = ymd_hms(.data$date, tz = "America/New_York")) %>%
+  mutate(hourly = format(date, format="%Y-%m-%d %H", tz = "America/New_York"))
+
+sn62Avg2 <- sn62 %>% 
+  dplyr::filter(.data$wd > 0 & .data$wd < 170) %>%
+  dplyr::select(.data$co, .data$correctedNO, .data$no2model, .data$bin0, .data$date) %>%
+  openair::timeAverage(avg.time = "1 hour") %>% 
+  mutate(date = ymd_hms(.data$date, tz = "America/New_York")) %>%
+  mutate(hourly = format(date, format="%Y-%m-%d %H", tz = "America/New_York"))
+
+sn67Avg2 <- sn67 %>% 
+  dplyr::filter(.data$wd > 200 & .data$wd < 330) %>%
+  dplyr::select(.data$co, .data$correctedNO, .data$no2model, .data$bin0, .data$date) %>%
+  openair::timeAverage(avg.time = "1 hour") %>% 
+  mutate(date = ymd_hms(.data$date, tz = "America/New_York")) %>%
+  mutate(hourly = format(date, format="%Y-%m-%d %H", tz = "America/New_York"))
+
+
+setDT(sn45Avg2, key = "hourly")
+sn45F3 <- LTOactivity[sn45Avg2, nomatch = 0]
+
+setDT(sn49Avg2, key = "hourly")
+sn49F3 <- sn49Avg2[LTOactivity, nomatch = 0]
+
+setDT(sn62Avg2, key = "hourly")
+sn62F3 <- sn62Avg2[LTOactivity, nomatch = 0]
+
+setDT(sn67Avg2, key = "hourly")
+sn67F3 <- sn67Avg2[LTOactivity, nomatch = 0]
+
+```
+
+```{r}
+
+pdf("hourlyConcentrations-vs-NumberFlightsperHour-newDownwind.pdf")
+df = sn45F3 
+ggplot(aes(x = num_flights, y = co), data = df) + geom_point(na.rm = TRUE)  + ggtitle("Hourly Averaged CO concentration vs. Number of Flights per Hour, for SN 45")
+ggplot(aes(x = num_flights, y = no2model), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO2 concentration vs. Number of Flights per Hour, for SN 45")
+ggplot(aes(x = num_flights, y = correctedNO), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO concentration vs. Number of Flights per Hour, for SN 45")
+
+df = sn49F3
+ggplot(aes(x = num_flights, y = co), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged CO concentration vs. Number of Flights per Hour, for SN 49")
+ggplot(aes(x = num_flights, y = no2model), data = df) + geom_point(na.rm = TRUE)  + ggtitle("Hourly Averaged NO2 concentration vs. Number of Flights per Hour, for SN 49")
+ggplot(aes(x = num_flights, y = correctedNO), data = df) + geom_point(na.rm = TRUE)  + ggtitle("Hourly Averaged NO concentration vs. Number of Flights per Hour, for SN 49")
+
+df = sn62F3 
+ggplot(aes(x = num_flights, y = co), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged CO concentration vs. Number of Flights per Hour, for SN 62")
+ggplot(aes(x = num_flights, y = no2model), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO2 concentration vs. Number of Flights per Hour, for SN 62")
+ggplot(aes(x = num_flights, y = correctedNO), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged NO concentration vs. Number of Flights per Hour, for SN 62")
+
+df = sn67F3 
+ggplot(aes(x = num_flights, y = co), data = df) + geom_point(na.rm = TRUE) + ggtitle("Hourly Averaged CO concentration vs. Number of Flights per Hour, for SN 67")
+ggplot(aes(x = num_flights, y = no2model), data = df) + geom_point(na.rm = TRUE)  + ggtitle("Hourly Averaged NO2 concentration vs. Number of Flights per Hour, for SN 67")
+ggplot(aes(x = num_flights, y = correctedNO), data = df) + geom_point(na.rm = TRUE)  + ggtitle("Hourly Averaged NO concentration vs. Number of Flights per Hour, for SN 67")
+
+dev.off()
+```
+
+
+# Check for FAA/ Sensor Data correlation 
+
+## Pick Oct 7 and overlay flights for the whole day 
+
+```{r}
+sn45_downwind <- filter(sn45, sn45$wd > 140 & sn45$wd < 270)
+```
+
+
+```{r}
+library(openair)
+Oct7flights <- subset(flightdf, Date> "2019-10-07 00:00:00"& Date< "2019-10-08 00:00:00" & RW == "22R")
+Oct7flights$adj_date <- ymd_hms(Oct7flights$Date, tz = "UTC") #openair plots in UTC
+pdf("oct7-LTO.pdf")
+timePlot(selectByDate(sn45_downwind, start = "2019/10/07", end = "2019/10.07"), pollutant = c("no2model", "correctedNO"),  group = TRUE, y.relation = "free", 
+         cols = c("green", "red"), lty = 1, main = "Pollutant Concentrations During Oct 7 vs Time, with LTOs on 22R", 
+         xlab = "Time", 
+         ref.x = list(v = Oct7flights$adj_date, lty = 3, col = "orange"))
+dev.off()
+```
+## Same Plot, using a different day
+
+```{r}
+
+Nov7flights <- subset(flightdf, Date> "2019-11-07 00:00:00"& Date< "2019-11-08 00:00:00" & RW == "22R")
+Nov7flights$adj_date1 <- with_tz(Nov7flights$Date, tz = "UTC") #openair plots in UTC
+Nov7flights$adj_date2 <- with_tz(Nov7flights$Date, tz = "GMT") #openair plots in UTC
+#pdf("Nov7-LTO.pdf")
+timePlot(selectByDate(sn45_downwind, start = "2019/11/07", end = "2019/11/07"), pollutant = c("no2model", "correctedNO"),  group = TRUE, y.relation = "free", 
+         cols = c("green", "red"), lty = 1, main = "Pollutant Concentrations During Nov 7 vs Time, with LTOs on 22R", 
+         xlab = "Time", 
+         ref.x = list(v = Nov7flights$Date, lty = 3, col = "orange"))
+
+timePlot(selectByDate(sn45_downwind, start = "2019/11/07", end = "2019/11/07"), pollutant = c("no2model", "correctedNO"),  group = TRUE, y.relation = "free", 
+         cols = c("green", "red"), lty = 1, main = "Pollutant Concentrations During Nov 7 vs Time, with LTOs on 22R", 
+         xlab = "Time", 
+         ref.x = list(v = Nov7flights$adj_date1, lty = 3, col = "orange"))
+
+timePlot(selectByDate(sn45_downwind, start = "2019/11/07", end = "2019/11/07"), pollutant = c("no2model", "correctedNO"),  group = TRUE, y.relation = "free", 
+         cols = c("green", "red"), lty = 1, main = "Pollutant Concentrations During Nov 7 vs Time, with LTOs on 22R", 
+         xlab = "Time", 
+         ref.x = list(v = Nov7flights$adj_date1, lty = 3, col = "orange"))
+#dev.off()
+
+```
+
+```{r}
+
+Nov7sn45_downwind <- subset(sn45_downwind, date> "2019-11-07 00:00:00"& date< "2019-11-08 00:00:00") 
+plot(Nov7sn45_downwind$date, 
+     Nov7sn45_downwind$correctedNO, type = "l", col = "blue")
+
+lines(Nov7sn45_downwind$date, 
+      Nov7sn45_downwind$no2model, col = "green")
+abline(v = Nov7flights$Date, lty = 3, col= "orange")
+```
+```{r}
+gen_plots <- function(sn, flights, date1, date2){
+  sn <- subset(sn, date> date1& date< date2) 
+plot(sn$date, 
+     sn$correctedNO, type = "l", col = "blue")
+
+lines(sn$date, 
+      sn$no2model, col = "green")
+abline(v = flights$Date, lty = 3, col= "orange")
+}
+```
+
+
+```{r}
+pdf("timeseries-LTOs-SN45-Downwind.pdf")
+flights <- subset(flightdf, Date> "2020-01-13 00:00:00"& Date< "2020-01-17 00:00:00" & RW == "22R")
+gen_plots(sn45_downwind, flights, "2020-01-13 00:00:00",  "2020-01-17 00:00:00")
+
+flights <- subset(flightdf, Date> "2020-02-03 00:00:00"& Date< "2020-02-10 00:00:00" & RW == "22R")
+gen_plots(sn45_downwind, flights, "2020-02-03 00:00:00",  "2020-02-10 00:00:00")
+
+flights <- subset(flightdf, Date> "2020-03-23 00:00:00"& Date< "2020-03-30 00:00:00" & RW == "22R")
+gen_plots(sn45_downwind, flights, "2020-03-23 00:00:00",  "2020-03-30 00:00:00")
+
+
+flights <- subset(flightdf, Date> "2020-04-23 00:00:00"& Date< "2020-04-30 00:00:00" & RW == "22R")
+gen_plots(sn45_downwind, flights, "2020-04-23 00:00:00",  "2020-04-30 00:00:00")
+
+dev.off()
+```
+```{r}
+pdf("longer-timeframe-LTO-timeseries.pdf")
+flights <- subset(flightdf, Date> "2019-09-10 00:00:00"& Date< "2019-09-30 00:00:00" & RW == "22R")
+gen_plots(sn45_downwind, flights, "2019-09-10 00:00:00",  "2019-09-30 00:00:00")
+
+flights <- subset(flightdf, Date> "2019-10-10 00:00:00"& Date< "2019-10-30 00:00:00" & RW == "22R")
+gen_plots(sn45_downwind, flights, "2019-10-10 00:00:00",  "2019-10-30 00:00:00")
+
+flights <- subset(flightdf, Date> "2019-11-10 00:00:00"& Date< "2019-11-30 00:00:00" & RW == "22R")
+gen_plots(sn45_downwind, flights, "2019-11-10 00:00:00",  "2019-11-30 00:00:00")
+
+flights <- subset(flightdf, Date> "2019-12-10 00:00:00"& Date< "2019-12-30 00:00:00" & RW == "22R")
+gen_plots(sn45_downwind, flights, "2019-12-10 00:00:00",  "2019-12-30 00:00:00")
+
+dev.off()
+
+```
+
+```{r}
+pdf("timeseries-LTOs-SN45.pdf")
+flights <- subset(flightdf, Date> "2020-01-13 00:00:00"& Date< "2020-01-17 00:00:00" & RW == "22R")
+gen_plots(sn45, flights, "2020-01-13 00:00:00",  "2020-01-17 00:00:00")
+
+flights <- subset(flightdf, Date> "2020-02-03 00:00:00"& Date< "2020-02-10 00:00:00" & RW == "22R")
+gen_plots(sn45, flights, "2020-02-03 00:00:00",  "2020-02-10 00:00:00")
+
+flights <- subset(flightdf, Date> "2020-03-23 00:00:00"& Date< "2020-03-30 00:00:00" & RW == "22R")
+gen_plots(sn45, flights, "2020-03-23 00:00:00",  "2020-03-30 00:00:00")
+
+
+flights <- subset(flightdf, Date> "2020-04-23 00:00:00"& Date< "2020-04-30 00:00:00" & RW == "22R")
+gen_plots(sn45, flights, "2020-04-23 00:00:00",  "2020-04-30 00:00:00")
+
+dev.off()
+```
+
+
+```{r}
+flights <- subset(flightdf, Date> "2020-01-13 00:00:00"& Date< "2020-01-17 00:00:00" & RW == "22R")
+flights$adj_date <- with_tz(flights$Date, tz = "GMT") #openair plots in UTC
+#pdf("timePlots-with-LTOs.pdf")
+timePlot(selectByDate(sn45_downwind, start = "2020/01/13", end = "2020/01/17"), pollutant = c("no2model", "correctedNO"),  group = TRUE, y.relation = "free", 
+         cols = c("green", "red"), lty = 1,
+         xlab = "Time", 
+         ref.x = list(v = flights$Date, lty = 3, col = "orange"))
+
+
+flights <- subset(flightdf, Date> "2020-02-03 00:00:00"& Date< "2020-02-10 00:00:00" & RW == "22R")
+flights$adj_date <- with_tz(flights$Date, tz = "GMT") #openair plots in UTC
+#pdf("Jan13-16-LTO.pdf")
+timePlot(selectByDate(sn45_downwind, start = "2020/02/03", end = "2020/02/10"), pollutant = c("no2model", "correctedNO"),  group = TRUE, y.relation = "free", 
+         cols = c("green", "red"), lty = 1, 
+         xlab = "Time", 
+         ref.x = list(v = flights$Date, lty = 3, col = "orange"))
+
+
+
+
+flights <- subset(flightdf, Date> "2020-03-23 00:00:00"& Date< "2020-03-30 00:00:00" & RW == "22R")
+flights$adj_date <- with_tz(flights$Date, tz = "UTC") #openair plots in UTC
+#pdf("Jan13-16-LTO.pdf")
+timePlot(selectByDate(sn45_downwind, start = "2020/03/23", end = "2020/03/30"), pollutant = c("no2model", "correctedNO"),  group = TRUE, y.relation = "free", 
+         cols = c("green", "red"), lty = 1, 
+         xlab = "Time", 
+         ref.x = list(v = flights$Date, lty = 3, col = "orange"))
+#dev.off()
+
+flights <- subset(flightdf, Date> "2020-04-23 00:00:00"& Date< "2020-04-30 00:00:00" & RW == "22R")
+flights$adj_date <- with_tz(flights$Date, tz = "UTC") #openair plots in UTC
+#pdf("Jan13-16-LTO.pdf")
+timePlot(selectByDate(sn45_downwind, start = "2020/04/23", end = "2020/04/30"), pollutant = c("no2model", "correctedNO"),  group = TRUE, y.relation = "free", 
+         cols = c("green", "red"), lty = 1, 
+         xlab = "Time", 
+         ref.x = list(v = flights$Date, lty = 3, col = "orange"))
+
+#dev.off()
+```
