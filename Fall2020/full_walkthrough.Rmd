@@ -1,0 +1,232 @@
+---
+title: "Full Walkthrough"
+---
+
+# Overview
+
+This is a full walkthrough of the Eastie Data Science code created during summer and fall of 2020. It includes the whole process of downloading, cleaning, and analyzing. 
+
+# Downloading and Importing
+
+We're going to be using two datasets: QuantAQ pollutant concentration data from the [QuantAQ website](https://www.quant-aq.com/) and meteorology data from the [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu/request/download.phtml?network=MA_ASOS).
+
+## QuantAQ Data 
+
+Download the following QuantAQ files: 
+
+* SN45: final and raw data taken from 7/4/2019 to 10/9/2020
+* SN49: final and raw data taken from 7/4/2019 to 10/9/2020
+* SN62: final and raw data taken from 7/4/2019 to 10/9/2020
+* SN67: final and raw data taken from 7/4/2019 to 10/9/2020
+* SN72: final and raw data taken from 7/4/2019 to 10/9/2020
+
+## Meteorology Data 
+
+Select the following station: 
+* [BOS] BOSTON/LOGAN INTL
+
+Select the following variables: 
+
+* Air Temperature [C]
+* Wind Direction
+* Wind Speed [mph]
+
+Select the date range: 
+* 7/4/2019 to 10/9/2020
+
+Select this timezone: 
+* America/New_York 
+
+
+Use the following download options:
+* csv 
+* no latitude/ longitude vectors 
+* represent missing data with blank string
+* denote trace with blank string
+
+## Storing the data 
+
+In order to easily import the data, we'll store the data in the following way: 
+
+* Store all the QuantAQ data in the folder called "quant_aq", which is a subfolder in "/data" in this workspace. When saving, make sure that the file name starts with the sensor name (ie SN45) and contains either "raw" or "final" in the name, to indicate which type of data was imported 
+* Store the meteorology data in the "/data" folder in this workspace. Store the file as "metdata.csv"
+
+## Importing Data
+
+### Importing Necessary Libraries 
+
+Our import and analysis relies on functions from a few packages. The following functions must be imported for the code to run.
+
+```{r}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+```
+
+
+
+### Import QuantAQ data 
+
+If we want to import only certain variables, we can define what we want to import ahead of time
+
+```{r}
+#defining which variables we'll keep
+final_vars <- c( "timestamp","timestamp_local",  "temp_manifold", 
+                 "co", "no" , "no2", "o3" ,  "pm1" , "pm25","pm10", "co2" ) #final variables to keep 
+raw_vars <- c("bin0", "no_ae") #raw variables to keep
+```
+
+Next, we'll import all the final and raw datafiles separately. We do this by finding all the csv's with "final" or "raw" in the name, and then applying the R read function to them. If you prefer to import all variables, comment the "lapply" functions that are being used, and uncomment the ones below it. The difference between them is that the currently uncommented one uses the "select" parameter, and the commented one doesn't.
+
+```{r}
+#finding all final datasets 
+temp = list.files(path = "./data/quant_aq/", pattern = "^.*final_final.*\\.csv", full.names = TRUE)
+finalfiles = lapply(temp, function(x) fread(file=x, select = final_vars) )
+#finalfiles = lapply(temp, function(x) fread(file=x) )
+
+#finding all raw datasets
+temp = list.files(path = "./data/quant_aq", pattern = "^.*final_raw.*\\.csv", full.names = TRUE)
+rawfiles = lapply(temp, function(x) fread(file=x, select = raw_vars) ) 
+#rawfiles = lapply(temp, function(x) fread(file=x) ) 
+```
+
+The output of the above functions gives a list of dataframes. If the csv's were stored with filenames that start with the sensor names (SN45, SN46), then the dataframes will be in numerical order. We can then separate them, by defining what the individual dataframes in the dataframes list maps to: 
+
+```{r}
+sn45 <- cbind(finalfiles[[1]], rawfinals[[1]])
+sn49 <- cbind(finalfiles[[2]], rawfinals[[2]])
+sn62 <- cbind(finalfiles[[3]], rawfinals[[3]])
+sn67 <- cbind(finalfiles[[4]], rawfinals[[4]])
+sn72 <- cbind(finalfiles[[5]], rawfinals[[5]])
+```
+
+### Import Meteorology data
+
+First, we import the file. We can indicate that there is a header. 
+
+```{r}
+metdata <- fread("data/metdata.csv", header=TRUE) #import meteorology file
+```
+
+If you look at the file, you'll see that the datetime is not in the standard datetime format. We can standardize it to the quantAQ data format using the R built-in POSIXct function, which changes datetime formats. We can specific which timezone this data is already in, as well. 
+
+```{r}
+metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M", tz = "America/New_York") #setting datetime, using correct timezone
+```
+
+Next, if we look at data columns, we see that the column names are unrepresentative of the data. if we look at the date column in particular, we see that the data is not in one-minute intervals, like the sensor data, but in 5 minute intervals. To solve this second concern, we can add one-minute intervals in between and then fill those 1 minute intervals with the data from the 5 minute intervals. Let's say that wind direction is 0 for 11:00 and 120 for 11:05. Then, the new data would be: 11:00 - 0, 11:01 - 0, 11:02 - 0, 11:03 - 0, 11:04 - 0, 11:05 - 120, 11:06 - 120 ... 11:09 - 120
+
+We can solve both of these concerns at once, using the dpylr operator (%>%)
+
+```{r}
+metdata <- metdata %>%
+  setnames(old = c("drct", "sped"), new = c("wd", "ws")) %>% #rename
+  complete(date = seq(from = min(date), to= max(date),  by = "1 min")) %>%#make 1 minute intervals
+  fill(c("wd", "ws")) #fill those new 1 minute interval rows 
+```
+
+We specified on the Iowa Mesonet website that our data's null values would show up as a blank string. When we import into R, this will then translate as an NA value. Since the missing strings are NAs, wind speed and wind direction become numeric vectors. If the missing data was set to "null", for example, then the vectors would be strings
+
+```{r}
+class(metdata$ws)
+class(metdata$wd)
+```
+On the website, the wind speed was given in in mph. However, we would prefer to use m/s. Let's convert ws from mph to m/s.
+
+```{r}
+metdata$ws <- metdata$ws * (1609/3600) #converting to m/s
+
+```
+
+Lastly, let's remove variables that we won't use:
+
+```{r}
+metdata[,c("tmpc", "valid", "station")] <- list(NULL) #getting rid of unnecessary variables
+```
+
+# Formatting and Merging Data 
+
+## Formatting QuantAQ sensor data 
+
+
+Just like we looked at the meteorology data, and found things to format, we can do the same for the sensor data. 
+
+Let's walk through it step-by-step for SN45. 
+
+### Formatting Walkthrough for SN45 
+
+First, let's standardize the date. Lubridate's ymd_hms function puts datetime data in the format Y:M:D H:M:S, so we'll use it. This function also has a parameter where you can define the timezone. We know the timestamp data is UTC, so we use that. Afterwards, we can move the datetime vector to be in the EST/EDT timezone with the lubridate timezone (tz) function. We're using timestamp instead of timestamp local, because QuantAQ said it was more reliable and because we can check the formatted datetime against the local timestamp afterwards.
+
+```{r}
+sn45$date <- ymd_hms(sn45$timestamp, tz="UTC") #parse datetime
+sn45$date <- with_tz(sn45$date, "America/New_York")
+```
+
+Next, we want to round the data to the nearest minute, so that we could align it with the meteorological, and other datasets. We'll preserve the original datetime vector by saving it as a separate vector. Then, we'll round the data so 11:30:29 rounds to 11:30:00 and 11:30:31 rounds to 11:31:00. 
+
+```{r}
+sn45 <- mutate(sn45, originaldate = date) #keeping original times for comparing to flight data
+sn45$date <- round_date(ymd_hms(sn45$date, tz="America/New_York"), unit="minute") #round date for merging
+```
+
+Lastly, we'll reorder the data so it's chronological, instead of reverse chronological. 
+
+```{r}
+sn45 <- sn45[order(sn45$originaldate),] #put it in chronological order
+```
+
+
+*** Should I include this stuff
+
+```{r}
+
+sn45[, c("X1","X", "sn" )] <- list(NULL) #removing unused variables
+
+
+setDT(sensor, key = "date") #change object type to data.table
+sensor <- unique(sensor, by = "date") #remove duplicates
+```
+
+### Formatting the rest of the QuantAQ files 
+
+We'll do what we did for sn45 for all of the quantAQ files. 
+
+In order to easily apply the cleaning to all the datasets, we're going to apply it as a function:
+
+```{r}
+clean_sensor_data <- function(sensor){
+  sensor$date <- ymd_hms(sensor$timestamp, tz="UTC") #parse datetime
+  sensor$date <- with_tz(sensor$date, "America/New_York")
+  sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
+  sensor$date <- round_date(ymd_hms(sensor$date, tz="America/New_York"), unit="minute") #round date for merging
+  sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
+  return(sensor)
+}
+
+```
+
+```{r}
+sn49 <- clean_sensor_data(sn49)
+sn62 <- clean_sensor_data(sn62)
+sn67 <- clean_sensor_data(sn67)
+sn72 <- clean_sensor_data(sn72)
+```
+
+## Merging 
+
+From trial and error, I've found that joining datasets using DT's merge works the best. Below is the code to implement it. First, we make sure that each dataset is a data.table object, with it's key column being "date". Next, we merge the meteorological and sensor datasets by date with no_match = 0. no_match = 0 ensures that there's no duplicates. 
+
+# Cleaning
+
+There are a number of erroneous datapoints, or data quirks, which come inherently in from sensors. In this section, we'll implement a number of filters.
+
+## O3 filter 
+
+According to QuantAQ, all o3 negative o3 data is erroneous. However there is no trend to the negative o3 data, so we'll set all negative o3 data to 0. 
+
+## NO_ae filter 
+
+
+
+

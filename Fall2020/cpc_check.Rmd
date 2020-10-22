@@ -1,0 +1,293 @@
+---
+title: "CPC Check"
+---
+
+# Packages & Paths
+
+
+```{r, warning = FALSE, error=FALSE}
+library(data.table)
+library(lubridate)
+library(tidyr)
+library(dplyr)
+library(openair)
+library(baseline)
+```
+
+
+```{r}
+main_path <- "C:/Users/abusa/Documents/GitHub/EB_AQ_Network/Fall2020/data/new_cpc_data" #folder where the data lives
+aeth_path <- paste0(main_path, "/AETHLOMETER") #path to aethlometer data
+sn45_path <- paste0(main_path, "/sn45_cpc.csv")
+sn46_path <- paste0(main_path, "/sn46_cpc.csv")
+cpc_path <- paste0(main_path, "/MCPC data")
+```
+
+
+# CPC Check
+
+importing the data
+
+```{r}
+nm <- list.files(path=cpc_path, all.files = TRUE, full.names = TRUE, pattern="*.TXT")
+  
+  cpc_upload <- do.call(rbind, lapply(nm, function(x) read.delim(file=x, header = TRUE, skip = 13) ) )
+  
+  ## removing unncessary variables 
+  
+  cpc_upload <- cpc_upload[ , c("X.YY.MM.DD", "HR.MN.SC", "concent", "fillcnt"  )]
+  
+  ##formatting datetime
+  
+  cpc_upload$date <- with(cpc_upload, ymd(`X.YY.MM.DD`) + hms(`HR.MN.SC`))
+  
+  tz(cpc_upload$date) <- "America/New_York"
+```
+
+make a vector to keep constant and check values against
+
+```{r}
+cpc_check <- cpc_upload
+```
+
+prepare vectors whose properties we will be checking. 
+
+first, prepare the vectors which represent the original -/+ 5 minute code
+```{r}
+cpc_upload$binary_fillcnt <- ifelse(
+    ( 
+      (cpc_upload$fillcnt != 0 )
+    ),
+    1,  # if condition is met, put 1
+    0   # else put 0
+  )
+  
+  start_indx <- which(diff(c(0L, cpc_upload$binary_fillcnt)) == 1L)
+  #[1] 1 5 7
+  end_indx <- which(diff(c(cpc_upload$binary_fillcnt, 0L)) == -1L)
+  
+  filtering_start_indx <- start_indx - 60*5
+  filtering_end_indx <- end_indx + 60*5
+  
+  filtering <- data.frame(filtering_start_indx,filtering_end_indx   )
+  
+  filtering_check <- data.frame(start_indx, filtering_start_indx, end_indx, filtering_end_indx)
+  
+  if(any(filtering$filtering_start_indx < 1)){
+    #print(which(filtering$filtering_start_indx <1))
+    filtering$filtering_start_indx <- replace(filtering$filtering_start_indx, which(filtering$filtering_start_indx <1), 1 )
+  }
+  
+  
+  #filtering pairs that start after end 
+  if(any(filtering$filtering_start_indx > length(cpc_upload$fillcnt))){
+    #print(which(filtering$filtering_start_indx <1))
+    indxs_pairs <- which(filtering$filtering_start_indx > length(cpc_upload$fillcnt))
+    filtering <- filtering[!indxs_pairs]
+  }
+  
+  
+  
+  
+  if(any(filtering$filtering_end_indx > length(cpc_upload$fillcnt))){
+    #print(which(filtering$filtering_end_indx > length(cpc_upload$fillcnt)))
+    filtering$filtering_end_indx <-replace(filtering$filtering_end_indx, which(filtering$filtering_end_indx > length(cpc_upload$fillcnt)), length(cpc_upload$fillcnt) )
+  }
+  setDT(filtering)
+  filtering <- filtering[!duplicated(filtering$filtering_end_indx)]
+  
+  
+  remove_indxs <- unlist(Map(':',filtering$filtering_start_indx, filtering$filtering_end_indx))
+  
+  
+  remove_indxs <- unique(remove_indxs)
+```
+
+Also prepare a vector and dataframe that keep track of just the fillcnt values !=0 
+```{r}
+  start_indx <- which(diff(c(0L, cpc_upload$binary_fillcnt)) == 1L)
+  #[1] 1 5 7
+  end_indx <- which(diff(c(cpc_upload$binary_fillcnt, 0L)) == -1L)
+  remove_indxs2 <- unlist(Map(':', start_indx, end_indx))
+  remove_indxs2 <- unique(remove_indxs2)
+  
+  filtering2 <- data.frame(start_indx, end_indx)
+```
+
+
+check different properties about the CPC data:
+
+
+```{r}
+print("number of negative values")
+print(sum(cpc_check$concent < 0))
+print("-------------------")
+
+print("check number of 0's (not giving real value)")
+sprintf("total number of values: %f", sum(cpc_check$concent ==0)) 
+sprintf("percentage of dataset where this holds: %f %%",100*sum(cpc_check$concent ==0) / nrow(cpc_check))
+print("-------------------")
+
+print("check number of fillcnt != 0  (sensor giving error)")
+sprintf("total number of values: %f",sum(cpc_check$fillcnt != 0)) 
+sprintf("percentage of dataset where this holds: %f %%",100*sum(cpc_check$fillcnt != 0) / nrow(cpc_check))
+sprintf("Number of minutes that have an error %f", sum(cpc_check$fillcnt != 0)/60)
+print("-------------------")
+
+print("check number of fillcnt != 0 and concent == 0 (sensor giving error and bad value)")
+sprintf("total number of values: %f",sum(cpc_check$fillcnt != 0 & cpc_check$concent ==0)) 
+sprintf("percentage of dataset where this holds: %f %%",100*sum(cpc_check$fillcnt != 0 & cpc_check$concent ==0) / nrow(cpc_check))
+print("-------------------")
+
+print("check number of fillcnt == 0 and concent == 0 (it giving a bad value but not recognizing as a bad value)")
+sprintf("total number of values: %f",sum(cpc_check$fillcnt == 0 & cpc_check$concent ==0)) 
+sprintf("percentage of dataset where this holds: %f %%",100*sum(cpc_check$fillcnt == 0 & cpc_check$concent ==0) / nrow(cpc_check))
+print("-------------------")
+
+print("check number of fillcnt == 0 and concent != 0 (it's not giving an error and the value isn't wrong)")
+sprintf("total number of values: %f",sum(cpc_check$fillcnt == 0 & cpc_check$concent !=0)) 
+sprintf("percentage of dataset where this holds: %f %%",100*sum(cpc_check$fillcnt == 0 & cpc_check$concent !=0) / nrow(cpc_check))
+print("-------------------")
+
+print("Try the remove index function (identifying indices to remove with binary fillcnt) ")
+sprintf("total number of values: %f",length(remove_indxs2))
+sprintf("percentage of dataset where this holds: %f %%",100*length(remove_indxs2)/nrow(cpc_check))
+print(nrow(filtering2))
+
+print("Check number of NAs with 5 min interval code applied")
+sprintf("total number of values: %f",length(remove_indxs))
+sprintf("percentage of dataset where this holds: %f %%",100*length(remove_indxs)/nrow(cpc_check))
+print("-------------------")
+
+sprintf("Number of minutes removed with 5 minute thing: %f", length(remove_indxs)/60)
+sprintf("Theoretical maximum number of minutes to be taken out with 5 min: number of minutes where fillcnt !=0 + (number of fillcnt!=0 passages * 10) %f", sum((cpc_check$fillcnt != 0))/60 + (nrow(filtering) * 10))
+sprintf("percentage of dataset where this holds: %f %%",100*(sum((cpc_check$fillcnt != 0)/60) + (nrow(filtering) * 10))/(nrow(cpc_check)/60))
+print("-------------------")
+
+
+
+```
+
+Seeing which time period doesn't register concentration being 0. 
+```{r}
+cpc_check[which(cpc_check$fillcnt == 0 & cpc_check$concent ==0), "date"]
+```
+
+
+Testing with a small, manageable subsection.
+
+```{r}
+cpc_small <- cpc_upload[500:1500, ]
+
+cpc_small$binary_fillcnt <- ifelse(
+    ( 
+      (cpc_small$fillcnt != 0 )
+    ),
+    1,  # if condition is met, put 1
+    0   # else put 0
+  )
+  
+  start_indx <- which(diff(c(0L, cpc_small$binary_fillcnt)) == 1L)
+  #[1] 1 5 7
+  end_indx <- which(diff(c(cpc_small$binary_fillcnt, 0L)) == -1L)
+  
+  filtering_start_indx <- start_indx - 60*5
+  filtering_end_indx <- end_indx + 60*5
+  
+  filtering <- data.frame(filtering_start_indx,filtering_end_indx   )
+  
+  filtering_check <- data.frame(start_indx, filtering_start_indx, end_indx, filtering_end_indx)
+  
+  if(any(filtering$filtering_start_indx < 1)){
+    #print(which(filtering$filtering_start_indx <1))
+    filtering$filtering_start_indx <- replace(filtering$filtering_start_indx, which(filtering$filtering_start_indx <1), 1 )
+  }
+  
+  
+  #filtering pairs that start after end 
+  if(any(filtering$filtering_start_indx > length(cpc_small$fillcnt))){
+    #print(which(filtering$filtering_start_indx <1))
+    indxs_pairs <- which(filtering$filtering_start_indx > length(cpc_small$fillcnt))
+    filtering <- filtering[!indxs_pairs]
+  }
+  
+  
+  
+  
+  if(any(filtering$filtering_end_indx > length(cpc_small$fillcnt))){
+    #print(which(filtering$filtering_end_indx > length(cpc_small$fillcnt)))
+    filtering$filtering_end_indx <-replace(filtering$filtering_end_indx, which(filtering$filtering_end_indx > length(cpc_small$fillcnt)), length(cpc_small$fillcnt) )
+  }
+  setDT(filtering)
+  filtering <- filtering[!duplicated(filtering$filtering_end_indx)]
+  
+  
+  remove_indxs <- unlist(Map(':',filtering$filtering_start_indx, filtering$filtering_end_indx))
+  
+  
+  remove_indxs <- unique(remove_indxs)
+  
+  cpc_small$removing <- rep(0, nrow(cpc_small))
+  cpc_small$removing[remove_indxs] <- 1
+  
+  start_and_stop <- sort(rbind(start_indx, end_indx) )
+  
+  
+  cpc_small <- cpc_small[c("X.YY.MM.DD", "HR.MN.SC", "date", "concent", "fillcnt", "binary_fillcnt", "removing" )]
+
+```
+
+We see that there are negative values, because there are 2 values where fillcnt != 0.
+
+# Aeth Data 
+
+```{r}
+nm <- list.files(path=aeth_path, all.files = TRUE, full.names = TRUE, pattern="*.csv")
+  
+  aeth_data <- do.call(rbind, lapply(nm, function(x) fread(file=x) ) )
+  
+  aeth_data <- aeth_data[ , c( "Date / time local",  "Timezone offset (mins)" , "Date local (yyyy/MM/dd)", "Time local (hh:mm:ss)", "Status" ,  "UV BC1", "Blue BC1", "Green BC1", "Red BC1", "IR BC1")]
+  
+  ## formatting date time 
+  
+  aeth_data$date <- ymd_hms(aeth_data$`Date / time local`)
+  tz(aeth_data$date) <- "America/New_York"
+```
+
+check number of NA, negative and zero values
+```{r}
+na_count <-sapply(aeth_data[, -c("Date / time local", "Timezone offset (mins)", "Time local (hh:mm:ss)", "date", "Date local (yyyy/MM/dd)")], function(y) sum(length(which(is.na(y)))))
+
+negative_count <-sapply(aeth_data[, -c("Date / time local", "Timezone offset (mins)", "Time local (hh:mm:ss)", "date", "Date local (yyyy/MM/dd)")], function(y) length(which((y)<0)))
+
+zero_count <-sapply(aeth_data[, -c("Date / time local", "Timezone offset (mins)", "Time local (hh:mm:ss)", "date", "Date local (yyyy/MM/dd)")], function(y) length(which((y)==0)))
+
+data.frame(na_count, negative_count, zero_count)
+```
+
+Since there's the same number of NA values, I suspect they happen at the same time: 
+```{r}
+cbind(aeth_data[which(is.na(aeth_data$`UV BC1`)),"date"], aeth_data[which(is.na(aeth_data$`Blue BC1`)),"date"] , aeth_data[which(is.na(aeth_data$`Green BC1`)),"date"] , aeth_data[which(is.na(aeth_data$`Red BC1`)),"date"],aeth_data[which(is.na(aeth_data$`IR BC1`)),"date"])
+```
+
+
+7 out of the 19 NA values happen the day of deployment. 9/30, 10/5 and 10/9 also are recorded days where MA stopped. However, the NA values are happening at different times.
+
+
+Where do the zero values occur? 
+```{r}
+cbind(aeth_data[which(aeth_data$`UV BC1` ==0),"date"], aeth_data[which((aeth_data$`Blue BC1`) ==0),"date"] , aeth_data[which((aeth_data$`Green BC1`) ==0),"date"] , aeth_data[which((aeth_data$`Red BC1`) ==0),"date"],aeth_data[which((aeth_data$`IR BC1`) ==0),"date"])
+```
+
+Since the zero_count wasn't equal in the dataframe above, the dates where zero happen can't all be the same. However, there is a lot of overlap. 
+
+Let's see if the negative values in the aeth data are just random values where the data is negative, or if there's a trend. 
+```{r}
+
+(sapply(aeth_data[, -c("Date / time local", "Timezone offset (mins)", "Time local (hh:mm:ss)", "date", "Date local (yyyy/MM/dd)", "Status")], function(y) neg(which((y)<0))))
+```
+
+
+
+
+
