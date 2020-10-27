@@ -1,0 +1,104 @@
+---
+title: "Colocation Walkthrough"
+output: html_notebook
+---
+
+# Overview 
+
+This is a complete walkthrough of the colocation analysis. We will import and clean QuantAQ and reference sensors. Then, we will align the datasets and analysis the trends between them.
+
+# Downloading and Importing 
+
+### Reference Instrument Data 
+
+The reference instrument data consists of two parts : CPC and aethlometer data. Both datasets can be downloaded from [this dropbox folder](https://www.dropbox.com/sh/e53t6f18m0jdhdq/AABfYYiqq3ChPqY80Gd_ZK0Ya?dl=0). Directly download the whole dropbox folder. This dropbox is updated with more data weekly, but we will touch on this point later. 
+
+### QuantAQ Data 
+
+In order to download QuantAQ data, we can walk through the initial walkthrough (initial_analysis_walkthrough.rmd). This will give us instructions on where to download the data, how to clean it, and how to export it. 
+
+## Storing Data
+
+* Store the Dropbox downloaded folder in the "/data/reference_data" subfolder of this folder. 
+
+* The initial walkthrough will provide instructions on how to store the QuantAQ data.
+
+
+## Importing Data
+
+### Importing Necessary Libraries 
+
+Same as in the initial walkthrough, our import and analysis relies on functions from a few packages. Below, we'll import the necessary packages. 
+
+```{r, warning= FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+```
+
+### Importing QuantAQ Data 
+
+### Importing Reference Instrument Data 
+
+#### Importing CPC Data 
+
+#### Importing Aethlometer Data 
+
+# Checking the Data 
+
+In this section we'll review the reference data, before we clean and analysis it. We will not be testing QuantAQ data.
+
+## Negative, NA and zero data trends 
+
+In this section, we'll count the number of negative, NA and zero data points and determine whether they are trends and their sources. 
+
+### CPC 
+
+### Aeth 
+
+## More Testing of CPC Data
+
+We know that CPC data should never equal 0, and that when fillcount is not equal to 0, there has been an interference in the system. Using these two variables as metrics, we can test how much of the data is reliable. 
+
+# Cleaning the Data 
+
+## QuantAQ 
+
+We will not be cleaning the QuantAQ data in this walkthrough, since it was cleaned in the previous walkthrough. 
+
+## CPC 
+
+## Aeth 
+
+# TIme Alignment 
+
+Because we round the datetime variables to merge the datasets, there is the chance that data can be up to one minute shifted. Therefore, each data point's datetime can be up to one minute off. For peak-by-peak analysis of plumes, this can make a big difference. In this section, we will correct for the time shift, and align the peaks. 
+
+## Subset 
+
+It is easier to do this analysis for one day than a whole timeframe. Therefore, before we start aligning the peaks, we will create a subset of the data for the day 10/15. We're looking at 10/15, since it is the date we will be analyzing later. 
+
+## Plot Data 
+
+We'll manually shift the data, by the trend that we see. In order to know what the time shift is, we'll plot the data and visually inspect it. 
+
+We'll plot the 10/15 data between 12 and 4 pm using openair timePlot.
+
+## Shifting Data 
+
+## Validate Time Shift 
+
+### Plot same data 
+
+### Corr plot 
+
+### Corr plot for whole time series 
+
+# Initial Analysis 
+
+
+
+
+

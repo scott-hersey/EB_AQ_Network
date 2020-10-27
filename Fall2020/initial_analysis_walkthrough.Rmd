@@ -5,7 +5,7 @@ output: html_notebook
 
 # Overview
 
-This is a walkthrough of the Eastie Data Science code created during summer and fall of 2020. It includes the whole process of downloading, cleaning, and doing a high level analysis of the data. At the end, we will export the cleaned datasets. These can be used as inputs to the following two walkthroughs: regime definitions and colocation. 
+This is a walkthrough of the Eastie Data Science code created during summer and fall of 2020. It includes downloading, cleaning, and doing a high level analysis of the data. At the end, we will export the cleaned datasets. These can be used as inputs to the following two walkthroughs: regime definitions and co-location. 
 
 # Downloading and Importing
 
@@ -48,14 +48,14 @@ Use the following download options:
 
 In order to easily import the data, we'll store the data in the following way: 
 
-* Store all the QuantAQ data in the folder called "quant_aq", which is a subfolder in "/data" in this workspace. When saving, make sure that the file name starts with the sensor name (ie SN45) and contains either "raw" or "final" in the name, to indicate which type of data was imported 
-* Store the mseteorology data in the "/data" folder in this workspace. Store the file as "metdata.csv"
+* Store all the QuantAQ data in the folder called "quant_aq", which is a subfolder in "/data" folder of this workspace. When saving, make sure that the file name starts with the sensor name (ie sn45) and contains either "raw" or "final" in the name, to indicate which type of data was imported 
+* Store the meteorology data in the "/data" folder in this workspace. Store the file as "metdata.csv"
 
 ## Importing Data
 
 ### Importing Necessary Libraries 
 
-Our import and analysis relies on functions from a few packages. The following functions must be imported for the code to run. You might get a message that certain functions are "masked" or "overwritten". This means that you imported libraries which have functions of the same name. If you know that these functions do different things from package to package, and want to use a specific one, then you can specific the function's package with package::function. For example, openair::polarPlot()
+Our import and analysis relies on functions from a few packages. The following functions must be imported for the code to run. You might get a message that certain functions are "masked" or "overwritten". This means that you imported libraries that have functions with the same name. If you know that these functions do different things from package to package, and want to use a specific one, then you can specific the function's package with package::function. For example, openair::polarPlot()
 
 ```{r, warning= FALSE}
 library(lubridate) #date and time functions 
@@ -78,7 +78,7 @@ final_vars <- c( "timestamp","timestamp_local",  "temp_manifold",
 raw_vars <- c("bin0", "no_ae") #raw variables to keep
 ```
 
-Next, we'll import all the final and raw datafiles separately. We do this by finding all the csv's with "final" or "raw" in the name, and then applying the R read function to them. If you prefer to import all variables, comment the "lapply" functions that are being used, and uncomment the ones below it. The difference between them is that the currently uncommented one uses the "select" parameter, and the commented one doesn't.
+Next, we'll import all the final and raw datafiles separately. We do this by finding all the csv's with "final" or "raw" in the name, and then applying the R read function to them. If you prefer to import all variables, comment the "sapply" functions that are being used, and uncomment the ones below it. The difference between them is that the currently uncommented one uses the "select" parameter, and the commented one doesn't.
 
 ```{r}
 #finding all final datasets 
@@ -94,17 +94,26 @@ rawfiles = sapply(temp, function(x) fread(file=x, data.table = TRUE, select = ra
 
 The output of the above functions gives a list of data tables. Since we included the sapply parameter "use.names", it attached the file name to each data.table. Since we used data.table = TRUE, we can be sure that the data is given in the data.table format, which has a more efficient runtime for large datasets.
 
-Next, we want to combine the final and raw files for a given sensor. However, it will be beneficial to keep the sensors as a list of dataframes, as we'll see later. We can accomplish both of those things with the following function
+Next, we want to combine the final and raw files for a given sensor. However, it will be beneficial to keep the sensors as a list of dataframes, as we'll see later.
 
 ```{r}
 snfiles <- mapply(FUN = cbind,finalfiles,rawfiles,SIMPLIFY = FALSE) # column bind the final and raw dataframes, so that the first final dataframe gets binded to the first raw dataframe, and so on
-names(snfiles) # print the current names of the dataframes in the list
 
+```
+
+As stated above, the file name is given as the title for each dataset.
+```{r}
+names(snfiles) # print the current names of the dataframes in the list
+```
+
+Instead, we're going to an easier naming convention. Since we used a specific naming scheme and a specific path, we can just extract the part of the path name that describes the dataset. Specifically, we're extracting "sn" and the sensor number. For example, "sn45" or "sn46".
+
+```{r}
 new_names <- lapply(names(snfiles), function(x) substr(x, 17, 20)) #extract the real sensor names from the current names used in the list
 names(snfiles) <- new_names #rename list names
 ```
 
-Since we used a specific naming scheme and a specific path, we can just extract the part of the path name that describes the dataset. Specifically, we're extracting "sn" and the sensor number. For example, "sn45" or "sn46".
+
 
 
 ### Import Meteorology data
@@ -139,11 +148,11 @@ We specified on the Iowa Mesonet website that our data's null values would show 
 class(metdata$ws)
 class(metdata$wd)
 ```
+
 On the website, the wind speed was given in in mph. However, we would prefer to use m/s. Let's convert ws from mph to m/s.
 
 ```{r}
 metdata$ws <- metdata$ws * (1609/3600) #converting to m/s, 1609 meters per mile, 3600 seconds per hr
-
 ```
 
 Lastly, let's remove variables that we won't use:
@@ -157,7 +166,7 @@ metdata[,c( "station")] <- list(NULL) #getting rid of unnecessary variables
 ## Formatting QuantAQ sensor data 
 
 
-Just like we looked at the meteorology data, and found things to format, we can do the same for the sensor data. 
+Similar to the meteorology data, we can identify what needs to be reformatted in the sensor data. 
 
 Let's walk through it step-by-step for SN45. 
 
@@ -170,7 +179,7 @@ snfiles$sn45$date <- lubridate::ymd_hms(snfiles$sn45$timestamp, tz="UTC") #parse
 snfiles$sn45$date <- lubridate::with_tz(snfiles$sn45$date, "America/New_York") #change timezone
 ```
 
-Next, we want to round the data to the nearest minute, so that we could align it with the meteorological, and other datasets. We'll preserve the original datetime vector by saving it as a separate vector. Then, we'll round the data so 11:30:29 rounds to 11:30:00 and 11:30:31 rounds to 11:31:00. 
+Next, we want to round the data to the nearest minute, so that we could align it with the meteorological dataset. We'll preserve the original datetime vector by saving it as a separate vector. Then, we'll round the data so 11:30:29 rounds to 11:30:00 and 11:30:31 rounds to 11:31:00. 
 
 ```{r}
 snfiles$sn45 <- mutate(snfiles$sn45, originaldate = date) #keeping original times for comparing to flight data
@@ -184,18 +193,19 @@ snfiles$sn45 <- snfiles$sn45[order(snfiles$sn45$originaldate),] #put it in chron
 ```
 
 
-We'll make sure there's no duplicate entries 
+This data has duplicate rows, which can become a problem for some analyses.
 
 ```{r}
 sum(duplicated(snfiles$sn45) == 1) #checking the number of duplicate entries 
 ```
-There are duplicates, so let's see what they look like: 
+
+Let's see what they look like: 
 
 ```{r}
 snfiles$sn45[duplicated(snfiles$sn45) | duplicated(snfiles$sn45, fromLast=TRUE)] #print all duplicates, including the first one
 ```
 
-So, this are entries that are exactly the same (all the columns are the same, even timestamp). Since there is no difference between this information, we can remove the duplicates: 
+These rows are entries that are exactly the same (all the columns are the same, even timestamp). Since there is no difference between this information, we can remove the duplicates: 
 
 ```{r}
 snfiles$sn45 <- unique(snfiles$sn45 ) #keep only unique rows in the dataset
@@ -205,9 +215,9 @@ snfiles$sn45 <- unique(snfiles$sn45 ) #keep only unique rows in the dataset
 
 ### Formatting the rest of the QuantAQ files 
 
-We'll do what we did for sn45 for all of the quantAQ files. 
+We'll do what we did for sn45 for all of the QuantAQ files. 
 
-In order to easily apply the cleaning to all the datasets, we're going to create a function to apply to the list of datafiles. Below is the function.
+In order to easily apply the cleaning to all the datasets, we're going to create a function to apply to the list of data frames. Below is the function.
 
 ```{r}
 clean_sensor_data <- function(sensor){
@@ -230,7 +240,7 @@ snfiles[c(-1)] <- lapply(snfiles[c(-1)], function(x) clean_sensor_data(x))
 
 ## Merging 
 
-From trial and error, I've found that joining datasets using DT's merge works the best. Below is the code to implement it. First, we make sure that each dataset is a data.table, with a key column of "date". This will allow us to the data.table merge function. We merge the meteorological and sensor datasets by date with no_match = 0. no_match = 0 ensures that there's no duplicates. 
+From trial and error, I've found that joining datasets using DT's merge works the best. Below is the code to implement it. First, we make sure that each dataset is a data.table with a key column of "date". This will allow us to the data.table merge function. We merge the meteorological and sensor datasets by date with no_match = 0. no_match = 0 ensures that there's no duplicates. 
 
 First, we'll implement it for SN45.
 
@@ -262,21 +272,22 @@ There are a number of erroneous datapoints, or data quirks, which come inherentl
 
 ## O3 filter 
 
-According to QuantAQ, all o3 negative o3 data is erroneous. However there is no trend to the negative o3 data, so we'll set all negative o3 data to 0. This is a simple process, so we'll just apply it directly to the datasets with lapply
+According to QuantAQ, all o3 negative o3 data is erroneous. However there is no trend to the negative o3 data, so we'll set all negative o3 data to 0. This is a simple process, so we'll just apply it directly to the datasets with lapply. 
 
 
 ```{r}
-o3_filter <- function(sensor){
+o3_filter <- function(sensor){ #create o3 filter function
   sensor$o3 <- replace(sensor$o3, sensor$o3 < 0, 0)
   return(sensor)
 }
-snfiles<- lapply(snfiles, function(x) o3_filter(x))
+
+snfiles<- lapply(snfiles, function(x) o3_filter(x)) #apply it to the data frames
 ```
 
 
 ## NO_ae filter 
 
-The NO auxiliary electrode (no_ae) is an NO sensor which should be very stable. If there is a drastic change in no_ae, the data is likely wrong. We want to exclude these data points that are likely wrong, therefore, we'll set NO to NA when no_ae changes rapidly. We'll set NO to NA when the change in no_ae exceeds 2.5 standard deviations past it's mean. 
+The NO auxiliary electrode (no_ae) is an NO sensor which should be very stable. If there is a drastic change in no_ae, the data is likely wrong. We want to exclude these data points that are likely wrong, therefore, we'll set NO to NA when no_ae changes rapidly. We'll set NO to NA when the change in no_ae exceeds 2.5 standard deviations past its mean. 
 
 ```{r}
 no_ae_filter <- function(sensor){
@@ -376,11 +387,11 @@ Polar plots are a tool that shows the relationship between pollutant concentrati
 ```{r}
 generate_overall_polarplots <- function(sn, snstring){
   #generates the polar plots for the variables we are interested in 
-  #polarPlot(sn, pollutant = "correctedNO", main = paste0(snstring, "NO Polar Plot", sep= " "))
-  #polarPlot(sn, pollutant = "no2", main = paste0(snstring, "NO Polar Plot", sep= " "))
-  #polarPlot(sn, pollutant = "co",  main = paste0(snstring, "NO Polar Plot", sep= " "))
-  #polarPlot(sn, pollutant = "bin0",  main = paste0(snstring, "NO Polar Plot", sep= " "))
-  polarPlot(sn, pollutant = "pm1",  main = paste0(snstring, "NO Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "no", main = paste0(snstring, " NO Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "no2", main = paste0(snstring, " NO2 Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "co",  main = paste0(snstring, " CO Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "bin0",  main = paste0(snstring, " bin0 Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "pm1",  main = paste0(snstring, " PM1 Polar Plot", sep= " "))
 
 }
 ```
@@ -401,8 +412,17 @@ for (i in seq(length(names(snfiles)))){
 Diurnal plots show the relationship between pollutant concentration and time (on the scale of hours, days and months). To create diurnal profiles for all of the sensors, we can apply the same method as we did to create polar plots.
 
 ```{r}
-lapply(snfiles, function(x) timeVariation(x, pollutant = c("pm1", "bin0")))
+
+for (i in seq(length(names(snfiles)))){
+  
+  timeVariation(snfiles[[i]], pollutant = c("no2"), main = paste0(names(snfiles)[i], " NO2 Diurnal Profile"))
+  
+  timeVariation(snfiles[[i]], pollutant = c("pm1", "co", "no",  "co2", "bin0"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
+}
 ```
+
+
+
 
 # Export 
 
