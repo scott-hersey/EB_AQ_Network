@@ -11,15 +11,17 @@ This is a walkthrough of the Eastie Data Science code created during summer and 
 
 We're going to be using two datasets: QuantAQ pollutant concentration data from the [QuantAQ website](https://www.quant-aq.com/) and meteorology data from the [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu/request/download.phtml?network=MA_ASOS).
 
+Note: The paragraph above and the following section will describe the downloading, storing and importing process for a normal workflow. However, there is not always the option of using this normal workflow. After the following downloading, storing and importing sections, there will be a section that describes how to do these things when you need to use the QuantAQ data from the [DropBox folder](https://app.box.com/s/3rs3dasqitqtrwxgtem0ef96jhkbnqtm). 
+
 ## QuantAQ Data 
 
 Download the following QuantAQ files: 
 
-* SN45: final and raw data taken from 7/4/2019 to 10/23/2020
-* SN49: final and raw data taken from 7/4/2019 to 10/23/2020
-* SN62: final and raw data taken from 7/4/2019 to 10/23/2020
-* SN67: final and raw data taken from 7/4/2019 to 10/23/2020
-* SN72: final and raw data taken from 7/4/2019 to 10/23/2020
+* SN45: final and raw data taken from 9/7/2019 to 10/27/2020
+* SN49: final and raw data taken from 9/72019 to 10/27/2020
+* SN62: final and raw data taken from 9/7/2019 to 10/27/2020
+* SN67: final and raw data taken from 9/7/2019 to 10/27/2020
+* SN72: final and raw data taken from 9/7/2019 to 10/27/2020
 
 ## Meteorology Data 
 
@@ -32,7 +34,7 @@ Select the following variables:
 * Wind Speed [mph]
 
 Select the date range: 
-* 7/4/2019 to 10/24/2020 (this dataset is not inclusive of the last date)
+* 9/7/2019 to 10/28/2020 (this dataset is not inclusive of the last date)
 
 Select this timezone: 
 * America/New_York 
@@ -48,7 +50,7 @@ Use the following download options:
 
 In order to easily import the data, we'll store the data in the following way: 
 
-* Store all the QuantAQ data in the folder called "quant_aq", which is a subfolder in "/data" folder of this workspace. When saving, make sure that the file name starts with the sensor name (ie sn45) and contains either "raw" or "final" in the name, to indicate which type of data was imported 
+* Store all the QuantAQ data in the folder called "quant_aq", which is a subfolder in "/data" folder of this workspace. When saving, make sure that the file name starts with the sensor name (ie sn45) and contains either "raw" or "final" in the name, to indicate which type of data was imported. For example: "sn45_final.csv". 
 * Store the meteorology data in the "/data" folder in this workspace. Store the file as "metdata.csv"
 
 ## Importing Data
@@ -63,6 +65,7 @@ library(data.table) #to use the data.table variable type
 library(dplyr) #this library allows you to use the %>% operator
 library(tidyr) #this library lets you use the complete function to account for time syncing
 library(openair) #for plotting and analysis
+library(stringr)
 ```
 
 
@@ -72,47 +75,84 @@ library(openair) #for plotting and analysis
 If we want to import only certain variables, we can define what we want to import ahead of time
 
 ```{r}
-#defining which variables we'll keep
-final_vars <- c( "timestamp","timestamp_local",  "temp_manifold", 
-                 "co", "no" , "no2", "o3" ,  "pm1" , "pm25","pm10", "co2" ) #final variables to keep 
-raw_vars <- c("bin0", "no_ae") #raw variables to keep
+# #defining which variables we'll keep
+# final_vars <- c( "timestamp","timestamp_local",  "temp_manifold", 
+#                  "co", "no" , "no2", "o3" ,  "pm1" , "pm25","pm10", "co2" ) #final variables to keep 
+# raw_vars <- c("timestamp","bin0", "no_ae") #raw variables to keep
 ```
 
 Next, we'll import all the final and raw datafiles separately. We do this by finding all the csv's with "final" or "raw" in the name, and then applying the R read function to them. If you prefer to import all variables, comment the "sapply" functions that are being used, and uncomment the ones below it. The difference between them is that the currently uncommented one uses the "select" parameter, and the commented one doesn't.
 
 ```{r}
-#finding all final datasets 
-temp = list.files(path = "./data/quant_aq/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
-finalfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
-#finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
-
-#finding all raw datasets
-temp = list.files(path = "./data/quant_aq", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
-rawfiles = sapply(temp, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE) 
+# #finding all final datasets 
+# temp = list.files(path = "./data/quant_aq/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
+# finalfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
+# #finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
+# 
+# #finding all raw datasets
+# temp = list.files(path = "./data/quant_aq", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
+# rawfiles = sapply(temp, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE) 
 #rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 The output of the above functions gives a list of data tables. Since we included the sapply parameter "use.names", it attached the file name to each data.table. Since we used data.table = TRUE, we can be sure that the data is given in the data.table format, which has a more efficient runtime for large datasets.
 
+Let's use an easier naming conventon. Since we used a specific naming scheme and a specific path, we can just extract the part of the path name that describes the dataset. Specifically, we're extracting "sn" and the sensor number. For example, "sn45" or "sn46".
+
+```{r}
+# names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 17, 20)) #extract the real sensor names from the current names used in the list
+# names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 17, 20)) 
+# names(finalfiles)
+# names(rawfiles)
+``` 
+
 Next, we want to combine the final and raw files for a given sensor. However, it will be beneficial to keep the sensors as a list of dataframes, as we'll see later.
 
-```{r}
-snfiles <- mapply(FUN = cbind,finalfiles,rawfiles,SIMPLIFY = FALSE) # column bind the final and raw dataframes, so that the first final dataframe gets binded to the first raw dataframe, and so on
+Since the final and raw datasets could have a different number of rows, we'll merge them based on entries to the "timestamp" column.
 
-```
-
-As stated above, the file name is given as the title for each dataset.
-```{r}
-names(snfiles) # print the current names of the dataframes in the list
-```
-
-Instead, we're going to an easier naming convention. Since we used a specific naming scheme and a specific path, we can just extract the part of the path name that describes the dataset. Specifically, we're extracting "sn" and the sensor number. For example, "sn45" or "sn46".
 
 ```{r}
-new_names <- lapply(names(snfiles), function(x) substr(x, 17, 20)) #extract the real sensor names from the current names used in the list
-names(snfiles) <- new_names #rename list names
+#snfiles <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
+
+#### Proof that Combining Datasets works 
+
+In case you aren't following the normal workflow, here is proof that binding the final and raw files still works. 
+
+Let's download SN45 and SN46 data from the QuantAQ website. Download a final and raw datafile, from 10/23 to 10/30. Save these files as "sn45_trial_final.csv" and "..raw.csv", and put them in the "quant_aq" data folder. 
+
+Import those files here.
+
+```{r}
+sn45_raw <- fread("./data/quant_aq/sn45_trial_raw.csv", data.table = TRUE) # import final sn45 data
+sn45_final <- fread("./data/quant_aq/sn45_trial_final.csv", data.table = TRUE) # import final sn46 data
+
+sn46_raw <- fread("./data/quant_aq/sn46_trial_raw.csv", data.table = TRUE) # import raw sn45 data
+sn46_final <- fread("./data/quant_aq/sn46_trial_final.csv", data.table = TRUE) # import raw sn46 data
+```
+
+Let's try merging SN45 together based on the "timestamp" vector. 
+```{r}
+merge(sn45_raw, sn45_final, by = "timestamp", all = FALSE) #merge both sn45 files
+```
+
+Now let's simulate the list of final dataframes and raw dataframes. 
+```{r}
+finalfiles <- list("sn45" = sn45_final,"sn46" = sn46_final) # create list of final dataframes
+rawfiles <- list("sn45" = sn45_raw, "sn46" = sn46_raw) # create list of raw dataframes
+```
+
+We'll bind the appropriate files together in an lapply statement.
+
+```{r}
+snfiles_trial <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE) #bind lists of final and raw dataframes
+```
+
+This is what's contained in the new dataframes
+```{r}
+colnames(snfiles_trial$sn45)
+```
 
 
 
@@ -161,6 +201,53 @@ Lastly, let's remove variables that we won't use:
 metdata[,c( "station")] <- list(NULL) #getting rid of unnecessary variables
 ```
 
+# Downloading, Saving and Importing using Dropbox workflow 
+
+## Downloading 
+
+Click "Download" in the top right corner of the Dropbox screen. This will download all of the contents in the DropBox folder. 
+
+## Saving 
+
+The data will download as a zip file. Extract the contents of the zip file, and place them in the "quant_aq" subfolder of the "data" folder in this workspace. Make sure to save the files directly to that folder, and not in a "Final_Customer" subfolder.
+
+## Importing 
+
+These datafiles aren't divided into final and raw, so we don't have to combine files. Instead, we can create one list of variables we want to extract (instead of two, like in the normal workflow). 
+
+```{r}
+#defining which variables we'll keep
+final_vars <- c( "timestamp","timestamp_local",  "temp_manifold", 
+                 "co", "no" , "no2", "o3" ,  "pm1" , "pm25","pm10", "co2" , "bin0", "no_ae") 
+```
+
+The data files can be categorized based on which sensor they represent. 
+
+Initially, the data files were categorized by whether they are "f0" or "f1" (both of these categorizes are represented in the filename). The difference between f0 and f1 is that one doesn't have filters apply, and the other does. 
+
+Currently, there are only "f0" files, so we'll specify we're looking at datafiles with "f0" in the name. 
+
+```{r}
+temp = list.files(path = "./data/quant_aq/", pattern = "^.*-f0.*\\.csv", full.names = TRUE) #specify files we're looking for
+snfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE) #importing them
+```
+Like in the normal workflow, we can reformat the names. Again, we'll only keep the relevant parts of the filenames. 
+
+```{r}
+new_names <- lapply(names(snfiles), function(x) substr(x, 17, 26)) #extract the real sensor names from the current names used in the list
+names(snfiles) <- new_names #rename list names
+names(snfiles)
+```
+
+As we see, these are in a different format than the ones imported from the QuantAQ website. We can change this by doing a string replacement - "sn" instead of "Output-0"
+
+```{r}
+names(snfiles) <- lapply(names(snfiles), function(x) str_replace(x, "Output-0", "sn"))
+names(snfiles)
+```
+
+
+
 # Formatting and Merging Data 
 
 ## Formatting QuantAQ sensor data 
@@ -172,46 +259,40 @@ Let's walk through it step-by-step for SN45.
 
 ### Formatting Walkthrough for SN45 
 
-First, let's standardize the date. Lubridate's ymd_hms function puts datetime data in the format Y:M:D H:M:S, so we'll use it. This function also has a parameter where you can define the timezone. We know the timestamp data is UTC, so we use that. Afterwards, we can move the datetime vector to be in the EST/EDT timezone with the lubridate timezone (tz) function. We're using timestamp instead of timestamp local, because QuantAQ said it was more reliable and because we can check the formatted datetime against the local timestamp afterwards.
+First, let's standardize the date. The ymd_hms function puts datetime data in the format Y:M:D H:M:S, so we'll use it. This function also has a parameter where you can define the timezone. We know the timestamp data is UTC, so we use that. Afterwards, we can move the datetime vector to be in the EST/EDT timezone with the timezone (tz) function. We're using timestamp instead of timestamp local, because QuantAQ said it was more reliable and because we can check the formatted datetime against the local timestamp afterwards.
+
+We'll print a date vector at each step, to show what the functions are doing. 
 
 ```{r}
+
+sprintf("unmodified timestamp : %s, timezone : %s", snfiles$sn45$timestamp[1], tz(snfiles$sn45$timestamp[1]))
+
 snfiles$sn45$date <- lubridate::ymd_hms(snfiles$sn45$timestamp, tz="UTC") #parse datetime
+
+sprintf("modified timestamp : %s , timezone : %s", snfiles$sn45$date[1] , tz(snfiles$sn45$timestamp[1]))
+
 snfiles$sn45$date <- lubridate::with_tz(snfiles$sn45$date, "America/New_York") #change timezone
+
+sprintf("modified timezone: %s , timezone : %s ", snfiles$sn45$date[1], tz(snfiles$sn45$date[1]))
+sprintf("compared to local timestamp: %s", snfiles$sn45$timestamp_local[1])
 ```
 
 Next, we want to round the data to the nearest minute, so that we could align it with the meteorological dataset. We'll preserve the original datetime vector by saving it as a separate vector. Then, we'll round the data so 11:30:29 rounds to 11:30:00 and 11:30:31 rounds to 11:31:00. 
 
 ```{r}
 snfiles$sn45 <- mutate(snfiles$sn45, originaldate = date) #keeping original times for comparing to flight data
+sprintf("new date object : %s, old date object : %s", snfiles$sn45$date[1], snfiles$sn45$originaldate[1])
 snfiles$sn45$date <- round_date(snfiles$sn45$date, unit="minute") #round date for merging
+sprintf("new date object : %s, old date object : %s", snfiles$sn45$date[1], snfiles$sn45$originaldate[1])
 ```
 
 Lastly, we'll reorder the data so it's chronological, instead of reverse chronological. 
 
 ```{r}
+sprintf("first date entry : %s", snfiles$sn45$date[1])
 snfiles$sn45 <- snfiles$sn45[order(snfiles$sn45$originaldate),] #put it in chronological order
+sprintf("first date entry : %s", snfiles$sn45$date[1])
 ```
-
-
-This data has duplicate rows, which can become a problem for some analyses.
-
-```{r}
-sum(duplicated(snfiles$sn45) == 1) #checking the number of duplicate entries 
-```
-
-Let's see what they look like: 
-
-```{r}
-snfiles$sn45[duplicated(snfiles$sn45) | duplicated(snfiles$sn45, fromLast=TRUE)] #print all duplicates, including the first one
-```
-
-These rows are entries that are exactly the same (all the columns are the same, even timestamp). Since there is no difference between this information, we can remove the duplicates: 
-
-```{r}
-snfiles$sn45 <- unique(snfiles$sn45 ) #keep only unique rows in the dataset
-```
-
-
 
 ### Formatting the rest of the QuantAQ files 
 
@@ -226,7 +307,6 @@ clean_sensor_data <- function(sensor){
   sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
   sensor$date <- round_date(ymd_hms(sensor$date, tz="America/New_York"), unit="minute") #round date for merging
   sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
-  sensor <- unique(sensor) #removing duplicate rows
   return(sensor)
 }
 ```
@@ -235,6 +315,119 @@ In order to apply it to every dataframe, we can run lapply (list apply) which wi
 
 ```{r}
 snfiles[c(-1)] <- lapply(snfiles[c(-1)], function(x) clean_sensor_data(x)) 
+```
+
+
+## Data Checking 
+
+In this section we'll check that the data doesn't have unrepresentative values or trends 
+
+### QuantAQ 
+
+#### Data by Row 
+
+There are some rows that are exact duplicates. 
+
+```{r}
+sum(duplicated(snfiles$sn45) == 1) #checking the number of duplicate entries 
+```
+
+Let's see what they look like: 
+
+```{r}
+snfiles$sn45[duplicated(snfiles$sn45) | duplicated(snfiles$sn45, fromLast=TRUE)] #print all duplicates, including the first one
+```
+
+These rows are entries that are exactly the same (all the columns are the same, even timestamp). Since there is no difference between this information, we can remove the duplicates: 
+
+```{r}
+snfiles <- lapply(snfiles, function(x) unique(x)) #keep only unique rows in the dataset
+```
+
+
+We have to remove these first, because they would otherwise skew our pollutant concentration analysis.
+
+Let's make sure they were removed: 
+
+```{r}
+snfiles$sn45[duplicated(snfiles$sn45) | duplicated(snfiles$sn45, fromLast=TRUE)] #print all duplicates, including the first one
+```
+
+
+#### Data by Column 
+
+We want to see if each sensor is giving reliable data. To do this, we will test how many NA, zero-valued and negative values there are for each variable. This will tell us if there are undeniably incorrect data. 
+
+We'll create a function that checks all the relevant variables for negative, NA or zero values. It will output the result in a dataframe. 
+
+```{r}
+data_check_test <- function(sensor){
+  
+  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
+  
+  na_count <- apply(temp_df, 2,  function(x) sum(is.na(x))) #count the number of NA values
+  
+  negative_count <-apply(temp_df, 2,  function(x) sum(x<0, na.rm = TRUE)) #count the number of negative values
+  
+  zero_count <- apply(temp_df, 2,  function(x) sum(x==0, na.rm = TRUE)) #count the number of zero values
+
+  
+  return(data.frame(na_count, negative_count, zero_count))
+}
+```
+
+We'll apply it to our list of dataframes: 
+
+```{r}
+lapply(snfiles, function(x) data_check_test(x ))
+```
+
+
+We'll also test for the mean, 25th percentile and 75th percentile of each variable. This will tell us if the data is in a reasonable range. 
+
+We'll create two functions: one which computes the percentiles and one which computes the mean.
+
+```{r}
+data_check_percentiles <- function(sensor){
+  
+  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
+  
+  percentiles <-apply(temp_df, 2,  function(x) quantile(x, probs =c(0.25, 0.75), na.rm = TRUE)) # apply the quantile function, which calculates percentiles
+  
+  return(percentiles)
+}
+
+
+
+data_check_mean <- function(sensor){
+  
+  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
+  
+  mean_vals <-apply(temp_df, 2,  function(x) mean(x, na.rm = TRUE)) #apply the mean function
+  
+  return(mean_vals)
+}
+```
+
+We'll apply these functions to our datasets:
+```{r}
+lapply(snfiles, function(x) data_check_percentiles(x))
+lapply(snfiles, function(x) data_check_mean(x))
+```
+
+
+Finally, we'll create time series plots of the variables, to visually inspect the data. 
+
+Since the dataframe is so long, we're going to split it into smaller dataframes, and plot those: 
+```{r}
+make_timeseries <- function(sensor, pollutants){
+  for(i in seq(1,floor((nrow(sensor)) - nrow(sensor)/4 -2), floor(nrow(sensor)/4))){
+    timePlot(sensor[i:floor(i + nrow(sensor)/4), ], pollutant = pollutants, group = FALSE, y.relation = "free")
+  }
+}
+
+lapply(snfiles, function(x) make_timeseries(x, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0")))
+
 ```
 
 
@@ -247,9 +440,19 @@ First, we'll implement it for SN45.
 ```{r}
 setDT(metdata, key = "date") # make the meteorological data a data.table
 setkey(snfiles$sn45,  "date") #set the "key" column to date
+sprintf("Original number of sensor data rows: %d", nrow(snfiles$sn45))
+sprintf("Original number of met data rows: %d", nrow(metdata))
+sprintf("The number of dates that are the same in the sensor and metdata datetimes: %d", length(intersect(snfiles$sn45$date, metdata$date)))
 
 snfiles$sn45 <- snfiles$sn45[metdata, nomatch = 0] #merge
+sprintf("New number of rows in merged data: %d", nrow(snfiles$sn45))
 ```
+
+Let's see what the vector looks like now: 
+```{r}
+colnames(snfiles$sn45)
+```
+As you can see, there is only one date column, all of the sensor columns, wind direction, wind speed, and the original meteorological datetime vector. 
 
 Now, let's implement it for the rest of the data frames. Again, we'll create a merge function and apply it to every element of the snfiles object (in other words, to every dataset).
 
@@ -264,7 +467,7 @@ merge_metdata <- function(sensor, metdata){
 ```{r}
 snfiles[c(-1)] <- lapply(snfiles[c(-1)], function(x) merge_metdata(x, metdata))
 ```
-Again, we exclude the first, since we already merged it above.
+As before, we exclude the first dataframe, since we already merged it above.
 
 # Cleaning
 
@@ -272,9 +475,16 @@ There are a number of erroneous datapoints, or data quirks, which come inherentl
 
 ## O3 filter 
 
-According to QuantAQ, all o3 negative o3 data is erroneous. However there is no trend to the negative o3 data, so we'll set all negative o3 data to 0. This is a simple process, so we'll just apply it directly to the datasets with lapply. 
+According to QuantAQ, all o3 negative o3 data is erroneous. However there is no trend to the negative o3 data, so we'll set all negative o3 data to 0. 
 
 
+First, let's remember how many negative o3 values there are: 
+
+```{r}
+print("original number of negative o3 values" )
+lapply(snfiles, function(x) sum(x$o3 <0, na.rm = TRUE))
+```
+Now, let's create an o3 filter, and apply it to our data:
 ```{r}
 o3_filter <- function(sensor){ #create o3 filter function
   sensor$o3 <- replace(sensor$o3, sensor$o3 < 0, 0)
@@ -284,11 +494,35 @@ o3_filter <- function(sensor){ #create o3 filter function
 snfiles<- lapply(snfiles, function(x) o3_filter(x)) #apply it to the data frames
 ```
 
+Let's look at the o3 data now:
+```{r}
+print("final number of negative o3 values" )
+lapply(snfiles, function(x) sum(x$o3 <0, na.rm = TRUE))
+```
 
 ## NO_ae filter 
 
 The NO auxiliary electrode (no_ae) is an NO sensor which should be very stable. If there is a drastic change in no_ae, the data is likely wrong. We want to exclude these data points that are likely wrong, therefore, we'll set NO to NA when no_ae changes rapidly. We'll set NO to NA when the change in no_ae exceeds 2.5 standard deviations past its mean. 
 
+
+First, let's check how many datapoints experience a rapid change in no_ae and how many NO values are currently NA.
+
+```{r}
+no_ae_check <- function(sensor){
+   #create a vector that shows the derivatives 
+  no_ae_derivative <- c(0,diff(sensor$no_ae, na.rm = TRUE))
+  #creating logical vector to pick which things to get rid of 
+  logical_vec <- abs(no_ae_derivative) > abs(2.5*(sd(no_ae_derivative, na.rm=TRUE)))
+  
+  sprintf("Number of values where delta no_ae exceeds 2.5 : %d. Number of NA no values : %d",sum(logical_vec), sum(is.na(sensor$no)))
+}
+```
+
+```{r}
+lapply(snfiles, function(x) no_ae_check(x))
+```
+
+Now, let's create our filter function and apply it to the data.
 ```{r}
 no_ae_filter <- function(sensor){
   #create a vector that shows the derivatives 
@@ -298,11 +532,11 @@ no_ae_filter <- function(sensor){
   
   #make sure SN NO values that == 0 are not removed
   if (any(sensor$no == 0, na.rm = TRUE)){
-    sensor$no <- replace(sensor$no, 0, 0.00001)
+    sensor$no[sensor$no == 0] <- 0.0001
   }
   # if logical_vec is true, then set the NO value to NA 
   sensor$no <- sensor$no * logical_vec
-  sensor$no <- replace(sensor$no, 0, NA)
+  sensor$no[sensor$no == 0] <- NA
   
   return(sensor)
 }
@@ -313,6 +547,11 @@ no_ae_filter <- function(sensor){
 snfiles<- lapply(snfiles, function(x) no_ae_filter(x))
 ```
 
+
+Let's check on the NO data statistics now:
+```{r}
+lapply(snfiles, function(x) no_ae_check(x))
+```
 
 ## NO baseline correction 
 
@@ -377,6 +616,13 @@ If there is not enough data points in the day, then the function will not run. T
 ```
 
 
+## Results 
+
+Let's see what the time plots look like now: 
+
+```{r}
+lapply(snfiles, function(x) make_timeseries(x, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0")))
+```
 
 # Analysis 
 
@@ -400,9 +646,9 @@ generate_overall_polarplots <- function(sn, snstring){
 We're applying this function as a for loop to the datasets, so we can also loop through the dataset names, and add those to the titles. 
 
 ```{r}
-for (i in seq(length(names(snfiles)))){
-  generate_overall_polarplots(snfiles[[i]], names(snfiles)[i])
-}
+#for (i in seq(length(names(snfiles)))){
+#  generate_overall_polarplots(snfiles[[i]], names(snfiles)[i])
+#}
 ```
 
 
@@ -412,16 +658,26 @@ for (i in seq(length(names(snfiles)))){
 Diurnal plots show the relationship between pollutant concentration and time (on the scale of hours, days and months). To create diurnal profiles for all of the sensors, we can apply the same method as we did to create polar plots.
 
 ```{r}
-
-for (i in seq(length(names(snfiles)))){
-  
-  timeVariation(snfiles[[i]], pollutant = c("no2"), main = paste0(names(snfiles)[i], " NO2 Diurnal Profile"))
-  
-  timeVariation(snfiles[[i]], pollutant = c("pm1", "co", "no",  "co2", "bin0"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
-}
+# for (i in seq(length(names(snfiles)))){
+#   
+#   timeVariation(snfiles[[i]], pollutant = c("no2"), main = paste0(names(snfiles)[i], " NO2 Diurnal Profile"))
+#   
+#   timeVariation(snfiles[[i]], pollutant = c("pm1", "co", "no",  "co2", "bin0"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
+# }
 ```
 
 
+## CorPlot 
+
+We will make a correlation plot, using openair's corPlot function. 
+
+```{r}
+for (i in seq(length(names(snfiles)))){
+  
+  corPlot(snfiles[[i]], main = paste0(names(snfiles)[i], " CorPlot Profile"))
+
+}
+```
 
 
 # Export 
@@ -431,11 +687,11 @@ The last thing we'll do is export the data into csvs.
 Since we want to save the datasets to files with representative names, we can use mapply (like lapply but with more functionality). For each dataset, we can set the name we used when we set snfiles as the file names. 
 
 ```{r}
-mapply(
-  write.table, #apply function write table
-  x=snfiles, file=paste(names(snfiles), "csv", sep="."), #for each element in snfiles, use its name to make a csv of it
-  MoreArgs=list(row.names=FALSE, sep=",")
-)
+# mapply(
+#   write.table, #apply function write table
+#   x=snfiles, file=paste(names(snfiles), "csv", sep="."), #for each element in snfiles, use its name to make a csv of it
+#   MoreArgs=list(row.names=FALSE, sep=",")
+# )
 ```
 
 Place the exported files into the data folder.
