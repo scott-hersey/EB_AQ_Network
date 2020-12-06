@@ -30,7 +30,7 @@ In order to download QuantAQ data, we can walk through the initial walkthrough (
 
 Same as in the initial walkthrough, our import and analysis relies on functions from a few packages. Below, we'll import the necessary packages. 
 
-```{r, warning= FALSE}
+```{r, warning= FALSE, error=FALSE}
 library(lubridate) #date and time functions 
 library(data.table) #to use the data.table variable type
 library(dplyr) #this library allows you to use the %>% operator
@@ -43,7 +43,7 @@ library(openair) #for plotting and analysis
 For colocation, we're going to be using sensors 45 and 46.
 
 ```{r}
-sn45 <- fread("./data/sn45.csv", header = TRUE)
+sn45 <- fread("./data/cleaned_sn45.csv", header = TRUE)
 
 #sn46 <- fread("./data/sn46.csv", header = TRUE)
 ```
@@ -69,7 +69,11 @@ First we import the files themselves. Since there's a lot of files that all cont
 All the CPC data are saved as TXT files to the CPC folder from the Dropbox files. We can find all the CPC data by finding all the txt files in that folder. 
 
 ```{r}
-nm <- list.files(path=cpc_path, all.files = TRUE, full.names = TRUE, pattern="*.TXT") #import and clean CPC 
+nm <- list.files(path="./data/reference_data/MCPC data", pattern="*.TXT", full.names = TRUE) # find CPC data
+```
+
+```{r}
+list.files(all.files=TRUE)
 ```
 
 
@@ -88,7 +92,7 @@ View(cpc_upload)
 In this walkthrough, we're only concerned with the variables "concent" (concentration), "fillcnt" (which tells you if the sensor is working correctly) and the datetime. Let's discard the rest of the variables (columns). 
 
 ```{r}
-cpc_upload <- cpc_upload[ , c("X.YY.MM.DD", "HR.MN.SC", "concent", "fillcnt"  )]   ## removing unncessary variables 
+cpc_upload <- cpc_upload[ , c("X.YY.MM.DD", "HR.MN.SC", "concent", "fillcnt"  )]   ## removing unnecessary variables 
 ```
 
 Finally, let's put the datetime in the right format. We're going to format the hour/minute/second column and the year/month/day columns separately, using lubridate functions. Then, we'll combine the vectors with the function "with". Since the timezone is already local, we can define it using the lubridate package "tz".
@@ -108,7 +112,7 @@ The aethlometer data import is very similar to the CPC data import. Again, we fi
 
 ```{r}
 #import and clean AETH 
-nm <- list.files(path=aeth_path, all.files = TRUE, full.names = TRUE, pattern="*.csv")
+nm <- list.files(path="./data/reference_data/AETHLOMETER", all.files = TRUE, full.names = TRUE, pattern="*.csv")
 
 aeth_data <- do.call(rbind, lapply(nm, function(x) fread(file=x) ) )
 
@@ -143,6 +147,15 @@ In this section, we'll count the number of negative, NA and zero data points and
 
 ### CPC 
 
+```{r}
+na_count <-sapply(cpc_upload[, c( "concent", "fillcnt" )], function(y) sum(length(which(is.na(y)))))
+
+negative_count <-sapply(cpc_upload[, c( "concent", "fillcnt" )], function(y) length(which((y)<0)))
+
+zero_count <-sapply(cpc_upload[, c( "concent", "fillcnt" )], function(y) length(which((y)==0)))
+
+data.frame(na_count, negative_count, zero_count)
+```
 
 
 ### Aeth 
@@ -155,6 +168,15 @@ negative_count <-sapply(aeth_data[, -c("Date / time local", "Timezone offset (mi
 zero_count <-sapply(aeth_data[, -c("Date / time local", "Timezone offset (mins)", "Time local (hh:mm:ss)", "date", "Date local (yyyy/MM/dd)")], function(y) length(which((y)==0)))
 
 data.frame(na_count, negative_count, zero_count)
+```
+
+So, there are all three types of values. We can compare this to what we know about the data: 
+* 
+
+We see that there is the same number of NA values for all the variables. Let's see when they happen. 
+
+```{r}
+cbind(aeth_data[which(is.na(aeth_data$`UV BC1`)),"date"], aeth_data[which(is.na(aeth_data$`Blue BC1`)),"date"] , aeth_data[which(is.na(aeth_data$`Green BC1`)),"date"] , aeth_data[which(is.na(aeth_data$`Red BC1`)),"date"],aeth_data[which(is.na(aeth_data$`IR BC1`)),"date"])
 ```
 
 ## More Testing of CPC Data

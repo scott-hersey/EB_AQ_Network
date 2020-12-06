@@ -18,7 +18,7 @@ Note: The paragraph above and the following section will describe the downloadin
 Download the following QuantAQ files: 
 
 * SN45: final and raw data taken from 9/7/2019 to 10/27/2020
-* SN49: final and raw data taken from 9/72019 to 10/27/2020
+* SN49: final and raw data taken from 9/7/2019 to 10/27/2020
 * SN62: final and raw data taken from 9/7/2019 to 10/27/2020
 * SN67: final and raw data taken from 9/7/2019 to 10/27/2020
 * SN72: final and raw data taken from 9/7/2019 to 10/27/2020
@@ -59,13 +59,14 @@ In order to easily import the data, we'll store the data in the following way:
 
 Our import and analysis relies on functions from a few packages. The following functions must be imported for the code to run. You might get a message that certain functions are "masked" or "overwritten". This means that you imported libraries that have functions with the same name. If you know that these functions do different things from package to package, and want to use a specific one, then you can specific the function's package with package::function. For example, openair::polarPlot()
 
-```{r, warning= FALSE}
+```{r, warning= FALSE, error = FALSE}
 library(lubridate) #date and time functions 
 library(data.table) #to use the data.table variable type
 library(dplyr) #this library allows you to use the %>% operator
 library(tidyr) #this library lets you use the complete function to account for time syncing
 library(openair) #for plotting and analysis
 library(stringr)
+library(baseline) # for baseline correction
 ```
 
 
@@ -76,23 +77,23 @@ If we want to import only certain variables, we can define what we want to impor
 
 ```{r}
 # #defining which variables we'll keep
-# final_vars <- c( "timestamp","timestamp_local",  "temp_manifold", 
-#                  "co", "no" , "no2", "o3" ,  "pm1" , "pm25","pm10", "co2" ) #final variables to keep 
-# raw_vars <- c("timestamp","bin0", "no_ae") #raw variables to keep
+# final_vars <- c( "timestamp","timestamp_local",  "temp_manifold",
+#                  "co", "no" , "no2", "o3" ,  "pm1" , "pm25","pm10", "co2" ) #final variables to keep
+# raw_vars <- c("timestamp","bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "no_ae", "co_ae") #raw variables to keep
 ```
 
 Next, we'll import all the final and raw datafiles separately. We do this by finding all the csv's with "final" or "raw" in the name, and then applying the R read function to them. If you prefer to import all variables, comment the "sapply" functions that are being used, and uncomment the ones below it. The difference between them is that the currently uncommented one uses the "select" parameter, and the commented one doesn't.
 
 ```{r}
-# #finding all final datasets 
+# #finding all final datasets
 # temp = list.files(path = "./data/quant_aq/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
 # finalfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
 # #finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 # 
 # #finding all raw datasets
 # temp = list.files(path = "./data/quant_aq", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
-# rawfiles = sapply(temp, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE) 
-#rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
+# rawfiles = sapply(temp, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE)
+# #rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 The output of the above functions gives a list of data tables. Since we included the sapply parameter "use.names", it attached the file name to each data.table. Since we used data.table = TRUE, we can be sure that the data is given in the data.table format, which has a more efficient runtime for large datasets.
@@ -101,7 +102,7 @@ Let's use an easier naming conventon. Since we used a specific naming scheme and
 
 ```{r}
 # names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 17, 20)) #extract the real sensor names from the current names used in the list
-# names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 17, 20)) 
+# names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 17, 20))
 # names(finalfiles)
 # names(rawfiles)
 ``` 
@@ -112,7 +113,7 @@ Since the final and raw datasets could have a different number of rows, we'll me
 
 
 ```{r}
-#snfiles <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
+# snfiles <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 
@@ -218,7 +219,7 @@ These datafiles aren't divided into final and raw, so we don't have to combine f
 ```{r}
 #defining which variables we'll keep
 final_vars <- c( "timestamp","timestamp_local",  "temp_manifold", 
-                 "co", "no" , "no2", "o3" ,  "pm1" , "pm25","pm10", "co2" , "bin0", "no_ae") 
+                 "co", "no" , "no2", "o3" ,  "pm1" , "pm25","pm10", "co2" , "no_ae", "bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "bin6") 
 ```
 
 The data files can be categorized based on which sensor they represent. 
@@ -317,12 +318,104 @@ In order to apply it to every dataframe, we can run lapply (list apply) which wi
 snfiles[c(-1)] <- lapply(snfiles[c(-1)], function(x) clean_sensor_data(x)) 
 ```
 
+## Merging 
 
-## Data Checking 
+From trial and error, I've found that joining datasets using DT's merge works the best. Below is the code to implement it. First, we make sure that each dataset is a data.table with a key column of "date". This will allow us to the data.table merge function. We merge the meteorological and sensor datasets by date with no_match = 0. no_match = 0 ensures that there's no duplicates. 
 
-In this section we'll check that the data doesn't have unrepresentative values or trends 
+First, we'll implement it for SN45.
 
-### QuantAQ 
+```{r}
+setDT(metdata, key = "date") # make the meteorological data a data.table
+setkey(snfiles$sn45,  "date") #set the "key" column to date
+sprintf("Original number of sensor data rows: %d", nrow(snfiles$sn45))
+sprintf("Original number of met data rows: %d", nrow(metdata))
+#sprintf("The number of dates that are the same in the sensor and metdata datetimes: %d", length(intersect(snfiles$sn45$date, metdata$date)))
+
+snfiles$sn45 <- snfiles$sn45[metdata, nomatch = 0] #merge
+sprintf("New number of rows in merged data: %d", nrow(snfiles$sn45))
+```
+Let's see what the vector looks like now: 
+```{r}
+colnames(snfiles$sn45)
+```
+As you can see, there is only one date column, all of the sensor columns, wind direction, wind speed, and the original meteorological datetime vector. 
+
+Now, let's implement it for the rest of the data frames. Again, we'll create a merge function and apply it to every element of the snfiles object (in other words, to every dataset).
+
+```{r}
+merge_metdata <- function(sensor, metdata){
+  setkey(sensor, "date")
+  sensor <- sensor[metdata, nomatch = 0]
+  return(sensor)
+}
+```
+
+```{r}
+snfiles[c(-1)] <- lapply(snfiles[c(-1)], function(x) merge_metdata(x, metdata))
+```
+As before, we exclude the first dataframe, since we already merged it above.
+
+
+# Data Cleaning
+
+## Checking the data
+
+First, we're going to look at statistics of the data, to make sure that there isn't a large problem with the data (ie everything is NA). We're going to do this by creating a function which prints out how many values are negative, zero and NA in the data. Then we're going to use lapply to apply it to all the datasets.
+
+
+```{r}
+data_check_test <- function(sensor){
+  
+  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
+  
+  na_count <- apply(temp_df, 2,  function(x) sum(is.na(x))) #count the number of NA values
+  
+  negative_count <-apply(temp_df, 2,  function(x) sum(x<0, na.rm = TRUE)) #count the number of negative values
+  
+  zero_count <- apply(temp_df, 2,  function(x) sum(x==0, na.rm = TRUE)) #count the number of zero values
+  
+  return(data.frame(na_count, negative_count, zero_count))
+}
+```
+
+We'll apply it to our list of dataframes: 
+
+```{r}
+lapply(snfiles, function(x) data_check_test(x))
+```
+
+We'll also test for the mean, 25th percentile and 75th percentile of each variable. This will tell us if the data is in a reasonable range. 
+
+We'll create two functions: one which computes the percentiles and one which computes the mean.
+
+```{r}
+data_check_percentiles <- function(sensor){
+  
+  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
+  
+  percentiles <-apply(temp_df, 2,  function(x) quantile(x, probs =c(0.25, 0.75), na.rm = TRUE)) # apply the quantile function, which calculates percentiles
+  
+  return(percentiles)
+}
+data_check_mean <- function(sensor){
+  
+  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
+  
+  mean_vals <-apply(temp_df, 2,  function(x) mean(x, na.rm = TRUE)) #apply the mean function
+  
+  return(mean_vals)
+}
+```
+
+We'll apply these functions to our datasets:
+```{r}
+lapply(snfiles, function(x) data_check_percentiles(x))
+lapply(snfiles, function(x) data_check_mean(x))
+```
+
+
+
+## Clean Duplicate Rows 
 
 #### Data by Row 
 
@@ -354,275 +447,333 @@ snfiles$sn45[duplicated(snfiles$sn45) | duplicated(snfiles$sn45, fromLast=TRUE)]
 ```
 
 
-#### Data by Column 
+## Removing Negative Values 
 
-We want to see if each sensor is giving reliable data. To do this, we will test how many NA, zero-valued and negative values there are for each variable. This will tell us if there are undeniably incorrect data. 
-
-We'll create a function that checks all the relevant variables for negative, NA or zero values. It will output the result in a dataframe. 
+First, we'll remove negative values. For this, we are simply finding all the points in all the pollutant vectors which are less than 0, and then setting them to 0. More filters can be added by adding in another replace statement in the same format. 
 
 ```{r}
-data_check_test <- function(sensor){
-  
-  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
-  
-  na_count <- apply(temp_df, 2,  function(x) sum(is.na(x))) #count the number of NA values
-  
-  negative_count <-apply(temp_df, 2,  function(x) sum(x<0, na.rm = TRUE)) #count the number of negative values
-  
-  zero_count <- apply(temp_df, 2,  function(x) sum(x==0, na.rm = TRUE)) #count the number of zero values
-
-  
-  return(data.frame(na_count, negative_count, zero_count))
+negative_value_filter <- function(sensor){
+  sensor$o3 <- replace(sensor$o3, sensor$o3 < 0, 0)
+  sensor$co <- replace(sensor$co, sensor$co <0, 0)
+  sensor$co2 <- replace(sensor$co2, sensor$co2 <0, 0)
+  sensor$no2 <- replace(sensor$no2, sensor$no2 <0, 0)
+  sensor$bin0 <- replace(sensor$bin0, sensor$bin0 <0, 0)
+  sensor$pm1 <- replace(sensor$pm1, sensor$pm1 <0, 0)
+  return(sensor)
 }
 ```
 
-We'll apply it to our list of dataframes: 
+We'll apply this function to all the datasets:
 
 ```{r}
-lapply(snfiles, function(x) data_check_test(x ))
+#sn45 <- negative_value_filter(sn45)
+snfiles <- lapply(snfiles, function(x) negative_value_filter(x))
+```
+
+## Removing NO Negative Values 
+
+NO has a changing baseline. It can't be filtered like the ones above because then we would lose real data. Therefore, we're going to apply a baseline correction algorithm to the NO data that was developed for spectroscopy. Since the baseline function wasn't made for this application, we have to prepare the data and feed it into the baseline function incrementally. We'll do this in the no_baseline_filter wrapper function below. The wrapper function was developed during summer 2020, and there is a document describing its components on the shared drive. 
+
+```{r}
+no_baseline_filter <- function(sensor){
+  # create day column
+  sensor[, day := as.Date(date, format="%Y-%m-%d", tz = "America/New_York")]
+  
+  # create corrected column
+  sensor[, correctedNO := seq(0,0,length.out= length(sensor$no))]
+  sensor$correctedNO[sensor$correctedNO == 0] <- NA  #set them actually to NA
+  
+  dropNAsensor<- sensor[!is.na(sensor$no), ] # drop NO NAs
+  unique_days <- c(unique(dropNAsensor$day, na.rm=TRUE)) #get all of the unique days in the sensor
+  
+  for (i in 2:(length(unique_days)-1)){ #for all days
+    temp <- subset(dropNAsensor, day %in% unique_days[i], c("day", "no", "date")) #create temp dataset
+  
+    if (nrow(temp) > 550){
+      wholebase.peakDetection <- baseline(t(temp$no), method='peakDetection',left=50, right=50, lwin=10, rwin=10) #baseline correction
+  
+    #replace the correctedNO column values with the baseline correction from earlier
+    dropNAsensor$correctedNO[which(dropNAsensor$date == temp$date[1]): which(dropNAsensor$date == tail(temp$date, n=1))] <-    c(getCorrected(wholebase.peakDetection))
+    }
+  
+    else{
+      if (sum(temp$no < 0, na.rm = TRUE) / nrow(temp) < 0.25){
+        dropNAsensor$correctedNO[which(dropNAsensor$date == temp$date[1]): which(dropNAsensor$date == tail(temp$date, n=1))] <-
+          sensor$no[which(sensor$date == temp$date[1]): which(sensor$date == tail(temp$date, n=1))]
+      }
+  
+    }
+  
+  }
+  
+  sensor$correctedNO[which(sensor$date %in% dropNAsensor$date)] <- dropNAsensor$correctedNO # replace values based on date
+  
+  return(sensor)
+}
+```
+
+We'll apply this function to all the datasets:
+
+```{r}
+#sn45 <- negative_value_filter(sn45)
+snfiles <- lapply(snfiles, function(x) no_baseline_filter(x))
 ```
 
 
-We'll also test for the mean, 25th percentile and 75th percentile of each variable. This will tell us if the data is in a reasonable range. 
 
-We'll create two functions: one which computes the percentiles and one which computes the mean.
+
+## Removing High Values without flags
+
+There are unrealistically high values which we know can't be real and we don't have to check. We'll filter those out here. 
 
 ```{r}
-data_check_percentiles <- function(sensor){
-  
-  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
-  
-  percentiles <-apply(temp_df, 2,  function(x) quantile(x, probs =c(0.25, 0.75), na.rm = TRUE)) # apply the quantile function, which calculates percentiles
-  
-  return(percentiles)
-}
-
-
-
-data_check_mean <- function(sensor){
-  
-  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
-  
-  mean_vals <-apply(temp_df, 2,  function(x) mean(x, na.rm = TRUE)) #apply the mean function
-  
-  return(mean_vals)
+o3_filter <- function(sensor){ #create o3 filter function
+  sensor$o3 <- replace(sensor$o3, sensor$o3 > 300, NA)
+  return(sensor)
 }
 ```
 
-We'll apply these functions to our datasets:
 ```{r}
+#sn45 <- o3_filter(sn45)
+snfiles <- lapply(snfiles, function(x) o3_filter(x))
+```
+
+
+## Removing High Values with flags 
+
+```{r}
+apply_flags <- function(sensor){
+  # creating a flags column to flag high values 
+  # flag number to pollutant definition given below:
+  # co - 1 
+  # co2 - 2
+  # no2 - 3
+  # bin0 - 4
+  # pm1 - 5
+  # no - 6
+  
+  sensor$flag <- replicate(nrow(sensor), c(), simplify = FALSE) #create flags column which has a list for every data point
+  sensor$flag[which(sensor$co2 > 2000)] <- lapply(sensor$flag[which(sensor$co2 > 2000)], function(x) c(x, 2)) #add 2 to the flags data points with high CO2 values
+  sensor$flag[which(sensor$no2 > 1000)] <- lapply(sensor$flag[which(sensor$no2 > 1000)], function(x) c(x, 3))
+  sensor$flag[which(sensor$no > 300)] <- lapply(sensor$flag[which(sensor$no > 300)], function(x) c(x, 6))
+
+  return(sensor)
+}
+```
+
+```{r}
+check_flags <- function(sensor, flagval, var_name){
+  #plots flagged intervals
+  
+  index_df = create_interval_vector(sensor, flagval) #generate dataframe of flagged intervals
+  
+  for(pair in 1:nrow(index_df)){   # for each interval
+    start_indx = index_df[pair,1] #get the start index of the interval
+    end_indx = index_df[pair,2] #get the end index
+
+    if(!is.null(start_indx) & !is.null(end_indx) & difftime(sensor$date[end_indx], sensor$date[start_indx], units="mins") < 2){ #if the interval lasts less than 2 minutes, set to NA
+      sensor[[var_name]][start_indx:end_indx] <- NA
+    }
+    
+    else{ #otherwise plot it
+      
+      subset_sensor <- sensor[start_indx:end_indx,]
+      #cat(sprintf("start and end intervals: %s - %s \n", as.character(sensor$date[start_indx]), as.character(sensor$date[end_indx] )))
+      timePlot(subset_sensor, pollutant = var_name, key = FALSE, main = paste0(as.character(sensor$date[start_indx]) ," to ", as.character(sensor$date[end_indx] )))
+      
+    }
+    
+    
+  }
+}
+
+create_interval_vector <- function(sensor, flagval){
+  # input a sensor dataframe and a flag (as numeric) to plot 
+  # returns a dataframe that has intervals where the high values start and end 
+  
+  
+  flagindxs <- ifelse(
+    ( 
+      (sensor$flag %like% flagval )
+    ),
+    1,  # if condition is met, put 1
+    0   # else put 0
+  )
+
+  start_indx <- which(diff(c(0L, flagindxs)) == 1L)
+  end_indx <- which(diff(c(flagindxs, 0L)) == -1L)
+  
+  mod_start_indx <- start_indx - 5 #adding 5/10 minutes before, depending on whether data is taken at 1 min or 2 min intervals
+  mod_end_indx <- end_indx + 5 #adding 5/10 minutes after
+  
+  index_df <- data.frame(mod_start_indx,mod_end_indx) #create dataframe with corresponding start and end indices where high values happen
+  
+  
+  #clean dataframe for intervals that start before 0
+  if(any(index_df$mod_start_indx < 1)){
+    
+    index_df$mod_start_indx <- replace(index_df$mod_start_indx, which(index_df$mod_start_indx <1), 1 )
+  }
+  
+  #clean dataframe for intervals that start after the end of the pollutant vector
+  if(any(index_df$mod_start_indx > nrow(sensor))){
+
+    indxs_pairs <- which(index_df$mod_start_indx > nrow(sensor))
+    index_df <- index_df[!indxs_pairs]
+  }
+  
+  #clean dataframe for intervals that end after the end of the pollutant vector
+  if(any(index_df$mod_end_indx > nrow(sensor))){
+    
+    index_df$mod_end_indx <-replace(index_df$mod_end_indx, which(index_df$mod_end_indx > nrow(sensor)), nrow(sensor) )
+  }
+
+  #index_df <- index_df[!duplicated(index_df$mod_end_indx)]
+  
+  return(index_df)
+  
+}
+```
+
+```{r}
+snfiles$sn45 <- apply_flags(snfiles$sn45)
+indx_df <- create_interval_vector(snfiles$sn45,6)
+check_flags(snfiles$sn45, 6, "no")
+```
+
+
+
+# Igor Quality Assurance 
+
+Next, we'll export the data to csv, put it into Igor and do a quality inspection. 
+
+We export using the following function: 
+
+```{r}
+# mapply(
+#   write.table, #apply function write table
+#   x=snfiles, file=paste(names(snfiles), "-for-igor.csv"), #for each element in snfiles, use its name to make a csv of it
+#   MoreArgs=list(row.names=FALSE, sep=",")
+# )
+```
+
+After checking in Igor, we'll import the data back in. 
+
+```{r}
+temp = list.files(path = "./data/quant_aq/", pattern = "^.*_NaN.*\\.csv", full.names = TRUE) #specify files we're looking for
+snfiles_correction = sapply(temp, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
+
+```
+
+
+As an example, we'll work through sn45. 
+
+First, we'll import all the data.
+
+```{r}
+sn45cleaning <- fread(temp, header = TRUE) #get the igor file for sn45
+```
+
+If you look at the sn45cleaning file, you'll see that "CO2" is given with uppercase C and O. We'll change it to lowercase to match the dataset. 
+
+```{r}
+sn45cleaning$"Pollutants"[which(sn45cleaning$"Pollutants" == "CO2")] <- "co2"
+```
+
+Next, we'll change the start and end vectors to be in datetime format. In order to convert, we first need to specify that "19" refers to 2019. We can do this by appending a "20" to the start and end strings. 
+
+```{r}
+sn45cleaning$Start <- paste("20", sn45cleaning$Start, sep="")
+sn45cleaning$End <- paste("20", sn45cleaning$End, sep="")
+```
+
+If a start&end pair encompass only one minute, we can make sure that we get all the data from that minute by specifying that "start" begins when the minute starts (ie: 00 seconds) and ends when the minute ends (ie: 59 seconds). 
+```{r}
+sn45cleaning$Start <- paste(sn45cleaning$Start, "00", sep="")
+sn45cleaning$End <- paste(sn45cleaning$End,"59", sep="")
+```
+
+
+Now we can convert the start and end columns to datetime objects. 
+
+```{r}
+sn45cleaning$Start <- ymd_hms(sn45cleaning$Start, tz = "America/New_York")
+sn45cleaning$End <- ymd_hms(sn45cleaning$End, tz = "America/New_York")
+```
+
+Since the file is now formatted, we can use it to modify the data. We're going to loop through start and end interval, and change them one by one. Since there's no "all" column in the data, we'll use an if statement to specify that that means all the pollutants. 
+
+```{r}
+for(i in 1:nrow(sn45cleaning)){ #loop through igor file
+
+  pollutant = sn45cleaning$`Pollutants`[i] #get which pollutant we're observing
+  
+  if (pollutant == "all"){ #if it's all
+    
+    snfiles$sn45[snfiles$sn45$date >= sn45cleaning$Start[i] & snfiles$sn45$date  <= sn45cleaning$End[i], c(  "co", "no" , "no2", "o3" , "pm1" , "pm25","pm10", "co2" , "no_ae", "bin0") ]  <- NA
+  }
+  
+  else{ #otherwise
+    
+   snfiles$sn45[[pollutant]][snfiles$sn45$date >= sn45cleaning$Start[i] & snfiles$sn45$date  <= sn45cleaning$End[i]] <- NA
+  }
+
+}
+```
+
+Let's now put this whole process in two functions: one to format the igor files and one to modify the datasets. 
+
+```{r}
+modify_igor <- function(igor_file){
+  #changing string formatting
+  if(any(igor_file$Pollutants == "CO2")){
+    igor_file$"Pollutants"[which(igor_file$"Pollutants" == "CO2")] <- "co2"
+  }
+  #formatting dates
+  igor_file$Start <- paste("20", igor_file$Start, sep="")
+  igor_file$End <- paste("20", igor_file$End, sep="")
+  igor_file$Start <- paste(igor_file$Start, "00", sep="")
+  igor_file$End <- paste(igor_file$End,"59", sep="")
+  igor_file$Start <- ymd_hms(igor_file$Start, tz = "America/New_York")
+  igor_file$End <- ymd_hms(igor_file$End, tz = "America/New_York")
+  
+  return(igor_file)
+}
+```
+
+```{r}
+apply_igor <- function(igor_file, snfile){
+  for(i in 1:nrow(igor_file)){ #loop through igor file
+
+  pollutant = igor_file$`Pollutants`[i] #get which pollutant we're observing
+  
+  if (pollutant == "all"){ #if it's all
+    
+    snfile[snfile$date >= igor_file$Start[i] & snfile$date  <= igor_file$End[i], c(  "co", "no" , "no2", "o3" , "pm1" , "pm25","pm10", "co2" , "no_ae", "bin0") ]  <- NA
+  }
+  
+  else{ #otherwise
+    
+   snfile[[pollutant]][snfile$date >= igor_file$Start[i] & snfile$date  <= igor_file$End[i]] <- NA
+  }
+
+  }
+  return(snfile)
+}
+```
+
+
+
+# Final data check 
+
+We'll check the data again using the data checking functions from before. We'll do this to make sure that the data is correct to our knowledge, before we do any analysis. 
+
+```{r}
+lapply(snfiles, function(x) data_check_test(x))
 lapply(snfiles, function(x) data_check_percentiles(x))
 lapply(snfiles, function(x) data_check_mean(x))
 ```
 
-
-Finally, we'll create time series plots of the variables, to visually inspect the data. 
-
-Since the dataframe is so long, we're going to split it into smaller dataframes, and plot those: 
-```{r}
-make_timeseries <- function(sensor, pollutants){
-  for(i in seq(1,floor((nrow(sensor)) - nrow(sensor)/4 -2), floor(nrow(sensor)/4))){
-    timePlot(sensor[i:floor(i + nrow(sensor)/4), ], pollutant = pollutants, group = FALSE, y.relation = "free")
-  }
-}
-
-lapply(snfiles, function(x) make_timeseries(x, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0")))
-
-```
-
-
-## Merging 
-
-From trial and error, I've found that joining datasets using DT's merge works the best. Below is the code to implement it. First, we make sure that each dataset is a data.table with a key column of "date". This will allow us to the data.table merge function. We merge the meteorological and sensor datasets by date with no_match = 0. no_match = 0 ensures that there's no duplicates. 
-
-First, we'll implement it for SN45.
-
-```{r}
-setDT(metdata, key = "date") # make the meteorological data a data.table
-setkey(snfiles$sn45,  "date") #set the "key" column to date
-sprintf("Original number of sensor data rows: %d", nrow(snfiles$sn45))
-sprintf("Original number of met data rows: %d", nrow(metdata))
-sprintf("The number of dates that are the same in the sensor and metdata datetimes: %d", length(intersect(snfiles$sn45$date, metdata$date)))
-
-snfiles$sn45 <- snfiles$sn45[metdata, nomatch = 0] #merge
-sprintf("New number of rows in merged data: %d", nrow(snfiles$sn45))
-```
-
-Let's see what the vector looks like now: 
-```{r}
-colnames(snfiles$sn45)
-```
-As you can see, there is only one date column, all of the sensor columns, wind direction, wind speed, and the original meteorological datetime vector. 
-
-Now, let's implement it for the rest of the data frames. Again, we'll create a merge function and apply it to every element of the snfiles object (in other words, to every dataset).
-
-```{r}
-merge_metdata <- function(sensor, metdata){
-  setkey(sensor, "date")
-  sensor <- sensor[metdata, nomatch = 0]
-  return(sensor)
-}
-```
-
-```{r}
-snfiles[c(-1)] <- lapply(snfiles[c(-1)], function(x) merge_metdata(x, metdata))
-```
-As before, we exclude the first dataframe, since we already merged it above.
-
-# Cleaning
-
-There are a number of erroneous datapoints, or data quirks, which come inherently in from sensors. In this section, we'll implement a number of filters.
-
-## O3 filter 
-
-According to QuantAQ, all o3 negative o3 data is erroneous. However there is no trend to the negative o3 data, so we'll set all negative o3 data to 0. 
-
-
-First, let's remember how many negative o3 values there are: 
-
-```{r}
-print("original number of negative o3 values" )
-lapply(snfiles, function(x) sum(x$o3 <0, na.rm = TRUE))
-```
-Now, let's create an o3 filter, and apply it to our data:
-```{r}
-o3_filter <- function(sensor){ #create o3 filter function
-  sensor$o3 <- replace(sensor$o3, sensor$o3 < 0, 0)
-  return(sensor)
-}
-
-snfiles<- lapply(snfiles, function(x) o3_filter(x)) #apply it to the data frames
-```
-
-Let's look at the o3 data now:
-```{r}
-print("final number of negative o3 values" )
-lapply(snfiles, function(x) sum(x$o3 <0, na.rm = TRUE))
-```
-
-## NO_ae filter 
-
-The NO auxiliary electrode (no_ae) is an NO sensor which should be very stable. If there is a drastic change in no_ae, the data is likely wrong. We want to exclude these data points that are likely wrong, therefore, we'll set NO to NA when no_ae changes rapidly. We'll set NO to NA when the change in no_ae exceeds 2.5 standard deviations past its mean. 
-
-
-First, let's check how many datapoints experience a rapid change in no_ae and how many NO values are currently NA.
-
-```{r}
-no_ae_check <- function(sensor){
-   #create a vector that shows the derivatives 
-  no_ae_derivative <- c(0,diff(sensor$no_ae, na.rm = TRUE))
-  #creating logical vector to pick which things to get rid of 
-  logical_vec <- abs(no_ae_derivative) > abs(2.5*(sd(no_ae_derivative, na.rm=TRUE)))
-  
-  sprintf("Number of values where delta no_ae exceeds 2.5 : %d. Number of NA no values : %d",sum(logical_vec), sum(is.na(sensor$no)))
-}
-```
-
-```{r}
-lapply(snfiles, function(x) no_ae_check(x))
-```
-
-Now, let's create our filter function and apply it to the data.
-```{r}
-no_ae_filter <- function(sensor){
-  #create a vector that shows the derivatives 
-  no_ae_derivative <- c(0,diff(sensor$no_ae, na.rm = TRUE))
-  #creating logical vector to pick which things to get rid of 
-  logical_vec <- abs(no_ae_derivative) < abs(2.5*(sd(no_ae_derivative, na.rm=TRUE)))
-  
-  #make sure SN NO values that == 0 are not removed
-  if (any(sensor$no == 0, na.rm = TRUE)){
-    sensor$no[sensor$no == 0] <- 0.0001
-  }
-  # if logical_vec is true, then set the NO value to NA 
-  sensor$no <- sensor$no * logical_vec
-  sensor$no[sensor$no == 0] <- NA
-  
-  return(sensor)
-}
-  
-```
-
-```{r}
-snfiles<- lapply(snfiles, function(x) no_ae_filter(x))
-```
-
-
-Let's check on the NO data statistics now:
-```{r}
-lapply(snfiles, function(x) no_ae_check(x))
-```
-
-## NO baseline correction 
-
-With the new machine learning algorithm that QuantAQ applies to their sensor data, the baseline for the data is already corrected. Below, I'm including the code written for No baseline correction, that was used before the machine learning algorithm was developed. The following code will be commented, because it should not be run with the new data. 
-
-Note, that if you want to run this section, you'll need to define "sensor". For example, "sensor <- snfiles$sn45".
-
-
-The first step is creating a column that represents the day that each data point was taken on. 
-
-```{r}
-# # create day column
-# sensor[, day := as.Date(date, format="%Y-%m-%d", tz = "America/New_York")]
-```
-
-Next, we'll create a column that will be filled with baseline corrected data: 
-
-```{r}
-# # create corrected column 
-# sensor[, correctedNO := seq(0,0,length.out= length(sensor$no))]
-# sensor$correctedNO[sensor$correctedNO == 0] <- NA  #set them actually to NA
-```
-
-We need to drop all NA values in order for the baseline algorithm to work. We do that here: 
-
-```{r}
-# dropNAsensor<- sensor[!is.na(sensor$no), ] # drop NO NAs
-```
-
-We'll create a list of all the unique days in the dataset, to loop through: 
-
-```{r}
-# unique_days <- c(unique(dropNAsensor$day, na.rm=TRUE)) #get all of the unique days in the sensor
-```
-
-We're going to baseline-correct the NO day by day. So, we'll loop through all the unique days in the data (given by the code above), and apply the baseline correcting algorithm to all the data with the date given by the for loop. 
-
-If there is not enough data points in the day, then the function will not run. Therefore, if we determine there's too few datapoints (less then 550), and the data is mostly positive, we include the original NO data. Otherwise, we'll keep the corrected data as NA.
-
-```{r}
-# for (i in 2:(length(unique_days)-1)){ #for all days
-#   temp <- subset(dropNAsensor, day %in% unique_days[i], c("day", "no", "date")) #create temp dataset
-# 
-#   if (nrow(temp) > 550){
-#     wholebase.peakDetection <- baseline(t(temp$no), method='peakDetection',left=50, right=50, lwin=10, rwin=10) #baseline correction
-#   
-#   #replace the correctedNO column values with the baseline correction from earlier
-#   dropNAsensor$correctedNO[which(dropNAsensor$date == temp$date[1]): which(dropNAsensor$date == tail(temp$date, n=1))] <-    c(getCorrected(wholebase.peakDetection))
-#   }
-#   
-#   else{
-#     if (sum(temp$no < 0, na.rm = TRUE) / nrow(temp) < 0.25){
-#       dropNAsensor$correctedNO[which(dropNAsensor$date == temp$date[1]): which(dropNAsensor$date == tail(temp$date, n=1))] <-    
-#         sensor$no[which(sensor$date == temp$date[1]): which(sensor$date == tail(temp$date, n=1))]
-#     }
-# 
-#   }
-#   
-# }
-# 
-# sensor$correctedNO[which(sensor$date %in% dropNAsensor$date)] <- dropNAsensor$correctedNO # replace values based on date 
-```
-
-
-## Results 
-
-Let's see what the time plots look like now: 
-
-```{r}
-lapply(snfiles, function(x) make_timeseries(x, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0")))
-```
 
 # Analysis 
 
@@ -642,8 +793,15 @@ generate_overall_polarplots <- function(sn, snstring){
 }
 ```
 
+The following chunk of code can also save the polar plots to a pdf. To do this, uncomment the "pdf" and "dev.off" lines. 
 
-We're applying this function as a for loop to the datasets, so we can also loop through the dataset names, and add those to the titles. 
+```{r}
+#pdf("cleaned_sn45_polarplots.csv")
+generate_overall_polarplots(snfiles$sn45, "sn45")
+#dev.off()
+```
+
+We can also apply this function as a for loop to the datasets. We can also loop through the dataset names, and add those to the titles. 
 
 ```{r}
 #for (i in seq(length(names(snfiles)))){
