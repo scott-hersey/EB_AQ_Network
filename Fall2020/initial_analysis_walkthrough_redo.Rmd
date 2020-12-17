@@ -445,6 +445,38 @@ Let's make sure they were removed:
 ```{r}
 snfiles$sn45[duplicated(snfiles$sn45) | duplicated(snfiles$sn45, fromLast=TRUE)] #print all duplicates, including the first one
 ```
+## Removing Values Based on Rate of Change of Auxiliary Electrode 
+
+Auxiliary electrodes indicate that the corresponding data could be incorrect. Because of that, we'll filter variables that have unexpected ae values. 
+
+In the future, we could add more auxiliary electrode checks. Therefore, we'll create an genral auxiliary electrode function which takes in a variable and an auxiliary electrode. The equation will measure the standard deviation of the change in ae values, and pick out datapoints where the sd surpasses a limit that the user sets. We'll write the equation below: 
+
+```{r}
+ae_cleaning <- function(sensor, pollutant, ae_val, sd_val){
+  ae_derivative <- c(0,diff(sensor[[ae_val]], na.rm = TRUE)) #create vector of derivatives
+
+  sensor[which(abs(ae_derivative) < sd_val*(sd(abs(ae_derivative), na.rm=TRUE))), pollutant] <- NA #compare sd
+  
+  return(sensor)
+}
+```
+
+For now, we're interested in no. We can filter no values that have a change in no_ae above 2.5 sd from the mean:
+
+```{r}
+snfiles <- lapply(snfiles, function(x) ae_cleaning(x, "no", "no_ae", 2.5)) 
+```
+
+
+In the future, we can use this function to filter for multiple ae values at once by storing the parameters in a list and looping through them. Below, I provide an example: 
+
+```{r}
+parameter_list = list(c("no", "no_ae", 2.5), c("no2", "no2_ae", 2))
+
+for(parameters in parameter_list){
+  snfiles <- lapply(snfiles, function(x) ae_cleaning(x, parameters[1], parameters[2], as.numeric(parameters[3]))) 
+}
+```
 
 
 ## Removing Negative Values 
@@ -453,12 +485,12 @@ First, we'll remove negative values. For this, we are simply finding all the poi
 
 ```{r}
 negative_value_filter <- function(sensor){
-  sensor$o3 <- replace(sensor$o3, sensor$o3 < 0, 0)
-  sensor$co <- replace(sensor$co, sensor$co <0, 0)
-  sensor$co2 <- replace(sensor$co2, sensor$co2 <0, 0)
-  sensor$no2 <- replace(sensor$no2, sensor$no2 <0, 0)
-  sensor$bin0 <- replace(sensor$bin0, sensor$bin0 <0, 0)
-  sensor$pm1 <- replace(sensor$pm1, sensor$pm1 <0, 0)
+  sensor$o3 <- replace(sensor$o3, sensor$o3 < 0, NA)
+  sensor$co <- replace(sensor$co, sensor$co <0, NA)
+  sensor$co2 <- replace(sensor$co2, sensor$co2 <0, NA)
+  sensor$no2 <- replace(sensor$no2, sensor$no2 <0, NA)
+  sensor$bin0 <- replace(sensor$bin0, sensor$bin0 <0, NA)
+  sensor$pm1 <- replace(sensor$pm1, sensor$pm1 <0, NA)
   return(sensor)
 }
 ```
@@ -466,7 +498,6 @@ negative_value_filter <- function(sensor){
 We'll apply this function to all the datasets:
 
 ```{r}
-#sn45 <- negative_value_filter(sn45)
 snfiles <- lapply(snfiles, function(x) negative_value_filter(x))
 ```
 
@@ -541,6 +572,8 @@ snfiles <- lapply(snfiles, function(x) o3_filter(x))
 
 ## Removing High Values with flags 
 
+The following function applies flags to the data. Each flag value corresponds to a pollutant that surpassed its limit. In order to change the limit, you can change the limit value directly inside of the function.
+
 ```{r}
 apply_flags <- function(sensor){
   # creating a flags column to flag high values 
@@ -560,6 +593,8 @@ apply_flags <- function(sensor){
   return(sensor)
 }
 ```
+
+The next set of functions plots the flagged values for a given variable. 
 
 ```{r}
 check_flags <- function(sensor, flagval, var_name){
@@ -585,6 +620,21 @@ check_flags <- function(sensor, flagval, var_name){
     
     
   }
+}
+
+print_flag_intervals <- function(sensor, flagval){
+  #plots flagged intervals
+  
+  index_df = create_interval_vector(sensor, flagval) #generate dataframe of flagged intervals
+  if(nrow(index_df) == 0){
+    print("No flagged data")
+  }
+  else{
+  rows_to_keep <- which( difftime(sensor$date[mod_end_indx], sensor$date[mod_start_indx], units="mins") > 2)
+  
+  sprintf("Number of intervals %f", rows_to_keep)
+  }
+
 }
 
 create_interval_vector <- function(sensor, flagval){
@@ -635,13 +685,51 @@ create_interval_vector <- function(sensor, flagval){
 }
 ```
 
+We can apply the flags to the sn dataframes: 
+
 ```{r}
-snfiles$sn45 <- apply_flags(snfiles$sn45)
-indx_df <- create_interval_vector(snfiles$sn45,6)
-check_flags(snfiles$sn45, 6, "no")
+snfiles <- lapply(snfiles, function(x) apply_flags(x)) 
+```
+
+We can check if these flags capture outlying values well by printing out plots where flags occur. First, however, we'll check how many intervals of flagged values there are, to make sure that we're not generating hundreds of graphs. 
+
+```{r}
+for(var in 1:6){
+  lapply(snfiles, function(x) print_flag_intervals(x, var))
+}
+```
+
+If the number of intervals is too high, it might be good to raise the limit. 
+
+Otherwise, we can print the plots below. Below, there are two options how to print the pdfs. We can print directly in R, or we can print to pdf. To print to pdfs, uncomment the "pdf" and "dev.off" lines.
+
+
+
+```{r}
+flags_list = list(c(2,"co2"), c(3,"no2"), c(6, "no"))
+for(i in flags_list){
+  #pdf(paste("check_flags_", i, ".pdf", sep = ""))
+  snfiles <- lapply(snfiles, function(x) check_flags(x, i[1], i[2]))
+  #dev.off()
+}
 ```
 
 
+The following function will remove flagged pollutant values. The user inputs which flag they want to remove values for, and the function will remove the values that correspond to that flag (as given in the function that creates flags). 
+
+```{r}
+remove_flags <- function(sensor, flag_val, pollutant){
+  sensor[which(sensor$flag %like% flag_val), pollutant] <- NA
+  return(sensor)
+}
+```
+
+```{r}
+flags_list = list(c(2,"co2"), c(3,"no2"), c(6, "no"))
+for(i in flags_list){
+  snfiles <- lapply(snfiles, function(x) remove_flags(x, i[1], i[2]))
+}
+```
 
 # Igor Quality Assurance 
 
@@ -662,7 +750,8 @@ After checking in Igor, we'll import the data back in.
 ```{r}
 temp = list.files(path = "./data/quant_aq/", pattern = "^.*_NaN.*\\.csv", full.names = TRUE) #specify files we're looking for
 snfiles_correction = sapply(temp, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
-
+names(snfiles_correction) <- lapply(names(snfiles), function(x) substr(x, 17, 26)) #change the names
+names(snfiles) <- lapply(names(snfiles), function(x) str_replace(x, "SN", "sn"))
 ```
 
 
@@ -671,7 +760,7 @@ As an example, we'll work through sn45.
 First, we'll import all the data.
 
 ```{r}
-sn45cleaning <- fread(temp, header = TRUE) #get the igor file for sn45
+sn45cleaning <- fread("./data/quant_aq/SN45_NaN.*\\.csv", header = TRUE) #get the igor file for sn45
 ```
 
 If you look at the sn45cleaning file, you'll see that "CO2" is given with uppercase C and O. We'll change it to lowercase to match the dataset. 
@@ -760,6 +849,15 @@ apply_igor <- function(igor_file, snfile){
   }
   return(snfile)
 }
+```
+
+Now, we'll apply it to all the files 
+
+```{r}
+snfiles_correction <- lapply(snfiles_correction, function(x) modify_igor(x)) #modify all the igor files
+
+snfiles <-  sapply(names(snfiles), function(k) apply_igor(snfiles_correction[[k]], snfiles[[k]])) #apply the igor corrections, by matching corrections and snfiles by name
+
 ```
 
 
