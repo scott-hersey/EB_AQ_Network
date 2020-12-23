@@ -57,7 +57,7 @@ In order to easily import the data, we'll store the data in the following way:
 
 ### Importing Necessary Libraries 
 
-Our import and analysis relies on functions from a few packages. The following functions must be imported for the code to run. You might get a message that certain functions are "masked" or "overwritten". This means that you imported libraries that have functions with the same name. If you know that these functions do different things from package to package, and want to use a specific one, then you can specific the function's package with package::function. For example, openair::polarPlot()
+Our import and analysis relies on functions from a few packages. The following functions must be imported for the code to run. The first step is to install each of the following packages with the install.packages("...") command - for example, install.packages("lubridate"). Run these in the command line, and they will all be installed locally for you to then import them here. You might get a message that certain functions are "masked" or "overwritten". This means that you imported libraries that have functions with the same name. If you know that these functions do different things from package to package, and want to use a specific one, then you can specific the function's package with package::function. For example, openair::polarPlot()
 
 ```{r, warning= FALSE, error = FALSE}
 library(lubridate) #date and time functions 
@@ -69,7 +69,7 @@ library(stringr)
 library(baseline) # for baseline correction
 ```
 
-
+################################################################################
 
 ### Import QuantAQ data 
 
@@ -77,23 +77,26 @@ If we want to import only certain variables, we can define what we want to impor
 
 ```{r}
 # #defining which variables we'll keep
-# final_vars <- c( "timestamp","timestamp_local",  "temp_manifold",
-#                  "co", "no" , "no2", "o3" ,  "pm1" , "pm25","pm10", "co2" ) #final variables to keep
-# raw_vars <- c("timestamp","bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "no_ae", "co_ae") #raw variables to keep
+ final_vars <- c( "timestamp","timestamp_local","temp_box",  "temp_manifold", "rh_manifold", "pressure", 
+                  "noise", "solar", "wind_dir", "wind_speed", "co", "no" , "no2", "o3" ,  "pm1" , "pm25",
+                  "pm10", "co2" ) #final variables to keep
+
+# temp_box	temp_manifold	rh_manifold	pressure	noise	solar	wind_dir	wind_speed
+ raw_vars <- c("timestamp","bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "no_ae", "co_ae", "no2_ae") #raw variables to keep
 ```
 
 Next, we'll import all the final and raw datafiles separately. We do this by finding all the csv's with "final" or "raw" in the name, and then applying the R read function to them. If you prefer to import all variables, comment the "sapply" functions that are being used, and uncomment the ones below it. The difference between them is that the currently uncommented one uses the "select" parameter, and the commented one doesn't.
 
 ```{r}
-# #finding all final datasets
-# temp = list.files(path = "./data/quant_aq/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
-# finalfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
-# #finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
-# 
-# #finding all raw datasets
-# temp = list.files(path = "./data/quant_aq", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
-# rawfiles = sapply(temp, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE)
-# #rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
+#finding all final datasets
+temp = list.files(path = "./data/quant_aq/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
+finalfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
+#finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
+
+#finding all raw datasets
+temp = list.files(path = "./data/quant_aq", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
+rawfiles = sapply(temp, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE)
+#rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 The output of the above functions gives a list of data tables. Since we included the sapply parameter "use.names", it attached the file name to each data.table. Since we used data.table = TRUE, we can be sure that the data is given in the data.table format, which has a more efficient runtime for large datasets.
@@ -101,10 +104,10 @@ The output of the above functions gives a list of data tables. Since we included
 Let's use an easier naming conventon. Since we used a specific naming scheme and a specific path, we can just extract the part of the path name that describes the dataset. Specifically, we're extracting "sn" and the sensor number. For example, "sn45" or "sn46".
 
 ```{r}
-# names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 17, 20)) #extract the real sensor names from the current names used in the list
-# names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 17, 20))
-# names(finalfiles)
-# names(rawfiles)
+names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 18, 21)) #extract the real sensor names from the current names used in the list
+names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 17, 20))
+names(finalfiles)
+names(rawfiles)
 ``` 
 
 Next, we want to combine the final and raw files for a given sensor. However, it will be beneficial to keep the sensors as a list of dataframes, as we'll see later.
@@ -113,7 +116,7 @@ Since the final and raw datasets could have a different number of rows, we'll me
 
 
 ```{r}
-# snfiles <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
+snfiles <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 
@@ -126,49 +129,52 @@ Let's download SN45 and SN46 data from the QuantAQ website. Download a final and
 Import those files here.
 
 ```{r}
-sn45_raw <- fread("./data/quant_aq/sn45_trial_raw.csv", data.table = TRUE) # import final sn45 data
-sn45_final <- fread("./data/quant_aq/sn45_trial_final.csv", data.table = TRUE) # import final sn46 data
-
-sn46_raw <- fread("./data/quant_aq/sn46_trial_raw.csv", data.table = TRUE) # import raw sn45 data
-sn46_final <- fread("./data/quant_aq/sn46_trial_final.csv", data.table = TRUE) # import raw sn46 data
+# sn45_raw <- fread("./data/quant_aq/sn45_trial_raw.csv", data.table = TRUE) # import final sn45 data
+# sn45_final <- fread("./data/quant_aq/sn45_trial_final.csv", data.table = TRUE) # import final sn46 data
+# 
+# sn46_raw <- fread("./data/quant_aq/sn46_trial_raw.csv", data.table = TRUE) # import raw sn45 data
+# sn46_final <- fread("./data/quant_aq/sn46_trial_final.csv", data.table = TRUE) # import raw sn46 data
 ```
 
 Let's try merging SN45 together based on the "timestamp" vector. 
 ```{r}
-merge(sn45_raw, sn45_final, by = "timestamp", all = FALSE) #merge both sn45 files
+# merge(sn45_raw, sn45_final, by = "timestamp", all = FALSE) #merge both sn45 files
 ```
 
 Now let's simulate the list of final dataframes and raw dataframes. 
 ```{r}
-finalfiles <- list("sn45" = sn45_final,"sn46" = sn46_final) # create list of final dataframes
-rawfiles <- list("sn45" = sn45_raw, "sn46" = sn46_raw) # create list of raw dataframes
+# finalfiles <- list("sn45" = sn45_final,"sn46" = sn46_final) # create list of final dataframes
+# rawfiles <- list("sn45" = sn45_raw, "sn46" = sn46_raw) # create list of raw dataframes
 ```
 
 We'll bind the appropriate files together in an lapply statement.
 
 ```{r}
-snfiles_trial <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE) #bind lists of final and raw dataframes
+# snfiles_trial <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE) #bind lists of final and raw dataframes
 ```
 
 This is what's contained in the new dataframes
 ```{r}
-colnames(snfiles_trial$sn45)
+# colnames(snfiles_trial$sn45)
 ```
 
 
+
+################################################################################
 
 ### Import Meteorology data
 
 First, we import the file. We can indicate that there is a header. 
 
 ```{r}
-metdata <- fread("data/metdata.csv", header=TRUE, data.table = TRUE) #import meteorology file
+metdata <- fread("data/Oct_2020_Met_EST.csv", header=TRUE, data.table = TRUE) #import meteorology file
 ```
 
-If you look at the file, you'll see that the datetime is not in the standard datetime format. We can standardize it to the quantAQ data format using the R built-in POSIXct function, which changes datetime formats. We can specific which timezone this data is already in, as well. 
+If you look at the file, you'll see that the datetime is not in the standard datetime format. We can standardize it to the quantAQ data format using the R built-in POSIXct function, which changes datetime formats. We can specific which timezone this data is already in, as well. Be sure that the timezone you specify matches the timezone that you originally specified in the data download.
 
 ```{r}
-metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M", tz = "America/New_York") #setting datetime, using correct timezone
+#metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M", tz = "America/New_York") #setting datetime, using correct timezone on East Coast Local time
+metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M") #setting datetime, using correct timezone for UTC
 ```
 
 Next, if we look at data columns, we see that the column names are unrepresentative of the data. if we look at the date column in particular, we see that the data is not in one-minute intervals, like the sensor data, but in 5 minute intervals. To solve this second concern, we can add one-minute intervals in between and then fill those 1 minute intervals with the data from the 5 minute intervals. Let's say that wind direction is 0 for 11:00 and 120 for 11:05. Then, the new data would be: 11:00 - 0, 11:01 - 0, 11:02 - 0, 11:03 - 0, 11:04 - 0, 11:05 - 120, 11:06 - 120 ... 11:09 - 120
@@ -177,10 +183,17 @@ We can solve both of these concerns at once, using the dpylr operator (%>%)
 
 ```{r}
 metdata <- metdata %>%
-  setnames(old = c("drct", "sped", "valid"), new = c("wd", "ws", "original_met_time")) %>% #rename
+  # if only wind speed and wind direction matter
+  # setnames(old = c("drct", "sped", "valid"), new = c("wd", "ws", "original_met_time")) %>% #rename
+  # na.omit("date") %>% #if any dates are NA, the following function won't work
+  # complete(date = seq(from = min(date), to= max(date),  by = "1 min")) %>%#make 1 minute intervals
+  # fill(c("wd", "ws")) #fill those new 1 minute interval rows 
+
+  #if the entire met dataset matters
+  setnames(old = c("drct", "sped", "valid", "relh", "mslp"), new = c("wd", "ws", "original_met_time", "rh", "press")) %>% #rename
   na.omit("date") %>% #if any dates are NA, the following function won't work
   complete(date = seq(from = min(date), to= max(date),  by = "1 min")) %>%#make 1 minute intervals
-  fill(c("wd", "ws")) #fill those new 1 minute interval rows 
+  fill(c("wd", "ws", "rh", "press", "sknt", "tmpc", "press", "dwpc")) #fill those new 1 minute interval rows 
 ```
 
 We specified on the Iowa Mesonet website that our data's null values would show up as a blank string. When we import into R, this will then translate as an NA value. Since the missing strings are NAs, wind speed and wind direction become numeric vectors. If the missing data was set to "null", for example, then the vectors would be strings
@@ -188,6 +201,14 @@ We specified on the Iowa Mesonet website that our data's null values would show 
 ```{r}
 class(metdata$ws)
 class(metdata$wd)
+class(metdata$rh)
+class(metdata$press)
+class(metdata$sknt)
+class(metdata$tmpc)
+class(metdata$press)
+class(metdata$dwpc)
+class(metdata$date)
+
 ```
 
 On the website, the wind speed was given in in mph. However, we would prefer to use m/s. Let's convert ws from mph to m/s.
@@ -201,6 +222,8 @@ Lastly, let's remove variables that we won't use:
 ```{r}
 metdata[,c( "station")] <- list(NULL) #getting rid of unnecessary variables
 ```
+
+#########################################################################################3
 
 # Downloading, Saving and Importing using Dropbox workflow 
 
@@ -249,6 +272,8 @@ names(snfiles)
 
 
 
+#################################################################################
+
 # Formatting and Merging Data 
 
 ## Formatting QuantAQ sensor data 
@@ -294,6 +319,10 @@ sprintf("first date entry : %s", snfiles$sn45$date[1])
 snfiles$sn45 <- snfiles$sn45[order(snfiles$sn45$originaldate),] #put it in chronological order
 sprintf("first date entry : %s", snfiles$sn45$date[1])
 ```
+
+
+################################################################################
+
 
 ### Formatting the rest of the QuantAQ files 
 
