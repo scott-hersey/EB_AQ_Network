@@ -385,6 +385,8 @@ snfiles[c(-1)] <- lapply(snfiles[c(-1)], function(x) merge_metdata(x, metdata))
 As before, we exclude the first dataframe, since we already merged it above.
 
 
+################################################################################
+
 # Data Cleaning
 
 ## Checking the data
@@ -478,7 +480,7 @@ snfiles$sn45[duplicated(snfiles$sn45) | duplicated(snfiles$sn45, fromLast=TRUE)]
 
 Auxiliary electrodes indicate that the corresponding data could be incorrect. Because of that, we'll filter variables that have unexpected ae values. 
 
-In the future, we could add more auxiliary electrode checks. Therefore, we'll create an genral auxiliary electrode function which takes in a variable and an auxiliary electrode. The equation will measure the standard deviation of the change in ae values, and pick out datapoints where the sd surpasses a limit that the user sets. We'll write the equation below: 
+In the future, we could add more auxiliary electrode checks. Therefore, we'll create an general auxiliary electrode function which takes in a variable and an auxiliary electrode. The equation will measure the standard deviation of the change in ae values, and pick out datapoints where the sd surpasses a limit that the user sets. We'll write the equation below: 
 
 ```{r}
 ae_cleaning <- function(sensor, pollutant, ae_val, sd_val){
@@ -514,7 +516,7 @@ First, we'll remove negative values. For this, we are simply finding all the poi
 
 ```{r}
 negative_value_filter <- function(sensor){
-  sensor$o3 <- replace(sensor$o3, sensor$o3 < 0, NA)
+  sensor$o3 <- replace(sensor$o3, sensor$o3 < 0, 0)
   sensor$co <- replace(sensor$co, sensor$co <0, NA)
   sensor$co2 <- replace(sensor$co2, sensor$co2 <0, NA)
   sensor$no2 <- replace(sensor$no2, sensor$no2 <0, NA)
@@ -532,7 +534,7 @@ snfiles <- lapply(snfiles, function(x) negative_value_filter(x))
 
 ## Removing NO Negative Values 
 
-NO has a changing baseline. It can't be filtered like the ones above because then we would lose real data. Therefore, we're going to apply a baseline correction algorithm to the NO data that was developed for spectroscopy. Since the baseline function wasn't made for this application, we have to prepare the data and feed it into the baseline function incrementally. We'll do this in the no_baseline_filter wrapper function below. The wrapper function was developed during summer 2020, and there is a document describing its components on the shared drive. 
+NO has a changing baseline. It can't be filtered like the ones above because then we would lose real data. Therefore, we're going to apply a baseline correction algorithm to the NO data that was developed for Raman Spectroscopy. Since the baseline function wasn't made for this application, we have to prepare the data and feed it into the baseline function incrementally. We'll do this in the no_baseline_filter wrapper function below. The wrapper function was developed during summer 2020, and there is a document describing its components on the shared drive. 
 
 ```{r}
 no_baseline_filter <- function(sensor){
@@ -760,6 +762,9 @@ for(i in flags_list){
 }
 ```
 
+
+################################################################################
+
 # Igor Quality Assurance 
 
 Next, we'll export the data to csv, put it into Igor and do a quality inspection. 
@@ -889,7 +894,7 @@ snfiles <-  sapply(names(snfiles), function(k) apply_igor(snfiles_correction[[k]
 
 ```
 
-
+################################################################################
 
 # Final data check 
 
@@ -901,6 +906,7 @@ lapply(snfiles, function(x) data_check_percentiles(x))
 lapply(snfiles, function(x) data_check_mean(x))
 ```
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 # Analysis 
 
@@ -931,9 +937,9 @@ generate_overall_polarplots(snfiles$sn45, "sn45")
 We can also apply this function as a for loop to the datasets. We can also loop through the dataset names, and add those to the titles. 
 
 ```{r}
-#for (i in seq(length(names(snfiles)))){
-#  generate_overall_polarplots(snfiles[[i]], names(snfiles)[i])
-#}
+for (i in seq(length(names(snfiles)))){
+ generate_overall_polarplots(snfiles[[i]], names(snfiles)[i])
+}
 ```
 
 
@@ -943,12 +949,12 @@ We can also apply this function as a for loop to the datasets. We can also loop 
 Diurnal plots show the relationship between pollutant concentration and time (on the scale of hours, days and months). To create diurnal profiles for all of the sensors, we can apply the same method as we did to create polar plots.
 
 ```{r}
-# for (i in seq(length(names(snfiles)))){
-#   
-#   timeVariation(snfiles[[i]], pollutant = c("no2"), main = paste0(names(snfiles)[i], " NO2 Diurnal Profile"))
-#   
-#   timeVariation(snfiles[[i]], pollutant = c("pm1", "co", "no",  "co2", "bin0"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
-# }
+for (i in seq(length(names(snfiles)))){
+
+  timeVariation(snfiles[[i]], pollutant = c("no2"), main = paste0(names(snfiles)[i], " NO2 Diurnal Profile"))
+
+  timeVariation(snfiles[[i]], pollutant = c("pm1", "co", "no", "bin0", "bin1"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
+}
 ```
 
 
