@@ -1,0 +1,94 @@
+---
+title: "Regimes"
+---
+
+# Overview 
+
+In this notebook, we will analyze data that answers the question "What regime is associated with the most pollution?". In this case, when we say regime, we mean varieties in time and location that are associated with different airport activity. For instance, SN45 is situated close to the northern runway at Logan. That runway has periods when it is being used, and when it is not being used; thus, the sensor data during those two different regimes could result in different sensor readings. 
+
+```{r}
+library(lubridate)
+library(openair)
+library(data.table)
+library(dplyr)
+library(baseline)
+library(Rmisc)
+library(ggplot2)
+```
+
+
+```{r}
+sn45 <- fread("./data/cleaned_sn45.csv", header = TRUE, data.table = TRUE)
+```
+
+
+# Creating Regimes 
+
+## Upwind - Downwind 
+
+```{r}
+sn45$regime <- NA 
+
+
+sn45$regime[which(sn45$ws >= 2.5 & sn45$wd>  140 & sn45$wd < 270)] <- "140 - 270  and higher speeds"
+
+sn45$regime[which(sn45$ws >= 2.5 & sn45$wd>  140 & sn45$wd < 180)] <- "140 - 180 downwind and higher speeds"
+
+sn45$regime[which(sn45$ws < 2.5)] <- "downwind and lower speeds"
+
+sn45$regime[which(is.na(sn45$regime))] <- "upwind"
+
+
+```
+
+# Generating Boxplots 
+
+```{r}
+p <- ggplot(sn45, aes(x="", y=no, group=regime)) + 
+  geom_boxplot(aes(fill=regime), outlier.shape = NA) +
+  #scale_y_continuous(limits = quantile(sn45$no, c(0.1, 0.9), na.rm = TRUE))
+  coord_cartesian(ylim = quantile(sn45$no, c(0.1,0.9), na.rm = TRUE))
+p
+```
+
+```{r}
+t <- ggplot(sn45, aes(x="", y=no2, group=regime)) + 
+  geom_boxplot(aes(fill=regime), outlier.shape = NA) +
+  #scale_y_continuous(limits = quantile(sn45$no, c(0.1, 0.9), na.rm = TRUE))
+  coord_cartesian(ylim = quantile(sn45$no2, c(0.1,0.9), na.rm = TRUE))
+t
+```
+```{r}
+
+ggplot(sn45) + 
+  geom_boxplot(aes(x="",y=no,group=regime,fill=regime), outlier.shape = NA) + coord_cartesian(ylim = quantile(sn45$no, c(0.1,0.9), na.rm = TRUE)) +  
+  geom_boxplot(aes(x="wt", y=no, group=regime, fill=regime), outlier.shape = NA) +   coord_cartesian(ylim = quantile(sn45$no2, c(0.1,0.9), na.rm = TRUE))
+```
+
+
+```{r}
+sn45.melt <- melt.data.table(sn45, id.vars = c("regime"), measure.vars = c("no", "no2", "pm1") )
+
+#gather(sn45, , measurement, control:cond2, factor_key=TRUE)
+```
+
+```{r}
+ggplot(sn45.melt, aes(x = "", y = value, group = sn45.melt$regime)) + 
+  geom_boxplot(outlier.shape = NA, aes(fill = sn45.melt$regime) )+
+  facet_wrap(~sn45.melt$variable, ncol = 1, scales = "free_y") + 
+  geom_blank(aes(y = y_min)) +
+  geom_blank(aes(y = y_max))
+  coord_cartesian(ylim = quantile(sn45$no2, c(0.1,0.9), na.rm = TRUE))
+```
+
+```{r}
+p <- ggplot(sn45.melt, aes(x = "", y = value, group = sn45.melt$regime)) + 
+  geom_boxplot(outlier.shape = NA, aes(fill = sn45.melt$regime) ) 
+  + geom_blank()
+p <- p + facet_wrap(~variable, ncol = 1, scales = "free_y") 
+
+#     coord_cartesian(ylim = quantile(sn45.melt$value, c(0.1,0.9), na.rm = TRUE))
+p
+```
+
+
