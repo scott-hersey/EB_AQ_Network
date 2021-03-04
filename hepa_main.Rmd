@@ -1,0 +1,511 @@
+---
+title: "R Notebook"
+---
+
+# Description 
+
+In this notebook, I include my initial work to answer the second goal presented in the HEPA powerpoint. 
+
+# Environment Setup 
+
+Beforehand, we will import the necessary libraries. 
+
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+```
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+# Preparing the CPC data 
+
+## Importing the CPC data 
+
+We're going to take the CPC from every day of the experiment (each day's data is given as a TXT file), and combine in into one data frame that represents all the CPC data from a given room. 
+
+They way we will import and combine the data is the method used to import QuantAQ data in the initial walkthrough of Eastie. Refer to line 74 of initial_analysis_walkthrough_redo.Rmd for that example. 
+
+Since the data was taken on multiple CPC instruments, the initial way I was importing data didn't work for every room's data. Therefore, I used two different methods, but I think that the method used for the 'auditor' dataset could potentially be used for all the data (I haven't checked yet). 
+
+```{r}
+auditor_cpc_files <- list.files(path="./City Hall Data - Jan 2021/Auditor CPC077 MOD025", pattern="*.TXT", full.names = TRUE)
+auditor_cpc <- do.call(rbind, lapply(auditor_cpc_files, function(x) fread(file=x, header = TRUE, data.table = TRUE, skip="#YY/MM/DD", fill=TRUE) ) ) 
+
+mainroom_al_cpc_files <- list.files(path="./City Hall Data - Jan 2021/Main Room AL CPC077 MOD025", pattern="*.TXT", full.names = TRUE)
+mainroom_al_cpc <-  do.call(rbind, lapply(mainroom_al_cpc_files, function(x) fread(file=x, header = TRUE, data.table = TRUE, skip="#YY/MM/DD", fill=TRUE) ) ) 
+
+veterans_al_cpc_files <- list.files(path="./City Hall Data - Jan 2021/Veterans AL MOD030", pattern="*.TXT", full.names = TRUE)
+veterans_al_cpc <-  do.call(rbind, lapply(veterans_al_cpc_files, function(x) fread(file=x, header = TRUE, data.table = TRUE, skip="#YY/MM/DD", fill=TRUE) ) ) 
+
+engineering_cpc_files <- list.files(path="./City Hall Data - Jan 2021/Engineering CH CPC015 MOD030", pattern="*.TXT", full.names = TRUE) # find CPC data
+engineering_cpc <- do.call(rbind, lapply(engineering_cpc_files, function(x) fread(file=x, header = TRUE, data.table = TRUE, skip = 13) ) ) #import all the files and bind them together into 1 dataframe
+
+outdoor_al_cpc_files <- list.files(path= "./City Hall Data - Jan 2021/Outdoor AL CPC016 MOD045", pattern="*.TXT", full.names = TRUE) # find CPC data
+outdoor_al_cpc <- do.call(rbind, lapply(outdoor_al_cpc_files, function(x) fread(file=x, header = TRUE, data.table = TRUE, skip = 13) ) )
+
+outdoor_ch_cpc_files <- list.files(path= "./City Hall Data - Jan 2021/Outdoor CH CPC016 MOD045", pattern="*.TXT", full.names = TRUE) # find CPC data
+outdoor_ch_cpc <- do.call(rbind, lapply(outdoor_ch_cpc_files, function(x) fread(file=x, header = TRUE, data.table = TRUE, skip = 13) ) )
+
+waterdept_cpc_files <- list.files(path="./City Hall Data - Jan 2021/Water Dept CH CPC077 MOD025", pattern="*.TXT", full.names = TRUE) # find CPC data
+waterdept_cpc <- do.call(rbind, lapply(waterdept_cpc_files, function(x) read.delim2(file=x, header = TRUE, skip = 14) ) )
+
+names(waterdept_cpc)[names(waterdept_cpc)==c("X.YY.MM.DD", "HR.MN.SC" )] <- c("#YY/MM/DD", "HR:MN:SC")
+waterdept_cpc$X <- NULL #setting extra variable to null
+```
+
+Note that the one entry is lost from each dataset. I checked the files which produced discarded footers, and they were all rows that were cut off. 
+
+
+Now, we will combine the CPC data from all three locations into one list of dataframes, similar to how we created a list of dataframes in the initial walkthrough of Eastie, on line 119. We will do this so we can apply functions to the data with greater ease. 
+
+```{r}
+cpc_list <- list( "auditor" = auditor_cpc, "engineering" = engineering_cpc, "outdoor_al" = outdoor_al_cpc , "outdoor_ch" = outdoor_ch_cpc ,
+                  "waterdept" = waterdept_cpc, "mainroom" = mainroom_al_cpc)
+```
+
+
+## Setting the correct datetime
+
+We combine the date and time columns in the cpc data to create datetime objects. Note that there is probably a more efficient way of doing this, but I ran into errors and just copied and pasted a given function for all the files, in order to save time. 
+```{r}
+cpc_list$engineering$date <- with(cpc_list$engineering, ymd(`#YY/MM/DD`) + hms(`HR:MN:SC`)) ##formatting datetime
+tz(cpc_list$engineering$date) <- "America/New_York" # define timezone
+
+cpc_list$outdoor_al$date <- with(cpc_list$outdoor_al, ymd(`#YY/MM/DD`) + hms(`HR:MN:SC`)) ##formatting datetime
+tz(cpc_list$outdoor_al$date) <- "America/New_York" # define timezone
+
+cpc_list$outdoor_ch$date <- with(cpc_list$outdoor_ch, ymd(`#YY/MM/DD`) + hms(`HR:MN:SC`)) ##formatting datetime
+tz(cpc_list$outdoor_ch$date) <- "America/New_York" # define timezone
+
+cpc_list$waterdept$date <- with(cpc_list$waterdept, ymd(`#YY/MM/DD`) + hms(`HR:MN:SC`)) ##formatting datetime
+tz(cpc_list$waterdept$date) <- "America/New_York" # define timezone
+
+cpc_list$mainroom$date <- with(cpc_list$mainroom, ymd(`#YY/MM/DD`) + hms(`HR:MN:SC`)) ##formatting datetime
+tz(cpc_list$mainroom$date) <- "America/New_York" # define timezone
+
+cpc_list$auditor$date <- with(cpc_list$auditor, ymd(`#YY/MM/DD`) + hms(`HR:MN:SC`)) ##formatting datetime
+tz(cpc_list$auditor$date) <- "America/New_York" # define timezone
+```
+There is also a warning message here that says 'some strings failed to parse'. I looked into this a little, and there is a row of NA values somewhere, but for now is an unresolved part of the data. 
+
+## Cleaning the data for non-numerical errors 
+
+I had found that the data isn't always imported in the right format (ie as strings instead of numeric), which leads to problems when you want to perform operations on those data. In order to solve this, we are checking the column type of each dataset, determining where there are outliers, and fixing the formatting issues. 
+
+We'll check the data format of each column in each data set. Numeric data should be "double" or "integer".
+
+```{r}
+sapply(cpc_list, function(x) sapply(x,typeof))
+```
+
+
+The engineering dataframe has all its columns in the right format. However, the outdoor_ch, auditor and water department datasets have concent and rawconc as characters, when they should be doubles. 
+
+For the outdoor data, lets find out where there are non-integer values and what they are: 
+```{r}
+test_concent <- as.numeric(as.character(cpc_list$outdoor_ch$concent))
+sprintf("Where they are (entry number and date): %s, %s", which(is.na(test_concent)), cpc_list$outdoor_ch$date[which(is.na(test_concent))])
+sprintf("What they are: %s", cpc_list$outdoor_ch$concent[which(is.na(test_concent))])
+
+test_rawconc <- as.numeric(as.character(cpc_list$outdoor_ch$rawconc))
+sprintf("Where they are (entry number and date): %s, %s", which(is.na(test_rawconc)), cpc_list$outdoor_ch$date[which(is.na(test_rawconc))])
+sprintf("What they are: %s", cpc_list$outdoor_ch$rawconc[which(is.na(test_rawconc))])
+```
+
+Since CPC shouldn't be zero, we can now set the vectors to be numeric 
+
+```{r}
+cpc_list$outdoor_ch$concent <- as.numeric(cpc_list$outdoor_ch$concent)
+cpc_list$outdoor_ch$rawconc <- as.numeric(cpc_list$outdoor_ch$rawconc)
+
+sapply(cpc_list$outdoor_ch, typeof)
+```
+Let's check for the water department data, too. 
+
+```{r}
+test_concent <- as.numeric(as.character(cpc_list$waterdept$concent))
+sprintf("Where they are (entry number and date): %s, %s", which(is.na(test_concent)), cpc_list$waterdept$date[which(is.na(test_concent))])
+sprintf("What they are: %s", waterdept_cpc$concent[which(is.na(test_concent))])
+
+test_rawconc <- as.numeric(as.character(cpc_list$waterdept$rawconc))
+sprintf("Where they are (entry number and date): %s, %s", which(is.na(test_rawconc)), cpc_list$waterdept$date[which(is.na(test_rawconc))])
+sprintf("What they are: %s", cpc_list$waterdept$rawconc[which(is.na(test_rawconc))])
+```
+It appears that the whole row is NA. Let's confirm:
+```{r}
+cpc_list$waterdept[435394, ]
+```
+
+Since these entries were originally NA, we can set the vectors to numeric. 
+
+```{r}
+cpc_list$waterdept$concent <- as.numeric(cpc_list$waterdept$concent)
+cpc_list$waterdept$rawconc <- as.numeric(cpc_list$waterdept$rawconc)
+
+cpc_list$waterdept <- cpc_list$waterdept %>% mutate_if(is.character,as.numeric) # This was originally a hack solution, but I do end up using this function later on all the data, so I will consolidate these, as a TO-DO
+
+sapply(cpc_list$waterdept, typeof)
+```
+Finally, we'll look at the auditor dataset: 
+
+```{r}
+test_concent <- as.numeric(as.character(cpc_list$auditor$concent))
+sprintf("Where they are (entry number and date): %s, %s", which(is.na(test_concent)), cpc_list$auditor$date[which(is.na(test_concent))])
+sprintf("What they are: %s", cpc_list$auditor$concent[which(is.na(test_concent))])
+
+test_rawconc <- as.numeric(as.character(cpc_list$auditor$rawconc))
+sprintf("Where they are (entry number and date): %s, %s", which(is.na(test_rawconc)), cpc_list$auditor$date[which(is.na(test_rawconc))])
+sprintf("What they are: %s", cpc_list$auditor$rawconc[which(is.na(test_rawconc))])
+```
+This dataset has a lot of rows that look to be NA. 
+
+```{r}
+cpc_list$auditor[which(is.na(test_concent)), ]
+```
+Strangely, it looks like the header got imported as data. Let's remove those rows: 
+
+```{r}
+cpc_list$auditor <- cpc_list$auditor[-c(which(is.na(test_concent))), ]
+```
+
+
+
+## Cleaning the data for numerical errors 
+
+Now, we'll clean the data according the guidelines we set in place in our 'Expected Values' spreadsheet. 
+
+### Discard all zero and negative values 
+First, we check how many zero and negative values there are 
+```{r}
+lapply(cpc_list, function(x) sprintf("Number of negative and zero values: %d", sum(x$concent <= 0, na.rm = TRUE)))
+```
+We're expecting a lot of zero values for the engineering dataset, because we know the data goes to zero after 16 hours. We're also expecting a lot of zeros for the main room dataset.
+
+Now, we can clean the rest. 
+
+```{r}
+cpc_list <- sapply(cpc_list, function(x) {
+  x$concent[x$concent <= 0] <- NA
+  return(x)}
+       )
+```
+
+Let's also check how many values are NA: 
+
+```{r}
+lapply(cpc_list, function(x) sprintf("Number of NA values: %d", sum(is.na(x$concent))))
+lapply(cpc_list, function(x) sprintf("Percentage of NA values: %f", 100*(sum(is.na(x$concent)) / nrow(x))))
+```
+Since the engineering and mainroom had lots of negative or 0 values, they're removed; the other percentages make sense as well.
+
+
+### Check low and high values 
+
+First, we'll check how many values are below 1000: 
+
+```{r}
+lapply(cpc_list, function(x) sprintf("Number of values below 1000 particles/cm3: %d", sum(x$concent < 1000, na.rm = TRUE)))
+lapply(cpc_list, function(x) sprintf("Percentage of values below 1000 particles/cm3: %f", 100*(sum(x$concent < 1000, na.rm = TRUE)/ nrow(x))))
+```
+Next, we'll check how many values are above 100000: 
+
+```{r}
+lapply(cpc_list, function(x) sprintf("Number of values above 100000 particles/cm3: %d", sum(x$concent > 100000, na.rm = TRUE)))
+lapply(cpc_list, function(x) sprintf("Percentage of values above 100000 particles/cm3: %f", 100*sum(x$concent > 100000, na.rm = TRUE)/ nrow(x)))
+```
+
+Finally, let's visually inspect the data. 
+
+```{r}
+#lapply(names(cpc_list), function(x) timePlot(cpc_list[[x]], pollutant = "concent", main = x ))
+
+#lapply(names(cpc_list), function(x) plot(cpc_list[[x]]$concent, main = x ))
+```
+
+Both the low and high values appear to be part of larger trends in the data. 
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+# Preparing the PM data 
+
+## Importing the PM data 
+
+Now we will import all the PM data, using the same method as for the CPC data. We will combine the three PM data frames into one list of dataframes. Lastly, we will clean all the dataframes in the list of dataframes using the function above. 
+
+```{r}
+# import pm data 
+
+auditor_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Auditor CPC077 MOD025", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE)))
+
+mainroom_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Main Room AL CPC077 MOD025", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE)))
+
+veterans_al_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Veterans AL MOD030", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE)))
+
+engineering_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Engineering CH CPC015 MOD030", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE))) 
+
+outdoor_al_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Outdoor AL CPC016 MOD045", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE))) 
+
+outdoor_ch_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Outdoor CH CPC016 MOD045", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE))) 
+
+waterdept_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Water Dept CH CPC077 MOD025", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE))) 
+
+# combine PM data 
+
+pm_list = list( "auditor" = auditor_PM, "engineering" = engineering_PM, "outdoor_al" = outdoor_al_PM , "outdoor_ch" = outdoor_ch_PM ,
+                  "waterdept" = waterdept_PM, "mainroom" = mainroom_PM, "veterans" = veterans_al_PM)
+```
+
+```{r}
+nm <- list.files(path="./City Hall Data - Jan 2021/Outdoor CH CPC016 MOD045", pattern="*.csv", full.names = TRUE)
+
+outdoor_pm_1 <- fread(file=nm[1], header = TRUE)
+outdoor_pm_2 <- fread(file=nm[2], header = TRUE)
+```
+
+
+## Setting the correct datetime
+
+The first step for this subsection is to create a function that will clean the PM data. This involves setting it to a datetime object, changing the timezone from UTC to EST/EDT, and rounding the datetime object so that the data can be matched with the CPC data, minute by minute. This function is based off of the clean_sensor_data function (line 334) in the initial analysis walkthrough. 
+
+```{r}
+clean_PM_data <- function(sensor){
+  indx = which(!duplicated(colnames(sensor))) #find duplicate columns
+  sensor <- subset(sensor, select = indx) #remove duplicate columns from the pm files
+  sensor$date <- ymd_hms(sensor$timestamp, tz="UTC") #parse datetime
+  sensor$date <- with_tz(sensor$date, "America/New_York") #change the time according to shifted timezone
+  sensor$original_date <- sensor$date
+  sensor$date <- round_date(ymd_hms(sensor$date, tz="America/New_York"), unit="minute") #round date for merging
+  sensor<- sensor[order(sensor$original_date),] #put it in chronological order
+  return(sensor)
+}
+```
+
+Now, we'll apply it. 
+
+```{r}
+pm_list <- lapply(pm_list,  function(x) clean_PM_data(x)) # convert pm data to local time, round date 
+```
+
+## Cleaning the data for non-numerical errors
+
+As before, we'll check for non-numerical errors. 
+
+```{r}
+sapply(pm_list, function(x) sapply(x,typeof))
+```
+
+Everything here looks okay, for our purposes.
+
+## Cleaning the data for numerical errors 
+
+According to our spreadsheet, pm1 shouldn't exceed 1 microgram/m3, and should never be negative. 
+
+```{r}
+lapply(pm_list, function(x) sprintf("Number of negative values: %d", sum(x$pm1 < 0, na.rm = TRUE)))
+```
+There are no negative values. 
+
+```{r}
+lapply(pm_list, function(x) sprintf("Number of pm1 values over 1 mg/m3: %d", sum(x$pm1 > 1, na.rm = TRUE)))
+```
+And it seems all of the pm1 values are greater than 1. Let's see what the timeplots look like: 
+
+```{r}
+#lapply(names(pm_list), function(x) timePlot(pm_list[[x]], pollutant = "pm1", main = x ))
+```
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+# Merging 
+
+## Averaging CPC data 
+
+In order to merge with the PM data, we have to get the data to have the same time intervals. This way, we will be able to match datapoints based on what time they were taken. Since the PM data has a smaller resolution than the CPC data (1 min opposed to 1 sec), we will average the CPC data so that it will be on a 1 minute time basis. 
+
+To do this, we will create a date1min vector in the CPC data; this vector gives the datetime rounded to the nearest minute for each datapoint. Then we will take all of the numeric data, group them into categories so that each category has the same date1min, and then taking the mean of each group. 
+
+```{r}
+average_cpc <- function(cpc){
+  
+  cpc$date1min <- round_date(cpc$date, "1 min") #creating date1min vector. Turns 00:00:01 and 00:00:59 into 00:00 and 00:01, respectively.
+  
+  new_cpc <- cpc %>% 
+    select(c("date1min", "aveconc","concent","rawconc", "cnt_sec",    "condtmp",   "satttmp",   "satbtmp",   "optctmp",   "inlttmp" ,  "smpflow" ,  "satflow", "pressur",   "condpwr",   "sattpwr" ,  "satbpwr" ,  "optcpwr",   "satfpwr" ,  "fillcnt",  "err_num")) %>% 
+    dplyr::group_by(date1min) %>%  
+    mutate_if(is.character,as.numeric) %>%  #converting strings to numeric
+    dplyr::summarize(across(everything(), list(mean), na.rm= TRUE))
+    
+  return(new_cpc)
+}
+```
+
+Let's check that all the columns are in the right format, again. 
+
+```{r}
+sapply(cpc_list, function(x) sapply(x,typeof))
+```
+And making sure there aren't any rows that could stop us from taking the mean: 
+
+```{r}
+sapply(cpc_list, function(x) which(is.na(x$date)))
+```
+Let's inspect and fix the two entries found above:
+```{r}
+cpc_list$auditor[3685,] 
+cpc_list$auditor  <- cpc_list$auditor[-c(3685),]
+```
+```{r}
+cpc_list$waterdept[435394,]
+
+cpc_list$waterdept  <- cpc_list$waterdept[-c(435394),] 
+```
+
+Note, I've also added another line to the average_cpc function, that will turn anything that's a string into a numeric vector. If this isn't there, then the function won't run.
+
+
+```{r}
+cpc_list2 <- lapply(cpc_list, average_cpc)
+```
+
+
+## Merging Function 
+
+The function we are using is also based on line 74 of the initial analysis walkthrough. 
+
+```{r}
+rooms <- sapply(names(cpc_list), function(k) merge(cpc_list2[[k]], pm_list[[k]], by.x = "date1min", by.y = "date", all = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+# Apply Correction Factor 
+
+As stated in the HEPA Analysis powerpoint, here we will "multiply CPC concentrations by a static value to account for noise from the sensors." We do this by creating a function, which takes in a dataframe and a correction factor. It multiplies that dataframe's concent vector by the input correction factor.  
+
+```{r}
+apply_correction <- function(sensor, correctionfactor){
+  sensor$concent <- (sensor$concent) * correctionfactor
+  return(sensor)
+}
+```
+
+The correction data is based on which sensor is used. Below, we list which sensor is used in each location.
+
+015 - engineering
+016 - outdoor_al & ch
+077 - auditor, main room, water dept
+
+We apply that function to all of the dataframes:
+```{r}
+rooms_previous = rooms # replicating the list, to check the function
+
+rooms["engineering"] <- apply_correction(rooms["engineering"], 0.9449454)
+
+rooms["outdoor_al"] <- apply_correction(rooms["outdoor_al"], 1.005473)
+rooms["outdoor_ch"] <- apply_correction(rooms["outdoor_ch"], 1.005473)
+
+rooms["auditor"] <- apply_correction(rooms["auditor"],  1.100486)
+rooms["mainroom"] <- apply_correction(rooms["mainroom"],  1.100486)
+rooms["waterdept"] <- apply_correction(rooms["waterdept"],  1.100486)
+```
+
+We can check that the concentration vector still stays the same: 
+
+```{r}
+all(rooms_previous$engineering$concent == rooms$engineering$concent, na.rm = TRUE)
+all(rooms_previous$outdoor_al$concent == rooms$outdoor_al$concent, na.rm = TRUE)
+all(rooms_previous$waterdept$concent == rooms$waterdept$concent)
+```
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+# Generating indoor/outdoor ratios 
+
+We will create a function that merges two dataframes (a dataframe from a testing location inside, and from outside).
+
+```{r}
+ratio_merge <- function(room_df, outdoor_df, cpc = TRUE){
+  
+  # if the dataset has CPC data
+  if(cpc == TRUE){
+    ratio_df <- merge(room_df, outdoor_df, by.x = "date1min", by.y = "date1min", all = TRUE, suffixes = c(".indoor", ".outdoor")) #merge the data from the room and the outdoors
+  
+    ratio_df$pm1_ratio <- ratio_df$pm1.indoor / ratio_df$pm1.outdoor #create a column that's a ratio of pm1's
+    
+    ratio_df$concent_ratio <- ratio_df$concent_1.indoor / ratio_df$concent_1.outdoor #create a column that's a ratio of cpc
+  }
+  
+  #if the data doesn't have CPC data
+  else{
+    ratio_df <- merge(room_df, outdoor_df, by.x = "date", by.y = "date1min", all = TRUE, suffixes = c(".indoor", ".outdoor"))
+  
+    ratio_df$pm1_ratio <- ratio_df$pm1.indoor / ratio_df$pm1.outdoor
+    
+  }
+  
+  
+
+  
+  return(ratio_df)
+  
+}
+```
+
+
+We'll run this function on the datasets. 
+
+```{r}
+auditor_ratio <- ratio_merge(rooms$auditor, rooms$outdoor_ch, cpc = TRUE)
+engineering_ratio <- ratio_merge(rooms$engineering, rooms$outdoor_ch, cpc = TRUE)
+waterdept_ratio <- ratio_merge(rooms$waterdept, rooms$outdoor_ch, cpc = TRUE)
+mainroom_ratio <- ratio_merge(rooms$mainroom, rooms$outdoor_al, cpc = TRUE)
+
+veterans_ratio <- ratio_merge(pm_list$veterans, rooms$outdoor_al, cpc = FALSE)
+```
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+# Exporting csvs
+
+Make a list of the new dataframes: 
+
+```{r}
+ratios <- list("engineering_ratio" = engineering_ratio, "waterdept_ratio" = waterdept_ratio, "mainroom_ratio" = mainroom_ratio, "auditor_ratio" = auditor_ratio, "veterans_ratio" = veterans_ratio)
+```
+
+Export them:
+
+```{r}
+# mapply(
+#   write.table, #apply function write table
+#   x=ratios, file=paste(names(ratios), "csv", sep="."), #for each dataframe, use its name to make a csv of it
+#   MoreArgs=list(row.names=FALSE, sep=",")
+# )
+```
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+# Creating plots 
+
+Here, we'll create plots to see what the output data looks like: 
+
+```{r}
+lapply(names(ratios), function(x) plot(ratios[[x]]$date1min,ratios[[x]]$concent_1, main = x ))
+
+plot(ratios[["engineering_ratio"]]$date1min,ratios[["engineering_ratio"]]$concent_1, main = x )
+```
+
+And now we'll create simple plots of the ratios computed above:
+
+```{r}
+#plot(waterdept_ratio$date1min, waterdept_ratio$concent_ratio, type = "l")
+#plot(waterdept_ratio$date1min, waterdept_ratio$pm1_ratio, type = "l")
+```
+

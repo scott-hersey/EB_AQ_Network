@@ -1,0 +1,191 @@
+---
+title: "Calibration"
+---
+
+
+# Load Libraries 
+
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(matrixStats) # for rowMeans
+```
+
+# Load CPC Data 
+
+Here we load the data as a dataframe. 
+
+We will be using the same method to import as we used to do goal 2.
+
+Currently we are only loading and interacting with the calibration trial for 1/6.
+
+```{r}
+calibration_15 <- fread("./calibration_data/210106_Calibration/210106A0_015.TXT", header = TRUE, skip = 13)
+calibration_16 <- fread("./calibration_data/210106_Calibration/210106A0_016.TXT", header = TRUE, skip = 13)
+calibration_77 <- read.delim2("./calibration_data/210106_Calibration/210106A0_077.TXT", header = TRUE, skip = 14)
+calibration_77$concent <- as.numeric(as.character(calibration_77$concent))
+
+calibration <- list("calibration_15" = calibration_15, "calibration_16" = calibration_16, "calibration_77" = calibration_77)
+
+```
+# Clean CPC data 
+
+## Set datetime 
+
+Like in the goal 2 document and the QuantAQ initial walkthrough, we reformat the dates.
+
+```{r}
+calibration$calibration_15$date <- with(calibration$calibration_15, ymd(`#YY/MM/DD`) + hms(`HR:MN:SC`)) ##formatting datetime
+tz(calibration$calibration_15$date) <- "America/New_York" # define timezone
+
+calibration$calibration_16$date <- with(calibration$calibration_16, ymd(`#YY/MM/DD`) + hms(`HR:MN:SC`)) ##formatting datetime
+tz(calibration$calibration_16$date) <- "America/New_York" # define timezone
+
+calibration$calibration_77$date <- with(calibration$calibration_77, ymd(`X.YY.MM.DD`) + hms(`HR.MN.SC`)) ##formatting datetime
+tz(calibration$calibration_77$date) <- "America/New_York" # define timezone
+```
+
+
+## Look at non-numerical errors
+
+Here we make sure that the data is in the right format. 
+
+```{r}
+sapply(calibration$calibration_15, typeof)
+print("------")
+sapply(calibration$calibration_16, typeof)
+print("------")
+sapply(calibration$calibration_77, typeof)
+```
+
+I believe that we're just going to use concentration and date, so I think we do not need to change any types. 
+
+## Look at numerical errors 
+
+Are there any concentration data equal to or lower than 0?
+
+```{r}
+lapply(calibration, function(x) sprintf("Number of negative and zero values: %d", sum(x$concent <= 0, na.rm = TRUE)))
+```
+Let's set them to NA. 
+
+```{r}
+calibration <- sapply(calibration, function(x) {
+  x$concent[x$concent <= 0] <- NA
+  return(x)})
+```    
+
+First, we'll check how many values are below 1000: 
+
+```{r}
+lapply(calibration, function(x) sprintf("Number of values below 1000 particles/cm3: %d", sum(x$concent < 1000, na.rm = TRUE)))
+lapply(calibration, function(x) sprintf("Percentage of values below 1000 particles/cm3: %f", 100*(sum(x$concent < 1000, na.rm = TRUE)/ nrow(x))))
+```
+Next, we'll check how many values are above 100000: 
+
+```{r}
+lapply(calibration, function(x) sprintf("Number of values above 100000 particles/cm3: %d", sum(x$concent > 100000, na.rm = TRUE)))
+lapply(calibration, function(x) sprintf("Percentage of values above 100000 particles/cm3: %f", 100*sum(x$concent > 100000, na.rm = TRUE)/ nrow(x)))
+```
+Let's check what the data looks like: 
+
+```{r}
+lapply(names(calibration), function(x) timePlot(calibration[[x]], pollutant = "concent", main = x ))
+```
+
+Since it looks like all the data rises from zero in the same time interval, we can set low concent values to NA. 
+
+```{r}
+calibration <- sapply(calibration, function(x) {
+  x$concent[x$concent < 1000] <- NA
+  return(x)}
+       )
+```
+
+
+# Reformat data 
+
+In order to perform the averaging, we will bring together every concentration for every time stamp. 
+
+First, we make every dataframe into data.table objects. 
+
+```{r}
+calibration2 <- sapply(calibration, function(x) setDT(x)) #reformat the data into data.table objects
+```
+
+Next, we rename the columns of each dataset to differentiate them in a merged data table. We leave the "date" column as is, so that the data tables can merge on that column.
+
+```{r}
+# function for renaming, taken from stackoverflow, https://stackoverflow.com/questions/31718484/rename-the-multiple-columns-in-r 
+suffix_col_names <- function(your_df, start_col, end_col, your_str, your_sep){
+  for (i in start_col:end_col){
+    colnames(your_df)[i]<-paste(colnames(your_df)[i], sep=your_sep,your_str)
+  }
+  return(your_df)
+}
+  
+# adding "." and the sensor number to each column
+calibration2$calibration_15 <- suffix_col_names(calibration2$calibration_15, 1, ncol(calibration2$calibration_15), "15", ".")
+calibration2$calibration_16 <- suffix_col_names(calibration2$calibration_16, 1, ncol(calibration2$calibration_16), "16", ".")
+calibration2$calibration_77 <- suffix_col_names(calibration2$calibration_77, 1, ncol(calibration2$calibration_77), "77", ".")
+
+#renaming the date column back to "date"
+names(calibration2$calibration_15)[names(calibration2$calibration_15) == 'date.15'] <- 'date'
+names(calibration2$calibration_16)[names(calibration2$calibration_16) == 'date.16'] <- 'date'
+names(calibration2$calibration_77)[names(calibration2$calibration_77) == 'date.77'] <- 'date'
+```
+
+Now, we merge using the data table merge syntax.
+```{r}
+averaging_df <- calibration2$calibration_15[calibration2$calibration_16, on = 'date', all = FALSE]
+averaging_df <- averaging_df[calibration2$calibration_77, on = 'date', all = FALSE]
+```
+
+
+# Average Data 
+
+Here, we are creating the average time series, or “True” concentration: CCPCavg
+
+We do this by taking the mean for every second data was taken : taking the mean for every row. 
+
+```{r}
+averaging_df <- averaging_df[,c("date", "concent.15", "concent.16", "concent.77")] #just keep concentrations
+
+averaging_df <- averaging_df[, .(Mean = rowMeans(.SD)), by = c("date", "concent.15", "concent.16", "concent.77"), .SDcols = c("concent.15", "concent.16", "concent.77")] #take the mean by rows, keep all the original columns
+```
+
+
+# Time series of correction factors
+
+Next, we are going to create xn = CCPCavg/CCPCn. In other words, for each room, we're going to divide the mean by the room's concentration. 
+
+```{r}
+averaging_df$avg.15 <- averaging_df$Mean / averaging_df$concent.15
+averaging_df$avg.16 <- averaging_df$Mean / averaging_df$concent.16
+averaging_df$avg.77 <- averaging_df$Mean / averaging_df$concent.77
+```
+
+
+# Average correction factor for each CPC, which we can apply to the whole time series
+
+We are now going to take the sum of the vector created above.
+
+```{r}
+sum.avg.15 <- mean(averaging_df$avg.15, na.rm = TRUE)
+sum.avg.16 <- mean(averaging_df$avg.16, na.rm = TRUE)
+sum.avg.77 <- mean(averaging_df$avg.77, na.rm = TRUE)
+```
+
+We'll print them in a table format:
+
+```{r}
+printing_table <- data.table("15 Avg Correction Factor" = sum.avg.15, "16 Avg Correction Factor" = sum.avg.16, 
+                             "77 Avg Correction Factor" = sum.avg.77)
+
+print.data.frame(printing_table)
+```
+
+
