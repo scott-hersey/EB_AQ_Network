@@ -1,6 +1,6 @@
 ---
 title: "Initial Analysis Walkthrough"
-output: html_notebook
+#output: html_notebook
 ---
 
 # Overview
@@ -76,27 +76,27 @@ library(baseline) # for baseline correction
 If we want to import only certain variables, we can define what we want to import ahead of time
 
 ```{r}
-# # #defining which variables we'll keep
-#  final_vars <- c( "timestamp","timestamp_local","temp_box",  "temp_manifold", "rh_manifold", "pressure", 
-#                   "noise", "solar", "wind_dir", "wind_speed", "co", "no" , "no2", "o3" ,  "pm1" , "pm25",
-#                   "pm10", "co2" ) #final variables to keep
-# 
-# # temp_box	temp_manifold	rh_manifold	pressure	noise	solar	wind_dir	wind_speed
-#  raw_vars <- c("timestamp","bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "no_ae", "co_ae", "no2_ae") #raw variables to keep
+# #defining which variables we'll keep
+ final_vars <- c( "timestamp","timestamp_local","temp_box",  "temp_manifold", "rh_manifold", "pressure",
+                  "noise", "solar", "wind_dir", "wind_speed", "co", "no" , "no2", "o3" ,  "pm1" , "pm25",
+                  "pm10", "co2" ) #final variables to keep
+
+# temp_box	temp_manifold	rh_manifold	pressure	noise	solar	wind_dir	wind_speed
+ raw_vars <- c("timestamp","bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "no_ae", "co_ae", "no2_ae") #raw variables to keep
 ```
 
 Next, we'll import all the final and raw datafiles separately. We do this by finding all the csv's with "final" or "raw" in the name, and then applying the R read function to them. If you prefer to import all variables, comment the "sapply" functions that are being used, and uncomment the ones below it. The difference between them is that the currently uncommented one uses the "select" parameter, and the commented one doesn't.
 
 ```{r}
-# #finding all final datasets
-# temp = list.files(path = "./data/quant_aq/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
-# finalfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
-# #finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
-# 
-# #finding all raw datasets
-# temp = list.files(path = "./data/quant_aq", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
-# rawfiles = sapply(temp, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE)
-# #rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
+#finding all final datasets
+temp = list.files(path = "./data/quant_aq/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
+finalfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
+#finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
+
+#finding all raw datasets
+temp = list.files(path = "./data/quant_aq", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
+rawfiles = sapply(temp, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE)
+#rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 The output of the above functions gives a list of data tables. Since we included the sapply parameter "use.names", it attached the file name to each data.table. Since we used data.table = TRUE, we can be sure that the data is given in the data.table format, which has a more efficient runtime for large datasets.
@@ -104,10 +104,10 @@ The output of the above functions gives a list of data tables. Since we included
 Let's use an easier naming conventon. Since we used a specific naming scheme and a specific path, we can just extract the part of the path name that describes the dataset. Specifically, we're extracting "sn" and the sensor number. For example, "sn45" or "sn46".
 
 ```{r}
-# names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 18, 21)) #extract the real sensor names from the current names used in the list
-# names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 17, 20))
-# names(finalfiles)
-# names(rawfiles)
+names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 18, 21)) #extract the real sensor names from the current names used in the list
+names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 17, 20))
+names(finalfiles)
+names(rawfiles)
 ``` 
 
 Next, we want to combine the final and raw files for a given sensor. However, it will be beneficial to keep the sensors as a list of dataframes, as we'll see later.
@@ -116,7 +116,7 @@ Since the final and raw datasets could have a different number of rows, we'll me
 
 
 ```{r}
-# snfiles <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
+snfiles <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 
@@ -240,10 +240,10 @@ The data will download as a zip file. Extract the contents of the zip file, and 
 These datafiles aren't divided into final and raw, so we don't have to combine files. Instead, we can create one list of variables we want to extract (instead of two, like in the normal workflow). 
 
 ```{r}
-#defining which variables we'll keep
-final_vars <- c( "timestamp","timestamp_local","temp_box",  "temp_manifold", "rh_manifold", "pressure", 
-                  "noise", "solar", "wind_dir", "wind_speed", "co", "no" , "no2", "o3" ,  "pm1" , "pm25",
-                  "pm10", "co2" , "no_ae", "co_ae", "no2_ae", "bin0", "bin1", "bin2", "bin3", "bin4", "bin5") 
+# #defining which variables we'll keep
+# final_vars <- c( "timestamp","timestamp_local","temp_box",  "temp_manifold", "rh_manifold", "pressure", 
+#                   "noise", "solar", "wind_dir", "wind_speed", "co", "no" , "no2", "o3" ,  "pm1" , "pm25",
+                  # "pm10", "co2" , "no_ae", "co_ae", "no2_ae", "bin0", "bin1", "bin2", "bin3", "bin4", "bin5") 
 ```
 
 The data files can be categorized based on which sensor they represent. 
@@ -253,22 +253,22 @@ Initially, the data files were categorized by whether they are "f0" or "f1" (bot
 Currently, there are only "f0" files, so we'll specify we're looking at datafiles with "f0" in the name. 
 
 ```{r}
-temp = list.files(path = "./data/quant_aq/", pattern = "^.*-f0.*\\.csv", full.names = TRUE) #specify files we're looking for
-snfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE) #importing them
+# temp = list.files(path = "./data/quant_aq/", pattern = "^.*-f0.*\\.csv", full.names = TRUE) #specify files we're looking for
+# snfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE) #importing them
 ```
 Like in the normal workflow, we can reformat the names. Again, we'll only keep the relevant parts of the filenames. 
 
 ```{r}
-new_names <- lapply(names(snfiles), function(x) substr(x, 17, 26)) #extract the real sensor names from the current names used in the list
-names(snfiles) <- new_names #rename list names
-names(snfiles)
+# new_names <- lapply(names(snfiles), function(x) substr(x, 17, 26)) #extract the real sensor names from the current names used in the list
+# names(snfiles) <- new_names #rename list names
+# names(snfiles)
 ```
 
 As we see, these are in a different format than the ones imported from the QuantAQ website. We can change this by doing a string replacement - "sn" instead of "Output-0"
 
 ```{r}
-names(snfiles) <- lapply(names(snfiles), function(x) str_replace(x, "Output-0", "sn"))
-names(snfiles)
+# names(snfiles) <- lapply(names(snfiles), function(x) str_replace(x, "Output-0", "sn"))
+# names(snfiles)
 ```
 
 
@@ -347,6 +347,43 @@ In order to apply it to every dataframe, we can run lapply (list apply) which wi
 ```{r}
 snfiles[c(-1)] <- lapply(snfiles[c(-1)], function(x) clean_sensor_data(x)) 
 ```
+
+#### Removing Unwanted Time Intervals 
+
+There are time periods in the ambient data that we know we don't want to keep. For example, we don't want to keep any data from periods of calibration. In this section we will be removing time intervals from the data that we don't want. 
+
+To show how this is done, we will be removing the period [5/20/2020, 7/30/2020] from sn45. 
+
+```{r}
+rows_to_remove <- snfiles$sn45[date %between% c("2020-05-20 00:00:00 EDT", "2020-07-31 23:59:00 EDT")]
+snfiles$sn45 <- anti_join(snfiles$sn45, rows_to_remove)
+```
+
+And show that those dates are gone: 
+
+```{r}
+print( snfiles$sn45[date > "2020-05-10 00:00:00 EDT" & date < "2020-08-10 23:59:00 EDT"])
+```
+And now we can make the above operation into a function and apply it to all the dataframes.
+
+```{r}
+remove_dates <- function(dataset, startdate, enddate){
+  rows_to_remove <- dataset[date %between% c(startdate, enddate)]
+  dataset <- anti_join(dataset, rows_to_remove)
+  return(dataset)
+}
+```
+
+```{r}
+snfiles[c(-1)] <- lapply(snfiles[c(-1)], function(x) remove_dates(x,"2020-05-20 00:00:00 EDT","2020-07-31 23:59:00 EDT"))
+```
+
+We can also make sure that all the dataframes start at the same date: 
+
+```{r}
+snfiles <- lapply(snfiles, function(x) x[date > "2020-09-07 00:00:00 EST"])
+```
+
 
 ## Merging 
 
@@ -557,11 +594,13 @@ Auxiliary electrodes indicate that the corresponding data could be incorrect. Be
 
 In the future, we could add more auxiliary electrode checks. Therefore, we'll create an general auxiliary electrode function which takes in a variable and an auxiliary electrode. The equation will measure the standard deviation of the change in ae values, and pick out datapoints where the sd surpasses a limit that the user sets. We'll write the equation below: 
 
+
+
 ```{r}
 ae_cleaning <- function(sensor, pollutant, ae_val, sd_val){
   ae_derivative <- c(0,diff(sensor[[ae_val]], na.rm = TRUE)) #create vector of derivatives
 
-  sensor[which(abs(ae_derivative) < sd_val*(sd(abs(ae_derivative), na.rm=TRUE))), pollutant] <- NA #compare sd
+  sensor[which(abs(ae_derivative) > sd_val*(sd(abs(ae_derivative), na.rm=TRUE))), pollutant] <- NA #compare sd
   
   return(sensor)
 }
@@ -570,7 +609,7 @@ ae_cleaning <- function(sensor, pollutant, ae_val, sd_val){
 For now, we're interested in no. We can filter no values that have a change in no_ae above 2.5 sd from the mean:
 
 ```{r}
-snfiles <- lapply(snfiles, function(x) ae_cleaning(x, "no", "no_ae", 2.5)) 
+snfiles_no_test <- lapply(snfiles, function(x) ae_cleaning(x, "no", "no_ae", 2.5)) 
 ```
 
 
@@ -580,7 +619,7 @@ In the future, we can use this function to filter for multiple ae values at once
 parameter_list = list(c("no", "no_ae", 2.5), c("no2", "no2_ae", 2))
 
 for(parameters in parameter_list){
-  snfiles <- lapply(snfiles, function(x) ae_cleaning(x, parameters[1], parameters[2], as.numeric(parameters[3]))) 
+  snfiles <- lapply(snfiles, function(x) ae_cleaning(x, parameters[1], parameters[2], as.numeric(parameters[3])))
 }
 ```
 
@@ -731,9 +770,9 @@ snfiles <- lapply(snfiles, function(x) apply_flags(x))
 We can check if these flags capture outlying values well by printing out plots where flags occur. First, however, we'll check how many intervals of flagged values there are, to make sure that we're not generating hundreds of graphs. 
 
 ```{r}
-for(var in 1:6){
-  lapply(snfiles, function(x) print_flag_intervals(x, var))
-}
+# for(var in 1:6){
+#   lapply(snfiles, function(x) print_flag_intervals(x, var))
+# }
 ```
 
 If the number of intervals is too high, it might be good to raise the limit. 
@@ -746,7 +785,7 @@ Otherwise, we can print the plots below. Below, there are two options how to pri
 flags_list = list(c(2,"co2"), c(3,"no2"), c(6, "no"))
 for(i in flags_list){
   #pdf(paste("check_flags_", i, ".pdf", sep = ""))
-  lapply(snfiles, function(x) check_flags(x, i[1], i[2]))
+  #lapply(snfiles, function(x) check_flags(x, i[1], i[2]))
   #dev.off()
 }
 ```
@@ -784,7 +823,23 @@ snfiles$sn49$flag <- NULL
 snfiles$sn62$flag <- NULL 
 snfiles$sn67$flag <- NULL 
 snfiles$sn72$flag <- NULL 
+```
 
+
+Next, we'll make an Igor date column, to make importing into Igor faster: 
+
+```{r}
+create_date_for_igor <- function(dataset){
+  ymd_col <- c(as.character(format(dataset$date, "%Y-%m-%d")) )
+  middle <- rep(" ", length(ymd_col))
+  hms_col <- c(as.character(format(dataset$date, "%H:%M:%S")))
+  dataset$igor_date <- paste(ymd_col, middle, hms_col)
+  return(dataset)
+}
+```
+
+```{r}
+snfiles <- lapply(snfiles, function(x) create_date_for_igor(x))
 ```
 
 
@@ -993,6 +1048,33 @@ for (i in seq(length(names(snfiles)))){
 # Export 
 
 The last thing we'll do is export the data into csvs. 
+
+## Split pre-covid and post-covid
+
+Since we are keeping pre-covid and post-covid times separate in our analysis, we'll separate the files: 
+
+```{r}
+snfiles$sn45_before <- snfiles$sn45[date < "2020-03-01 00:00:00 EST"]
+snfiles$sn45_after <- snfiles$sn45[date > "2020-04-01 00:00:00 EST"]
+
+snfiles$sn46_before <- snfiles$sn46[date < "2020-03-01 00:00:00 EST"]
+snfiles$sn46_after <- snfiles$sn46[date > "2020-04-01 00:00:00 EST"]
+
+snfiles$sn49_before <- snfiles$sn49[date < "2020-03-01 00:00:00 EST"]
+snfiles$sn49_after <- snfiles$sn49[date > "2020-04-01 00:00:00 EST"]
+
+snfiles$sn62_before <- snfiles$sn62[date < "2020-03-01 00:00:00 EST"]
+snfiles$sn62_after <- snfiles$sn62[date > "2020-04-01 00:00:00 EST"]
+
+snfiles$sn67_before <- snfiles$sn67[date < "2020-03-01 00:00:00 EST"]
+snfiles$sn67_after <- snfiles$sn67[date > "2020-04-01 00:00:00 EST"]
+
+snfiles$sn72_before <- snfiles$sn72[date < "2020-03-01 00:00:00 EST"]
+snfiles$sn72_after <- snfiles$sn72[date > "2020-04-01 00:00:00 EST"]
+```
+
+
+## Export
 
 Since we want to save the datasets to files with representative names, we can use mapply (like lapply but with more functionality). For each dataset, we can set the name we used when we set snfiles as the file names. 
 
