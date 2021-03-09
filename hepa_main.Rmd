@@ -378,7 +378,7 @@ cpc_list2 <- lapply(cpc_list, average_cpc)
 The function we are using is also based on line 74 of the initial analysis walkthrough. 
 
 ```{r}
-rooms <- sapply(names(cpc_list), function(k) merge(cpc_list2[[k]], pm_list[[k]], by.x = "date1min", by.y = "date", all = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+rooms <- sapply(names(cpc_list), function(k) merge(cpc_list2[[k]], pm_list[[k]], by.x = "date1min", by.y = "date", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -434,7 +434,7 @@ ratio_merge <- function(room_df, outdoor_df, cpc = TRUE){
   
   # if the dataset has CPC data
   if(cpc == TRUE){
-    ratio_df <- merge(room_df, outdoor_df, by.x = "date1min", by.y = "date1min", all = TRUE, suffixes = c(".indoor", ".outdoor")) #merge the data from the room and the outdoors
+    ratio_df <- merge(room_df, outdoor_df, by.x = "date1min", by.y = "date1min", all.x = TRUE, suffixes = c(".indoor", ".outdoor")) #merge the data from the room and the outdoors
   
     ratio_df$pm1_ratio <- ratio_df$pm1.indoor / ratio_df$pm1.outdoor #create a column that's a ratio of pm1's
     
@@ -443,7 +443,7 @@ ratio_merge <- function(room_df, outdoor_df, cpc = TRUE){
   
   #if the data doesn't have CPC data
   else{
-    ratio_df <- merge(room_df, outdoor_df, by.x = "date", by.y = "date1min", all = TRUE, suffixes = c(".indoor", ".outdoor"))
+    ratio_df <- merge(room_df, outdoor_df, by.x = "date", by.y = "date1min", all.x = TRUE, suffixes = c(".indoor", ".outdoor"))
   
     ratio_df$pm1_ratio <- ratio_df$pm1.indoor / ratio_df$pm1.outdoor
     
@@ -483,29 +483,25 @@ ratios <- list("engineering_ratio" = engineering_ratio, "waterdept_ratio" = wate
 Export them:
 
 ```{r}
-# mapply(
-#   write.table, #apply function write table
-#   x=ratios, file=paste(names(ratios), "csv", sep="."), #for each dataframe, use its name to make a csv of it
-#   MoreArgs=list(row.names=FALSE, sep=",")
-# )
+mapply(
+  write.table, #apply function write table
+  x=ratios, file=paste(names(ratios), "csv", sep="."), #for each dataframe, use its name to make a csv of it
+  MoreArgs=list(row.names=FALSE, sep=",")
+)
 ```
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
-# Creating plots 
-
-Here, we'll create plots to see what the output data looks like: 
+# Making sure the files read in correctly 
 
 ```{r}
-lapply(names(ratios), function(x) plot(ratios[[x]]$date1min,ratios[[x]]$concent_1, main = x ))
+read_in_files <- list.files(path = ".", pattern = "*.csv", full.names = TRUE)
 
-plot(ratios[["engineering_ratio"]]$date1min,ratios[["engineering_ratio"]]$concent_1, main = x )
+ratios_read_in <- sapply(read_in_files, function(x) fread(file= x, header = TRUE, data.table = TRUE), USE.NAMES = TRUE)
+
+names(ratios_read_in)<- lapply(names(ratios_read_in), function(x) substr(x, 3, 11))
 ```
 
-And now we'll create simple plots of the ratios computed above:
 
-```{r}
-#plot(waterdept_ratio$date1min, waterdept_ratio$concent_ratio, type = "l")
-#plot(waterdept_ratio$date1min, waterdept_ratio$pm1_ratio, type = "l")
-```
+
 
