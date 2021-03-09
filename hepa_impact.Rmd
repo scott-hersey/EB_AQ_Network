@@ -1,0 +1,346 @@
+---
+title: "hepa_impact"
+author: "Megan Ku"
+date: "3/4/2021"
+output: html_document
+---
+
+```{r setup, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(readr) #read .csv files
+library(ggplot2) #plotting
+```
+
+## HEPA Impact Plot
+
+This notebook focuses on creating visuals to highlight the impact of HEPA
+purifiers on particle concentration in classrooms.
+
+### Setup
+In hepa_main.Rmd, uncomment the code in the chunk at line 486 to download the 
+processed data as .csv files. We will start by importing them here.
+
+TODO: investigate why so many columns in auditor and mainroom are reading as 
+logical instead of double
+```{r}
+waterdept_ratio <- read_csv('waterdept_ratio.csv')
+
+auditor_ratio <- read_csv('auditor_ratio.csv', col_types = cols(
+  concent_ratio = col_double()
+))
+
+mainroom_ratio <- read_csv('mainroom_ratio.csv', col_types = cols(
+  concent_ratio = col_double()
+))
+
+# engineering_ratio <- read_csv('engineering_ratio.csv')
+
+```
+
+```{r}
+ratio_list <- list(
+  "auditor" = auditor_ratio,
+  "waterdept" = waterdept_ratio,
+  "mainroom" = mainroom_ratio
+  # "engineering" = engineering_ratio
+  )
+```
+
+
+To make the data frame more manageable, we'll only select these columns:
+date1min, 
+concent_ratio, 
+bin0.outdoor & bin0.indoor, 
+neph_bin0.outdoor, & neph_bin0.indoor, 
+pm1_ratio
+
+```{r}
+simplify_ratio_data <- function(room) {
+  room <- room %>%
+    # Add/delete relevant columns here
+    select(date1min, 
+           concent_ratio, 
+           bin0.outdoor, 
+           bin0.indoor, 
+           neph_bin0.outdoor, 
+           neph_bin0.indoor, 
+           pm1_ratio)
+  return(room)
+}
+
+ratio_list <- lapply(ratio_list,  function(x) simplify_ratio_data(x)) # Only save columns of importance 
+```
+
+Since times were imported as UTC, the below code block switches them back to
+Eastern.
+
+```{r}
+time_to_eastern <- function(room) {
+  tz(room$date1min) <- "America/New_York"
+  return(room)
+}
+
+ratio_list <- lapply(ratio_list,  function(x) time_to_eastern(x)) # Only save columns of importance 
+```
+
+```{r}
+print(ratio_list$auditor$date1min[1])
+```
+
+Let's filter the data for the times before and after the HEPA purifiers were
+installed. Dataframes with '_HEPA' indicate data taken post HEPA purifier 
+installation.
+
+```{r}
+
+ratio_list$auditor_HEPA <- ratio_list$auditor %>%
+  filter(date1min > as.POSIXct("2021-01-19 09:20:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-01-25 09:03:00", tz='America/New_York'))
+
+ratio_list$mainroom_HEPA <- ratio_list$mainroom %>%
+  filter(date1min > as.POSIXct("2021-01-27 12:30:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-01-27 19:53:00", tz='America/New_York'))
+
+ratio_list$waterdept_HEPA <- ratio_list$waterdept %>%
+  filter(date1min > as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-01-13 12:08:00", tz='America/New_York'))
+
+ratio_list$auditor <- ratio_list$auditor %>%
+  filter(date1min > as.POSIXct("2021-01-13 12:49:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-01-19 09:20:00", tz='America/New_York'))
+
+ratio_list$mainroom <- ratio_list$mainroom %>%
+  filter(date1min > as.POSIXct("2021-01-25 09:50:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-01-27 12:30:00", tz='America/New_York'))
+
+ratio_list$waterdept <- ratio_list$waterdept %>%
+  filter(date1min > as.POSIXct("2021-01-06 08:45:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'))
+
+# ratio_list$engineering <- engineering %>%
+#   filter(date1min > as.POSIXct("2021-01-13 12:49:00", tz='UTC'), date1min < as.POSIXct("2021-01-13 12:08:00", tz='UTC'))
+```
+We should now visually inspect the data and look out for bad measurements 
+(exponential decay) and remove them from our data.
+
+
+```{r}
+ratio_list
+```
+
+```{r}
+# viz <- ggplot(data=waterdept, aes(x=date1min, y=concent_ratio)) + 
+#   geom_line() +
+#   #Change time stamp to inspect different time periods
+#   xlim(as.POSIXct("2021-01-06 8:46:00", tz='UTC'),as.POSIXct("2021-01-07 8:46:00", tz='UTC')) + 
+#   ylim(0,2)
+# viz 
+```
+
+
+Let's calculate the mean concentration ratios before and after the HEPA 
+installation.
+```{r}
+# waterdept_mean_old <- waterdept %>%
+#   summarize(mean(concent_ratio, na.rm=TRUE))
+# 
+# waterdept_mean_old <- waterdept_mean_old[[1]]
+# print(waterdept_mean_old)
+# 
+# waterdept_mean_new <- waterdept_HEPA %>%
+#   summarize(mean(concent_ratio, na.rm=TRUE))
+# waterdept_mean_new <- waterdept_mean_new[[1]]
+
+calculate_mean_ratio <- function(room) {
+  mean_concent_ratio <- room %>%
+    summarize(mean(concent_ratio, na.rm=TRUE))
+  mean_concent_ratio <- mean_concent_ratio %>%
+    rename(
+      val = "mean(concent_ratio, na.rm = TRUE)"
+    )
+  return(mean_concent_ratio)
+}
+
+mean_concent_ratios <- lapply(ratio_list, function(x) calculate_mean_ratio(x))
+
+mean_concent_ratios
+```
+Percent concentration decrease with addition of HEPA Purifier in Water 
+Department room: 44.70%. This is awesome!
+
+```{r}
+mean_concent_ratios$waterdept_HEPA$val[1]
+```
+
+
+```{r}
+viz <- ggplot(data=ratio_list$waterdept, aes(x=date1min, y=concent_ratio)) + 
+  # Data Points
+  geom_point(aes(alpha=1/10)) +
+  geom_point(data=ratio_list$waterdept_HEPA,
+             aes(alpha=1/10)) +
+
+  #Mean before HEPA
+  geom_segment(
+    aes(x=as.POSIXct("2021-01-06 8:46:00", tz='America/New_York'),
+        y=mean_concent_ratios$waterdept$val[1],
+        xend=as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'),
+        yend=mean_concent_ratios$waterdept$val[1],
+        color="Mean Concentration Pre-HEPA"),
+    lwd=1.25) +
+  
+  #Mean after HEPA
+  geom_segment(
+    aes(x=as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'),
+        y=mean_concent_ratios$waterdept_HEPA$val[1],
+        xend=as.POSIXct("2021-01-13 12:08:00", tz='America/New_York'),
+        yend=mean_concent_ratios$waterdept_HEPA$val[1],
+        color="Mean Concentration Post-HEPA"),
+    lwd=1.25) +
+
+  #Installation
+  geom_vline(
+    aes(xintercept=as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'),
+        alpha=1,
+        linetype='solid'),
+    lwd=1.25) +
+  
+  #Labels
+  labs(title="Effects of HEPA Purifiers on Air Concentration", 
+       subtitle= "Revere City Hall: Water Department Room", 
+       x="Date", 
+       y="Indoor/Outdoor Particle Concentration (CPC)", 
+       color="Metrics", 
+       caption="The Water Department Room experienced a 44.70% decrease \n in particle concentration after HEPA purifier installation.") + 
+  #Reverse order of legend
+  guides(
+    color = guide_legend(reverse=TRUE)
+    ) +
+  scale_linetype_discrete(
+    name="", 
+    labels = c('HEPA Purifier Installation')
+    ) + 
+  #limits
+  ylim(0,1) +
+  xlim(as.POSIXct("2021-01-06 8:46:00", tz='America/New_York'),as.POSIXct("2021-01-13 12:09:00", tz='America/New_York')) +
+  #Omit gradient aesthetic of datapoints
+  guides(alpha=FALSE)
+
+viz
+```
+
+```{r}
+viz <- ggplot(data=ratio_list$auditor, aes(x=date1min, y=concent_ratio)) + 
+  # Data Points
+  geom_point(aes(alpha=1/10)) +  
+  geom_point(data=ratio_list$auditor_HEPA, 
+             aes(alpha=1/10)) +
+
+  #Mean before HEPA
+  geom_segment(
+    aes(x=as.POSIXct("2021-01-13 12:49:00", tz='America/New_York'), 
+        y=mean_concent_ratios$auditor$val[1], 
+        xend=as.POSIXct("2021-01-19 09:20:00", tz='America/New_York'), 
+        yend=mean_concent_ratios$auditor$val[1], 
+        color="Mean Concentration Pre-HEPA"),
+    lwd=1.25) + 
+  
+  #Mean after HEPA
+  geom_segment(
+    aes(x=as.POSIXct("2021-01-19 09:20:00", tz='America/New_York'), 
+        y=mean_concent_ratios$auditor_HEPA$val[1], 
+        xend=as.POSIXct("2021-01-25 09:03:00", tz='America/New_York'), 
+        yend=mean_concent_ratios$auditor_HEPA$val[1], 
+        color="Mean Concentration Post-HEPA"), 
+    lwd=1.25) +
+    
+  #Installation
+  geom_vline(
+    aes(xintercept=as.POSIXct("2021-01-19 09:20:00", tz='America/New_York'), 
+        alpha=1, 
+        linetype='solid'), 
+    lwd=1.25) + 
+  #Labels
+  labs(title="Effects of HEPA Purifiers on Air Concentration", 
+       subtitle= "Revere City Hall: Auditor Room", 
+       x="Date", 
+       y="Indoor/Outdoor Particle Concentration (CPC)", 
+       color="Metrics", 
+       caption="The Auditor Room experienced a xx% decrease \n in particle concentration after HEPA purifier installation.") + 
+  #Reverse order of legend
+  guides(
+    color = guide_legend(reverse=TRUE)
+    ) +
+  scale_linetype_discrete(
+    name="", 
+    labels = c('HEPA Purifier Installation')
+    ) + 
+  #limits
+  ylim(0,1) +
+  xlim(as.POSIXct("2021-01-13 12:49:00", tz='America/New_York'),as.POSIXct("2021-01-25 09:03:00", tz='America/New_York')) +
+  #Omit gradient aesthetic of datapoints
+  guides(alpha=FALSE)
+
+viz
+```
+
+
+```{r}
+viz <- ggplot(data=ratio_list$mainroom, aes(x=date1min, y=concent_ratio)) + 
+  # Data Points
+  geom_point(aes(alpha=1/10)) +  
+  geom_point(data=ratio_list$mainroom_HEPA, 
+             aes(alpha=1/10)) +
+
+  #Mean before HEPA
+  geom_segment(
+    aes(x=as.POSIXct("2021-01-25 09:50:00", tz='America/New_York'), 
+        y=mean_concent_ratios$mainroom$val[1], 
+        xend=as.POSIXct("2021-01-27 12:30:00", tz='America/New_York'), 
+        yend=mean_concent_ratios$mainroom$val[1], 
+        color="Mean Concentration Pre-HEPA"),
+    lwd=1.25) + 
+  
+  #Mean after HEPA
+  geom_segment(
+    aes(x=as.POSIXct("2021-01-27 12:30:00", tz='America/New_York'), 
+        y=mean_concent_ratios$mainroom_HEPA$val[1], 
+        xend=as.POSIXct("2021-01-27 19:53:00", tz='America/New_York'), 
+        yend=mean_concent_ratios$mainroom_HEPA$val[1], 
+        color="Mean Concentration Post-HEPA"), 
+    lwd=1.25) +
+    
+  #Installation
+  geom_vline(
+    aes(xintercept=as.POSIXct("2021-01-27 12:30:00", tz='America/New_York'), 
+        alpha=1, 
+        linetype='solid'), 
+    lwd=1.25) + 
+  #Labels
+  labs(title="Effects of HEPA Purifiers on Air Concentration", 
+       subtitle= "VFW: Main Room", 
+       x="Date", 
+       y="Indoor/Outdoor Particle Concentration (CPC)", 
+       color="Metrics", 
+       caption="The Main room experienced a xx% decrease \n in particle concentration after HEPA purifier installation.") + 
+  #Reverse order of legend
+  guides(
+    color = guide_legend(reverse=TRUE)
+    ) +
+  scale_linetype_discrete(
+    name="", 
+    labels = c('HEPA Purifier Installation')
+    ) + 
+  #limits
+  ylim(0,1) +
+  xlim(as.POSIXct("2021-01-25 09:50:00", tz='America/New_York'),as.POSIXct("2021-01-27 19:53:00", tz='America/New_York')) +
+  #Omit gradient aesthetic of datapoints
+  guides(alpha=FALSE)
+
+viz
+```
