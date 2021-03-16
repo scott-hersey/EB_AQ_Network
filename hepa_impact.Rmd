@@ -63,13 +63,14 @@ pm1_ratio
 simplify_ratio_data <- function(room) {
   room <- room %>%
     # Add/delete relevant columns here
+    mutate(bin0_ratio = bin0.indoor/bin0.outdoor) %>%
+    mutate(neph_bin0_ratio = neph_bin0.indoor/neph_bin0.outdoor) %>%
     select(date1min, 
            concent_ratio, 
-           bin0.outdoor, 
-           bin0.indoor, 
-           neph_bin0.outdoor, 
-           neph_bin0.indoor, 
+           bin0_ratio,
+           neph_bin0_ratio,
            pm1_ratio)
+    
   return(room)
 }
 
@@ -174,12 +175,21 @@ Percent concentration decrease with addition of HEPA Purifier in Water
 Department room: 44.70%. This is awesome!
 
 ```{r}
-mean_concent_ratios$waterdept_HEPA$val[1]
-```
+waterdept_ratio_pchange <- (mean_concent_ratios$waterdept_HEPA$val[1] - mean_concent_ratios$waterdept$val[1])/mean_concent_ratios$waterdept$val[1] * 100
 
+auditor_ratio_pchange <- (mean_concent_ratios$auditor_HEPA$val[1] - mean_concent_ratios$auditor$val[1])/mean_concent_ratios$auditor$val[1] * 100
+
+mainroom_ratio_pchange <- (mean_concent_ratios$mainroom_HEPA$val[1] - mean_concent_ratios$mainroom$val[1])/mean_concent_ratios$mainroom$val[1] * 100
+
+paste('Water Department:', waterdept_ratio_pchange, "% decrease")
+paste('Auditor Room:', auditor_ratio_pchange, "% decrease")
+paste('Main Room:', mainroom_ratio_pchange, "% decrease")
+
+```
+Let's start with the Water Department Room. First we'll make a time-based plot to observe the change in concentration based on CPC data.
 
 ```{r}
-viz <- ggplot(data=ratio_list$waterdept, aes(x=date1min, y=concent_ratio)) + 
+waterdept_CPC_timeplot <- ggplot(data=ratio_list$waterdept, aes(x=date1min, y=concent_ratio)) + 
   # Data Points
   geom_point(aes(alpha=1/10)) +
   geom_point(data=ratio_list$waterdept_HEPA,
@@ -211,7 +221,7 @@ viz <- ggplot(data=ratio_list$waterdept, aes(x=date1min, y=concent_ratio)) +
     lwd=1.25) +
   
   #Labels
-  labs(title="Effects of HEPA Purifiers on Air Concentration", 
+  labs(title="Effect of HEPA Purifiers on Air Concentration", 
        subtitle= "Revere City Hall: Water Department Room", 
        x="Date", 
        y="Indoor/Outdoor Particle Concentration (CPC)", 
@@ -231,11 +241,65 @@ viz <- ggplot(data=ratio_list$waterdept, aes(x=date1min, y=concent_ratio)) +
   #Omit gradient aesthetic of datapoints
   guides(alpha=FALSE)
 
-viz
+waterdept_CPC_timeplot
 ```
 
+Let's investigate the data by using a boxplot. Before we do that, though, we must make our data tidy.
+
 ```{r}
-viz <- ggplot(data=ratio_list$auditor, aes(x=date1min, y=concent_ratio)) + 
+waterdept_tidy <- ratio_list$waterdept %>%
+  gather('concent_ratio', 
+'pm1_ratio', 'bin0_ratio', 'bin0_ratio', 'neph_bin0_ratio', key="ratio_type", value="value")
+
+waterdept_HEPA_tidy <- ratio_list$waterdept_HEPA %>%
+  rename(concent_ratio.HEPA = concent_ratio,
+         pm1_ratio.HEPA = pm1_ratio,
+         bin0_ratio.HEPA = bin0_ratio,
+         neph_bin0_ratio.HEPA = neph_bin0_ratio) %>%
+  gather('concent_ratio.HEPA', 
+'pm1_ratio.HEPA', 'bin0_ratio.HEPA', 'neph_bin0_ratio.HEPA', key="ratio_type", value="value")
+
+waterdept_tidy <- rbind(waterdept_tidy, waterdept_HEPA_tidy)
+
+```
+
+
+```{r}
+
+waterdept_boxplot <- ggplot(data=waterdept_tidy, aes(x=ratio_type, y=value)) +
+  geom_boxplot(aes(fill=ratio_type)) +
+  
+  scale_x_discrete(breaks=c("bin0_ratio", "bin0_ratio.HEPA",
+                            "concent_ratio", "concent_ratio.HEPA",
+                            "neph_bin0_ratio", "neph_bin0_ratio.HEPA",
+                            "pm1_ratio","pm1_ratio.HEPA"),
+                   labels=c("Bin 0", "Bin 0 (HEPA)", 
+                            "CPC Concent.", "CPC Concent. (HEPA)",
+                            "Neph. Bin 0", "Neph. Bin 0 (HEPA)",
+                            "PM1", "PM1 (HEPA)")) + 
+  
+  theme(axis.text.x = element_text(angle = 50, hjust=1)) + 
+  
+  labs(title="Effect of HEPA Purifiers on Particle Ratios", 
+       subtitle= "Revere City Hall: Water Department Room", 
+       x="Particle Ratio Type", 
+       y="Indoor/Outdoor Ratio") +
+  
+  scale_fill_discrete(name = "Particle Ratio Type", 
+                      labels = c("Bin 0", "Bin 0 (HEPA)", 
+                                 "CPC Concentration", "CPC Concentration (HEPA)",
+                                 "Nephlometer Bin 0", "Nephlometer Bin 0 (HEPA)",
+                                 "PM1", "PM1 (HEPA)")) + 
+  
+  ylim(0,1)
+
+waterdept_boxplot
+```
+
+
+
+```{r}
+auditor_CPC_timeplot <- ggplot(data=ratio_list$auditor, aes(x=date1min, y=concent_ratio)) + 
   # Data Points
   geom_point(aes(alpha=1/10)) +  
   geom_point(data=ratio_list$auditor_HEPA, 
@@ -266,7 +330,7 @@ viz <- ggplot(data=ratio_list$auditor, aes(x=date1min, y=concent_ratio)) +
         linetype='solid'), 
     lwd=1.25) + 
   #Labels
-  labs(title="Effects of HEPA Purifiers on Air Concentration", 
+  labs(title="Effect of HEPA Purifiers on Air Concentration", 
        subtitle= "Revere City Hall: Auditor Room", 
        x="Date", 
        y="Indoor/Outdoor Particle Concentration (CPC)", 
@@ -286,12 +350,12 @@ viz <- ggplot(data=ratio_list$auditor, aes(x=date1min, y=concent_ratio)) +
   #Omit gradient aesthetic of datapoints
   guides(alpha=FALSE)
 
-viz
+auditor_CPC_timeplot
 ```
 
 
 ```{r}
-viz <- ggplot(data=ratio_list$mainroom, aes(x=date1min, y=concent_ratio)) + 
+mainroom_CPC_timeplot <- ggplot(data=ratio_list$mainroom, aes(x=date1min, y=concent_ratio)) + 
   # Data Points
   geom_point(aes(alpha=1/10)) +  
   geom_point(data=ratio_list$mainroom_HEPA, 
@@ -322,7 +386,7 @@ viz <- ggplot(data=ratio_list$mainroom, aes(x=date1min, y=concent_ratio)) +
         linetype='solid'), 
     lwd=1.25) + 
   #Labels
-  labs(title="Effects of HEPA Purifiers on Air Concentration", 
+  labs(title="Effect of HEPA Purifiers on Air Concentration", 
        subtitle= "VFW: Main Room", 
        x="Date", 
        y="Indoor/Outdoor Particle Concentration (CPC)", 
@@ -342,5 +406,5 @@ viz <- ggplot(data=ratio_list$mainroom, aes(x=date1min, y=concent_ratio)) +
   #Omit gradient aesthetic of datapoints
   guides(alpha=FALSE)
 
-viz
+mainroom_CPC_timeplot
 ```
