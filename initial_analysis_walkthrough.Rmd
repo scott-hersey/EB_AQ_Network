@@ -89,12 +89,12 @@ Next, we'll import all the final and raw datafiles separately. We do this by fin
 
 ```{r}
 #finding all final datasets
-temp = list.files(path = "./data/quant_aq/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
+temp = list.files(path = "./data/quant_aq_March2021", pattern = "^.*_final.*\\.csv", full.names = TRUE)
 finalfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
 #finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 
 #finding all raw datasets
-temp = list.files(path = "./data/quant_aq", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
+temp = list.files(path = "./data/quant_aq_March2021", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
 rawfiles = sapply(temp, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE)
 #rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 ```
@@ -104,8 +104,8 @@ The output of the above functions gives a list of data tables. Since we included
 Let's use an easier naming conventon. Since we used a specific naming scheme and a specific path, we can just extract the part of the path name that describes the dataset. Specifically, we're extracting "sn" and the sensor number. For example, "sn45" or "sn46".
 
 ```{r}
-names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 18, 21)) #extract the real sensor names from the current names used in the list
-names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 17, 20))
+names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 9+18, 9+21)) #extract the real sensor names from the current names used in the list
+names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 10+17, 10+20))
 names(finalfiles)
 names(rawfiles)
 ``` 
@@ -116,7 +116,7 @@ Since the final and raw datasets could have a different number of rows, we'll me
 
 
 ```{r}
-snfiles <- sapply(names(finalfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
+snfiles <- sapply(names(rawfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 
@@ -584,7 +584,7 @@ no_baseline_filter <- function(sensor){
 We'll apply this function to all the datasets:
 
 ```{r}
-snfiles <- lapply(snfiles, function(x) no_baseline_filter(x))
+#snfiles <- lapply(snfiles, function(x) no_baseline_filter(x))
 ```
 
 
@@ -609,18 +609,18 @@ ae_cleaning <- function(sensor, pollutant, ae_val, sd_val){
 For now, we're interested in no. We can filter no values that have a change in no_ae above 2.5 sd from the mean:
 
 ```{r}
-snfiles_no_test <- lapply(snfiles, function(x) ae_cleaning(x, "no", "no_ae", 2.5)) 
+#snfiles_no_test <- lapply(snfiles, function(x) ae_cleaning(x, "no", "no_ae", 2.5)) 
 ```
 
 
 In the future, we can use this function to filter for multiple ae values at once by storing the parameters in a list and looping through them. Below, I provide an example: 
 
 ```{r}
-parameter_list = list(c("no", "no_ae", 2.5), c("no2", "no2_ae", 2))
-
-for(parameters in parameter_list){
-  snfiles <- lapply(snfiles, function(x) ae_cleaning(x, parameters[1], parameters[2], as.numeric(parameters[3])))
-}
+# parameter_list = list(c("no", "no_ae", 2.5), c("no2", "no2_ae", 2))
+# 
+# for(parameters in parameter_list){
+#   snfiles <- lapply(snfiles, function(x) ae_cleaning(x, parameters[1], parameters[2], as.numeric(parameters[3])))
+# }
 ```
 
 ## Removing High Values without flags

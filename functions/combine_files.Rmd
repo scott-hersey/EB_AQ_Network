@@ -1,0 +1,50 @@
+---
+title: "R Notebook"
+---
+
+# Combine files 
+
+In this notebook, we are going to generate a helper function that takes in a few files and combines them into one. 
+
+The two requirements to use this function are: 
+1. the files have to have the same data columns 
+2. the files have to have a common part of the file name, to identify them with 
+
+# Helper function 
+
+```{r}
+combine_files <- function(location, filepattern, outputfilename){
+  found_files <- list.files(path=location, pattern=filepattern, full.names = TRUE)
+  output_df <- do.call(rbind, lapply(found_files, function(x) fread(file=x) ) )
+  #fwrite(output_df, file = outputfilename)
+  return(found_files)
+}
+```
+
+
+# Application
+
+I created this function in order to piece together SN 49 raw files, which I had to download separately. I will apply the function below to this example: 
+
+
+First, we will define the variables
+
+Remember that this notebook is in the 'files' subfolder, so we will have to go one folder up in order to access the data folder, or save to different locations 
+
+```{r}
+location = "./data/quant_aq_March2021"
+filepattern = "sn49_raw_\\d.csv" #find all files with "sn49_raw_" followed by a number followed by csv
+outputfilename = "./data/quant_aq_March2021/sn49_raw.csv"
+```
+
+We will have to call all the libraries we are using: 
+```{r}
+library(data.table)
+```
+
+Now we will run the function 
+
+```{r}
+output_df1<- combine_files(location, filepattern, outputfilename)
+```
+

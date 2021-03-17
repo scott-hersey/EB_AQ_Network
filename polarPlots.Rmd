@@ -1,0 +1,64 @@
+---
+title: "Polar Plots"
+---
+
+# Overview 
+
+In this notebook, we will import the cleaned data files and create polar plots from them. 
+
+# Importing 
+
+## Importing Libraries 
+
+```{r, warning= FALSE, error=FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(readr)
+library(ggplot2)
+library(sjmisc)
+library(plotly)
+```
+
+## Importing Files 
+
+```{r}
+nm <- list.files(path = "./data/cleaned/", pattern = ".csv", full.names = TRUE)
+snfiles <- do.call(rbind, lapply(nm, function(x) fread(x)))
+```
+
+# Generate Polar Plots 
+
+Polar plots are a tool that shows the relationship between pollutant concentration and wind direction and speed. In this section, we'll generate polar plots for NO, NO2, CO, CO2, bin0 and PM1. We'll do this by creating a function that will create all these polar plots, for a given sensor dataset. We'll apply this function to the snfiles list. 
+
+```{r}
+generate_overall_polarplots <- function(sn, snstring){
+  #generates the polar plots for the variables we are interested in 
+  polarPlot(sn, pollutant = "no", main = paste0(snstring, " NO Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "no2", main = paste0(snstring, " NO2 Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "co",  main = paste0(snstring, " CO Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "bin0",  main = paste0(snstring, " bin0 Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "pm1",  main = paste0(snstring, " PM1 Polar Plot", sep= " "))
+
+}
+```
+
+The following chunk of code can also save the polar plots to a pdf. To do this, uncomment the "pdf" and "dev.off" lines. 
+
+```{r}
+#pdf("cleaned_sn45_polarplots.csv")
+generate_overall_polarplots(snfiles$sn45, "sn45")
+#dev.off()
+```
+
+We can also apply this function as a for loop to the datasets. We can also loop through the dataset names, and add those to the titles. 
+
+```{r}
+for (i in seq(length(names(snfiles)))){
+ generate_overall_polarplots(snfiles[[i]], names(snfiles)[i])
+}
+```
+
+
