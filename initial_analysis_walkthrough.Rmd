@@ -34,7 +34,7 @@ Select the following variables:
 * Wind Speed [mph]
 
 Select the date range: 
-* 9/7/2019 to 10/28/2020 (this dataset is not inclusive of the last date)
+* 9/7/2019 to 3/7/2021 (this dataset is not inclusive of the last date)
 
 Select this timezone: 
 * America/New_York 
@@ -114,9 +114,30 @@ Next, we want to combine the final and raw files for a given sensor. However, it
 
 Since the final and raw datasets could have a different number of rows, we'll merge them based on entries to the "timestamp" column.
 
+3/17 edit: In the newest version of the data I pulled from the QuantAQ website, the data weren't all synced to the same seconds. Therefore, we have to put all the data in ymd_hms format first, and round it to the nearest minute. 
 
 ```{r}
-snfiles <- sapply(names(rawfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="timestamp", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
+clean_sensor_data <- function(sensor){
+  sensor$date <- ymd_hms(sensor$timestamp, tz="UTC") #parse datetime
+  sensor$date <- with_tz(sensor$date, "America/New_York") #change the time according to shifted timezone
+  sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
+  sensor$date <- round_date(ymd_hms(sensor$date, tz="America/New_York"), unit="minute") #round date for merging
+  sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
+  return(sensor)
+}
+```
+
+```{r}
+rawfiles <- lapply(rawfiles, function(x) clean_sensor_data(x))
+rawfiles <- lapply(rawfiles, function(x) unique(x)) 
+finalfiles <- lapply(finalfiles, function(x) clean_sensor_data(x))
+finalfiles <- lapply(finalfiles, function(x) unique(x)) 
+```
+
+
+
+```{r}
+snfiles <- sapply(names(rawfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="date", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 
@@ -167,14 +188,14 @@ This is what's contained in the new dataframes
 First, we import the file. We can indicate that there is a header. 
 
 ```{r}
-metdata <- fread("data/Oct_2020_Met_EST.csv", header=TRUE, data.table = TRUE) #import meteorology file
+metdata <- fread("data/metdata.csv", header=TRUE, data.table = TRUE) #import meteorology file
 ```
 
 If you look at the file, you'll see that the datetime is not in the standard datetime format. We can standardize it to the quantAQ data format using the R built-in POSIXct function, which changes datetime formats. We can specific which timezone this data is already in, as well. Be sure that the timezone you specify matches the timezone that you originally specified in the data download.
 
 ```{r}
-#metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M", tz = "America/New_York") #setting datetime, using correct timezone on East Coast Local time
-metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M") #setting datetime, using correct timezone for UTC
+metdata$date <- as.POSIXct(metdata$valid, format = "%d/%m/%Y %H:%M", tz = "America/New_York") #setting datetime, using correct timezone on East Coast Local time
+#metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M") #setting datetime, using correct timezone for UTC
 ```
 
 Next, if we look at data columns, we see that the column names are unrepresentative of the data. if we look at the date column in particular, we see that the data is not in one-minute intervals, like the sensor data, but in 5 minute intervals. To solve this second concern, we can add one-minute intervals in between and then fill those 1 minute intervals with the data from the 5 minute intervals. Let's say that wind direction is 0 for 11:00 and 120 for 11:05. Then, the new data would be: 11:00 - 0, 11:01 - 0, 11:02 - 0, 11:03 - 0, 11:04 - 0, 11:05 - 120, 11:06 - 120 ... 11:09 - 120
@@ -222,6 +243,11 @@ Lastly, let's remove variables that we won't use:
 ```{r}
 metdata[,c( "station")] <- list(NULL) #getting rid of unnecessary variables
 ```
+
+```{r}
+metdata <- unique(metdata)
+```
+
 
 #########################################################################################3
 
@@ -381,7 +407,7 @@ snfiles[c(-1)] <- lapply(snfiles[c(-1)], function(x) remove_dates(x,"2020-05-20 
 We can also make sure that all the dataframes start at the same date: 
 
 ```{r}
-snfiles <- lapply(snfiles, function(x) x[date > "2020-09-07 00:00:00 EST"])
+snfiles <- lapply(snfiles, function(x) x[date > "2019-09-07 00:00:00 EST"])
 ```
 
 
