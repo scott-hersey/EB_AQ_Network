@@ -1,0 +1,154 @@
+---
+title: "Combine QuantAQ files"
+---
+
+# Importing Libraries 
+
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(baseline) # for baseline correction
+```
+
+# Creating Functions 
+
+```{r}
+clean_sensor_data <- function(sensor){
+  sensor$date <- ymd_hms(sensor$timestamp, tz="UTC") #parse datetime
+  sensor$date <- with_tz(sensor$date, "America/New_York") #change the time according to shifted timezone
+  sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
+  sensor$date <- round_date(ymd_hms(sensor$date, tz="America/New_York"), unit="minute") #round date for merging
+  sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
+  return(sensor)
+}
+```
+
+# Importing the Box Files 
+
+```{r}
+# #defining which variables we'll keep
+ final_vars <- c( "timestamp","timestamp_local","temp_box",  "temp_manifold", "rh_manifold", "pressure",
+                  "noise", "solar", "wind_dir", "wind_speed", "co", "no" , "no2", "o3" ,  "pm1" , "pm25",
+                  "pm10", "co2" ,"bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "no_ae", "co_ae", "no2_ae") #raw variables to keep
+```
+
+```{r}
+temp = list.files(path = "./data/quant_aq/", pattern = "^.*-f0.*\\.csv", full.names = TRUE) #specify files we're looking for
+boxfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE) #importing them
+```
+
+```{r}
+new_names <- lapply(names(boxfiles), function(x) substr(x, 17, 26)) #extract the real sensor names from the current names used in the list
+names(boxfiles) <- new_names #rename list names
+names(boxfiles)
+```
+
+```{r}
+names(boxfiles) <- lapply(names(boxfiles), function(x) str_replace(x, "Output-0", "sn"))
+names(boxfiles)
+```
+
+```{r}
+boxfiles <- lapply(boxfiles, function(x) clean_sensor_data(x))
+```
+
+
+# Importing the QuantAQ Files 
+
+```{r}
+# #defining which variables we'll keep
+final_vars <- c( "timestamp","timestamp_local","temp_box",  "temp_manifold", "rh_manifold", "pressure",
+                "noise", "solar", "wind_dir", "wind_speed", "co", "no" , "no2", "o3" ,  "pm1" , "pm25",
+                "pm10", "co2" ) #final variables to keep
+
+# temp_box	temp_manifold	rh_manifold	pressure	noise	solar	wind_dir	wind_speed
+raw_vars <- c("timestamp","bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "no_ae", "co_ae", "no2_ae") #raw variables to keep
+```
+
+```{r}
+#finding all final datasets
+temp2 = list.files(path = "./data/quant_aq_March2021", pattern = "^.*_final.*\\.csv", full.names = TRUE)
+finalfiles = sapply(temp2,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
+#finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
+
+#finding all raw datasets
+temp3 = list.files(path = "./data/quant_aq_March2021", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
+rawfiles = sapply(temp3, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE)
+#rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
+```
+
+```{r}
+names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 9+18, 9+21)) #extract the real sensor names from the current names used in the list
+names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 10+17, 10+20))
+names(finalfiles)
+names(rawfiles)
+``` 
+
+```{r}
+rawfiles <- lapply(rawfiles, function(x) clean_sensor_data(x))
+rawfiles <- lapply(rawfiles, function(x) unique(x)) 
+finalfiles <- lapply(finalfiles, function(x) clean_sensor_data(x))
+finalfiles <- lapply(finalfiles, function(x) unique(x)) 
+```
+
+```{r}
+quantAQfiles <- sapply(names(rawfiles), function(k) merge.data.table(finalfiles[[k]], rawfiles[[k]], by="date", all.x = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+# Finding the end date of the Box Files 
+
+```{r}
+enddates <- lapply(boxfiles, function(x) tail(x$date, n=1))
+enddates_vec <- unlist(enddates)
+```
+
+# Cutting the QuantAQ data at the end date 
+
+```{r}
+cut_quantAQfiles <- sapply(names(quantAQfiles), function(x) subset(quantAQfiles[[x]], date> enddates[[x]]), simplify = FALSE,USE.NAMES = TRUE )
+```
+
+# Joining the two datasets
+
+```{r}
+# joined_files <- sapply(names(cut_quantAQfiles), function(x) rbind(boxfiles$x, cut_quantAQfiles$x, fill = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+# 
+#   joined_files <- do.call("rbind", apply(boxfiles, 1, gen.data))
+```
+
+```{r}
+sn45joined <- rbind(boxfiles$sn45, cut_quantAQfiles$sn45, fill = TRUE)
+sn46joined <- rbind(boxfiles$sn46, cut_quantAQfiles$sn46, fill = TRUE)
+sn49joined <- rbind(boxfiles$sn46, cut_quantAQfiles$sn49, fill = TRUE)
+sn62joined <- rbind(boxfiles$sn46, cut_quantAQfiles$sn62, fill = TRUE)
+sn67joined <- rbind(boxfiles$sn46, cut_quantAQfiles$sn67, fill = TRUE)
+sn72joined <- rbind(boxfiles$sn46, cut_quantAQfiles$sn72, fill = TRUE)
+
+joined_files <- list("sn45" = sn45joined, "sn46" = sn46joined, "sn49" = sn49joined, "sn62"= sn62joined, "sn67" = sn67joined, "sn72" = sn72joined)
+
+```
+
+
+```{r}
+lapply(joined_files, function(x) plot(x$date, x$o3))
+```
+
+
+```{r}
+mapply(
+  write.table, #apply function write table
+  x=joined_files, file=paste(names(joined_files), "csv", sep="."), #for each dataframe, use its name to make a csv of it
+  MoreArgs=list(row.names=FALSE, sep=",")
+)
+```
+
+
+```{r}
+lapply(joined_files, function(x) fread(x, file = paste(x, "csv", sep=".")))
+```
+
+

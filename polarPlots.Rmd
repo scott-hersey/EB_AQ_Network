@@ -25,8 +25,21 @@ library(plotly)
 ## Importing Files 
 
 ```{r}
-nm <- list.files(path = "./data/cleaned/", pattern = ".csv", full.names = TRUE)
-snfiles <- do.call(rbind, lapply(nm, function(x) fread(x)))
+nm <- list.files(path = "./", pattern = "*.csv", full.names = TRUE)
+snfiles <-  sapply(nm,  FUN = function(x) fread(file=x,  data.table = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+```{r}
+names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6)) 
+```
+
+
+```{r}
+set_vector <- function(snfile){
+  snfile$date <- ymd_hms(snfile$date, tz = "America/new_York")
+  return(snfile)
+}
+snfiles <- sapply(snfiles, function(x) set_vector(x), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 # Generate Polar Plots 
