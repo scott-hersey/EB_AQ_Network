@@ -36,7 +36,7 @@ names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6))
 
 ```{r}
 set_vector <- function(snfile){
-  snfile$date <- ymd_hms(snfile$date, tz = "America/new_York")
+  snfile$date <- ymd_hms(snfile$date, tz = "America/New_York")
   return(snfile)
 }
 snfiles <- sapply(snfiles, function(x) set_vector(x), simplify = FALSE,USE.NAMES = TRUE)
@@ -69,9 +69,12 @@ generate_overall_polarplots(snfiles$sn45, "sn45")
 We can also apply this function as a for loop to the datasets. We can also loop through the dataset names, and add those to the titles. 
 
 ```{r}
+pdf("polarplots.pdf")
 for (i in seq(length(names(snfiles)))){
  generate_overall_polarplots(snfiles[[i]], names(snfiles)[i])
 }
+
+dev.off()
 ```
 
 

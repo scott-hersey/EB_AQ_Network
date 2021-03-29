@@ -17,11 +17,11 @@ Note: The paragraph above and the following section will describe the downloadin
 
 Download the following QuantAQ files: 
 
-* SN45: final and raw data taken from 9/7/2019 to 10/27/2020
-* SN49: final and raw data taken from 9/7/2019 to 10/27/2020
-* SN62: final and raw data taken from 9/7/2019 to 10/27/2020
-* SN67: final and raw data taken from 9/7/2019 to 10/27/2020
-* SN72: final and raw data taken from 9/7/2019 to 10/27/2020
+* SN45: final and raw data taken from 9/7/2019 to 3/7/2020
+* SN49: final and raw data taken from 9/7/2019 to 3/7/2020
+* SN62: final and raw data taken from 9/7/2019 to 3/7/2020
+* SN67: final and raw data taken from 9/7/2019 to 3/7/2020
+* SN72: final and raw data taken from 9/7/2019 to 3/7/2020
 
 ## Meteorology Data 
 
@@ -32,6 +32,7 @@ Select the following variables:
 
 * Wind Direction
 * Wind Speed [mph]
+* Temperature (C)
 
 Select the date range: 
 * 9/7/2019 to 3/7/2021 (this dataset is not inclusive of the last date)
@@ -230,7 +231,7 @@ As we see, these are in a different format than the ones imported from the Quant
 
 ################################################################################
 
-### Importing data : Method 3
+# Importing data : Method 3
 
 On 3/19, we decided to merge two dataframes (quantAQ and the box data), in order to get a more complete dataset. We did this in the merging_sensor_data.Rmd file. Now, we're going to import those files. 
 
@@ -247,7 +248,7 @@ names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 15, 18)) #extract
 
 ```{r}
 set_vector <- function(snfile){
-  snfile$date <- ymd_hms(snfile$date, tz = "America/new_York")
+  snfile$date <- ymd_hms(snfile$date, tz = "UTC")
   return(snfile)
 }
 ```
@@ -259,18 +260,18 @@ snfiles <- lapply(snfiles, function(x) set_vector(x))
 
 ################################################################################
 
-### Import Meteorology data
+# Import Meteorology data
 
 First, we import the file. We can indicate that there is a header. 
 
 ```{r}
-metdata <- fread("data/metdata.csv", header=TRUE, data.table = TRUE) #import meteorology file
+metdata <- fread("data/metdata_temp.csv", header=TRUE, data.table = TRUE) #import meteorology file
 ```
 
 If you look at the file, you'll see that the datetime is not in the standard datetime format. We can standardize it to the quantAQ data format using the R built-in POSIXct function, which changes datetime formats. We can specific which timezone this data is already in, as well. Be sure that the timezone you specify matches the timezone that you originally specified in the data download.
 
 ```{r}
-metdata$date <- as.POSIXct(metdata$valid, format = "%d/%m/%Y %H:%M", tz = "America/New_York") #setting datetime, using correct timezone on East Coast Local time
+metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M", tz = "UTC") #setting datetime, using correct timezone on East Coast Local time
 #metdata$date <- as.POSIXct(metdata$valid, format = "%Y-%m-%d %H:%M") #setting datetime, using correct timezone for UTC
 ```
 
@@ -284,7 +285,7 @@ metdata <- metdata %>%
   setnames(old = c("drct", "sped", "valid"), new = c("wd", "ws", "original_met_time")) %>% #rename
   na.omit("date") %>% #if any dates are NA, the following function won't work
   complete(date = seq(from = min(date), to= max(date),  by = "1 min")) %>%#make 1 minute intervals
-  fill(c("wd", "ws")) #fill those new 1 minute interval rows
+  fill(c("wd", "ws", "tmpc")) #fill those new 1 minute interval rows
 
   #if the entire met dataset matters
   # setnames(old = c("drct", "sped", "valid", "relh", "mslp"), new = c("wd", "ws", "original_met_time", "rh", "press")) %>% #rename
@@ -637,8 +638,9 @@ no_baseline_filter <- function(sensor){
 We'll apply this function to all the datasets:
 
 ```{r}
-#snfiles <- lapply(snfiles, function(x) no_baseline_filter(x))
+snfiles <- lapply(snfiles, function(x) no_baseline_filter(x))
 ```
+
 
 
 ## Removing Values Based on Rate of Change of Auxiliary Electrode 
@@ -693,6 +695,80 @@ snfiles <- lapply(snfiles, function(x) o3_filter(x))
 ```
 
 
+
+## Remove CO spikes
+
+First we look for periods when there's large jumps between datapoints 
+
+```{r}
+trial <- snfiles$sn45
+trial$timediff <- c(NA, difftime(trial$date[-1],
+                               trial$date[-nrow(trial)],
+                               units="mins"))
+```
+
+Next, we find vectors where the difference is more than an hour
+
+```{r}
+large_jumps <- trial[which(trial$timediff > 60), ]
+
+jump_indices <- which(trial$timediff > 60)
+
+large_jumps$date
+```
+
+Then, we take where these jumps happen and we set the next 20 minutes to NA
+
+```{r}
+trial$removeCO <- "FALSE"
+for(jump_index in jump_indices){
+  #trial$removeCO[jump_index:jump_index+20] := "TRUE"
+  trial[jump_index:(jump_index+20), removeCO := "TRUE"] 
+  #set(trial,jump_index:jump_index+20, 1:40 ,NA_character_)
+}
+
+#trial <- complete.cases(trial)
+```
+
+```{r}
+# trial2 <- trial[complete.cases(trial)]
+# data6 <- filter(trial, rowSums(is.na(trial)) != ncol(trial))
+# trial4 <- subset(trial, removeCO != "TRUE")
+# trial5 <- trial[removeCO == "FALSE"]
+
+trial2 = trial
+trial2$co[trial2$removeCO == "TRUE"] <- NA  
+```
+
+
+```{r}
+trial[which(trial$timediff > 60), removeCO]
+```
+```{r}
+removeCOspikes <- function(sensor){
+  #calculate how much time elapses between data points
+  sensor$timediff <- c(NA, difftime(sensor$date[-1],
+                               sensor$date[-nrow(sensor)],
+                               units="mins"))
+  #find where there are jumps of an hour or more
+  jump_indices <- which(sensor$timediff > 60)
+  # set up which indices should be removed from the data 
+  sensor$removeCO <- "FALSE"
+  for(jump_index in jump_indices){
+    sensor[jump_index:(jump_index+20), removeCO := "TRUE"] 
+  }
+  #remove CO 
+  sensor$co[sensor$removeCO == "TRUE"] <- NA 
+  
+  return(sensor)
+}
+```
+
+```{r}
+snfiles <- lapply(snfiles, function(x) removeCOspikes(x))
+```
+
+
 ## Removing High Values with flags 
 
 The following function applies flags to the data. Each flag value corresponds to a pollutant that surpassed its limit. In order to change the limit, you can change the limit value directly inside of the function.
@@ -709,6 +785,7 @@ apply_flags <- function(sensor){
   # no - 6
   
   sensor$flag <- replicate(nrow(sensor), c(), simplify = FALSE) #create flags column which has a list for every data point
+  sensor$flag[which(sensor$co > 10000)] <- lapply(sensor$flag[which(sensor$co > 10000)], function(x) c(x, 1)) #add 2 to the flags data points with high CO2 values
   sensor$flag[which(sensor$co2 > 2000)] <- lapply(sensor$flag[which(sensor$co2 > 2000)], function(x) c(x, 2)) #add 2 to the flags data points with high CO2 values
   sensor$flag[which(sensor$no2 > 1000)] <- lapply(sensor$flag[which(sensor$no2 > 1000)], function(x) c(x, 3))
   sensor$flag[which(sensor$no > 300)] <- lapply(sensor$flag[which(sensor$no > 300)], function(x) c(x, 6))
@@ -835,7 +912,7 @@ Otherwise, we can print the plots below. Below, there are two options how to pri
 
 
 ```{r}
-flags_list = list(c(2,"co2"), c(3,"no2"), c(6, "no"))
+flags_list = list(c(1,"co"), c(2,"co2"), c(3,"no2"), c(6, "no"))
 for(i in flags_list){
   #pdf(paste("check_flags_", i, ".pdf", sep = ""))
   #lapply(snfiles, function(x) check_flags(x, i[1], i[2]))
@@ -854,11 +931,14 @@ remove_flags <- function(sensor, flag_val, pollutant){
 ```
 
 ```{r}
-flags_list = list(c(2,"co2"), c(3,"no2"), c(6, "no"))
+flags_list = list(c(1,"co"), c(2,"co2"), c(3,"no2"), c(6, "no"))
 for(i in flags_list){
   snfiles <- lapply(snfiles, function(x) remove_flags(x, i[1], i[2]))
 }
 ```
+
+
+
 
 
 ################################################################################
@@ -878,15 +958,43 @@ snfiles$sn67$flag <- NULL
 snfiles$sn72$flag <- NULL 
 ```
 
+Then, we'll convert the date vector to local time. 
+
+```{r}
+get_localtime <- function(sensor){
+  ##sensor$date_local = sensor$date
+  sensor$date_local <- with_tz(sensor$date, tzone = "America/New_York")
+  return(sensor)
+}
+```
+
+
+
+```{r}
+snfiles <- lapply(snfiles, function(x) get_localtime(x))
+```
+
+
+
+We can check that the date is actually local by comparing it to QuantAQ's local timestamp
+
+
 
 Next, we'll make an Igor date column, to make importing into Igor faster: 
 
 ```{r}
 create_date_for_igor <- function(dataset){
+  #create igor date column
   ymd_col <- c(as.character(format(dataset$date, "%Y-%m-%d")) )
   middle <- rep(" ", length(ymd_col))
   hms_col <- c(as.character(format(dataset$date, "%H:%M:%S")))
   dataset$igor_date <- paste(ymd_col, middle, hms_col)
+  
+  #create igor local date column
+  ymd_col <- c(as.character(format(dataset$date_local, "%Y-%m-%d")) )
+  middle <- rep(" ", length(ymd_col))
+  hms_col <- c(as.character(format(dataset$date_local, "%H:%M:%S")))
+  dataset$igor_date_local <- paste(ymd_col, middle, hms_col)
   return(dataset)
 }
 ```

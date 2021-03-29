@@ -19,9 +19,9 @@ library(baseline) # for baseline correction
 ```{r}
 clean_sensor_data <- function(sensor){
   sensor$date <- ymd_hms(sensor$timestamp, tz="UTC") #parse datetime
-  sensor$date <- with_tz(sensor$date, "America/New_York") #change the time according to shifted timezone
+  #sensor$date <- with_tz(sensor$date, "America/New_York") #change the time according to shifted timezone
   sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
-  sensor$date <- round_date(ymd_hms(sensor$date, tz="America/New_York"), unit="minute") #round date for merging
+  sensor$date <- round_date(ymd_hms(sensor$date, tz="UTC"), unit="minute") #round date for merging
   sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
   return(sensor)
 }
@@ -123,10 +123,10 @@ cut_quantAQfiles <- sapply(names(quantAQfiles), function(x) subset(quantAQfiles[
 ```{r}
 sn45joined <- rbind(boxfiles$sn45, cut_quantAQfiles$sn45, fill = TRUE)
 sn46joined <- rbind(boxfiles$sn46, cut_quantAQfiles$sn46, fill = TRUE)
-sn49joined <- rbind(boxfiles$sn46, cut_quantAQfiles$sn49, fill = TRUE)
-sn62joined <- rbind(boxfiles$sn46, cut_quantAQfiles$sn62, fill = TRUE)
-sn67joined <- rbind(boxfiles$sn46, cut_quantAQfiles$sn67, fill = TRUE)
-sn72joined <- rbind(boxfiles$sn46, cut_quantAQfiles$sn72, fill = TRUE)
+sn49joined <- rbind(boxfiles$sn49, cut_quantAQfiles$sn49, fill = TRUE)
+sn62joined <- rbind(boxfiles$sn62, cut_quantAQfiles$sn62, fill = TRUE)
+sn67joined <- rbind(boxfiles$sn67, cut_quantAQfiles$sn67, fill = TRUE)
+sn72joined <- rbind(boxfiles$sn72, cut_quantAQfiles$sn72, fill = TRUE)
 
 joined_files <- list("sn45" = sn45joined, "sn46" = sn46joined, "sn49" = sn49joined, "sn62"= sn62joined, "sn67" = sn67joined, "sn72" = sn72joined)
 
@@ -134,13 +134,13 @@ joined_files <- list("sn45" = sn45joined, "sn46" = sn46joined, "sn49" = sn49join
 
 
 ```{r}
-lapply(joined_files, function(x) plot(x$date, x$o3))
+#lapply(joined_files, function(x) plot(x$date, x$o3))
 ```
 
 
 ```{r}
 mapply(
-  write.table, #apply function write table
+  fwrite, #apply function write table
   x=joined_files, file=paste(names(joined_files), "csv", sep="."), #for each dataframe, use its name to make a csv of it
   MoreArgs=list(row.names=FALSE, sep=",")
 )
