@@ -22,11 +22,12 @@ This notebook focuses on creating visuals to highlight the impact of HEPA
 purifiers on particle concentration in classrooms.
 
 ### Setup
-In hepa_main.Rmd, uncomment the code in the chunk at line 486 to download the 
-processed data as .csv files. We will start by importing them here.
+In hepa_main.Rmd, un-comment the code in the chunk at line 486 to download the 
+processed data as .csv files. 
 
-TODO: investigate why so many columns in auditor and mainroom are reading as 
-logical instead of double
+We will start by importing them here. We need to manually set concent_ratio as 
+a double.
+
 ```{r}
 waterdept_ratio <- read_csv('waterdept_ratio.csv')
 
@@ -40,6 +41,9 @@ mainroom_ratio <- read_csv('mainroom_ratio.csv', col_types = cols(
 
 head(waterdept_ratio)
 ```
+
+Looking at hepa_main.Rmd, it seems that it's more useful to keep all structures
+as a list.
 
 ```{r}
 ratio_list <- list(
@@ -87,12 +91,28 @@ time_to_eastern <- function(room) {
   return(room)
 }
 
-ratio_list <- lapply(ratio_list,  function(x) time_to_eastern(x)) # Only save columns of importance 
+ratio_list <- lapply(ratio_list,  function(x) time_to_eastern(x)) # Fix time zone
 ```
 
 ```{r}
-print(ratio_list$auditor$date1min[1])
+head(ratio_list$auditor)
 ```
+It is good practice that a dataset be *tidy*. We will make this data tidier by
+transposing the columns.
+
+```{r}
+tidy_data <- function(room) {
+  room <- room %>%
+    pivot_longer(-date1min, names_to = "source", values_to = "ratio")
+}
+
+ratio_list <- lapply(ratio_list,  function(x) tidy_data(x))
+
+head(ratio_list$auditor)
+```
+
+
+
 
 We will now filter the data for work hours to focus on the impact the purifiers
 have on the people in these buildings. For City Hall and VFW, let's say that 
@@ -115,9 +135,7 @@ scattered among 0 readings.
 
 ```{r}
 ratio_list$mainroom <- ratio_list$mainroom %>%
-  subset(concent_ratio > 0.0001)
-
-print(nrow(subset(ratio_list$mainroom, concent_ratio < 0.0001)))
+  subset(ratio > 0.0001)
 ```
 
 
@@ -153,28 +171,58 @@ ratio_list$waterdept <- ratio_list$waterdept %>%
 ```
 
 Let's calculate the mean concentration ratios before and after the HEPA 
-installation.
+installation, as well as the standard deviations. We'll store this in another 
+dataset, which we will also tidy up.
 
 ```{r}
 calculate_mean_ratio <- function(room) {
   conc <- room %>%
-    summarize(mean(concent_ratio, na.rm=TRUE)) %>%
-    rename(conc = "mean(concent_ratio, na.rm = TRUE)")
+    filter(source=="concent_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(conc = "mean(ratio, na.rm = TRUE)")
+  conc_sd <- room %>%
+    filter(source=="concent_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(conc_sd = "sd(ratio, na.rm = TRUE)")
+  
   bin0 <- room %>%
-    summarize(mean(bin0_ratio, na.rm=TRUE)) %>%
-    rename(bin0 = "mean(bin0_ratio, na.rm = TRUE)")
+    filter(source=="bin0_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(bin0 = "mean(ratio, na.rm = TRUE)")
+  bin0_sd <- room %>%
+    filter(source=="bin0_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(bin0_sd = "sd(ratio, na.rm = TRUE)")
+  
   neph_bin0 <- room %>%
-    summarize(mean(neph_bin0_ratio, na.rm=TRUE)) %>%
-    rename(neph_bin0 = "mean(neph_bin0_ratio, na.rm = TRUE)")
+    filter(source=="neph_bin0_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0 = "mean(ratio, na.rm = TRUE)")
+  neph_bin0_sd <- room %>%
+    filter(source=="neph_bin0_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0_sd = "sd(ratio, na.rm = TRUE)")
+  
   pm1 <- room %>%
-    summarize(mean(pm1_ratio, na.rm=TRUE)) %>%
-    rename(pm1 = "mean(pm1_ratio, na.rm = TRUE)")
+    filter(source=="pm1_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm1 = "mean(ratio, na.rm = TRUE)")
+  pm1_sd <- room %>%
+    filter(source=="pm1_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm1_sd = "sd(ratio, na.rm = TRUE)")
+  
   pm25 <- room %>%
-    summarize(mean(pm25_ratio, na.rm=TRUE)) %>%
-    rename(pm25 = "mean(pm25_ratio, na.rm = TRUE)")
+    filter(source=="pm25_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm25 = "mean(ratio, na.rm = TRUE)")
+  pm25_sd <- room %>%
+    filter(source=="pm25_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm25_sd = "sd(ratio, na.rm = TRUE)")
 
   
-  mean_ratios = cbind(conc, bin0, neph_bin0, pm1, pm25)
+  mean_ratios = cbind(conc, conc_sd, bin0, bin0_sd, neph_bin0, neph_bin0_sd, pm1, pm1_sd, pm25, pm25_sd)
   return(mean_ratios)
 }
 
@@ -182,9 +230,18 @@ mean_concent_ratios <- lapply(ratio_list, function(x) calculate_mean_ratio(x))
 
 mean_ratios <- bind_rows(mean_concent_ratios) 
 
-names = c("auditor", "waterdept", "mainroom", "auditor_HEPA", "waterdept_HEPA", "mainroom_HEPA")
+names = c("auditor", "waterdept", "mainroom", "auditor", "waterdept", "mainroom")
+
+is_HEPA = c("no", "no", "no", "yes", "yes", "yes")
 
 mean_ratios <- cbind(name = names, mean_ratios)
+
+mean_ratios <- cbind(mean_ratios, is_HEPA)
+
+mean_ratios<- mean_ratios %>%
+                pivot_longer(-c(name, is_HEPA), 
+                names_to = "source", 
+                values_to = "mean_ratio")
 
 mean_ratios
 ```
