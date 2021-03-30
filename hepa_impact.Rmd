@@ -251,411 +251,128 @@ write.table(mean_ratios, "revere_mean_ratios.csv", append = FALSE, sep = ",", de
 ```
 
 
-Let's start with the Water Department Room. First we'll make a time-based plot to observe the change in concentration based on CPC data.
+Let's investigate the data by using boxplots. Before we do that, though, we 
+must distinguish which data is before and after the purifier installation.
 
 ```{r}
-waterdept_CPC_timeplot <- ggplot(data=ratio_list$waterdept, aes(x=date1min, y=concent_ratio)) + 
-  # Data Points
-  geom_point(aes(alpha=1/10)) +
-  geom_point(data=ratio_list$waterdept_HEPA,
-             aes(alpha=1/10)) +
+# Combine Water Department data
+ratio_list$waterdept <- ratio_list$waterdept %>%
+  mutate(is_HEPA = "no")
 
-  #Mean before HEPA
-  geom_segment(
-    aes(x=as.POSIXct("2021-01-06 8:46:00", tz='America/New_York'),
-        y=mean_ratios$conc[1],
-        xend=as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'),
-        yend=mean_ratios$conc[1],
-        color="Mean Concentration Pre-HEPA"),
-    lwd=1.25) +
-  
-  #Mean after HEPA
-  geom_segment(
-    aes(x=as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'),
-        y=mean_ratios$conc[4],
-        xend=as.POSIXct("2021-01-13 12:08:00", tz='America/New_York'),
-        yend=mean_ratios$conc[4],
-        color="Mean Concentration Post-HEPA"),
-    lwd=1.25) +
+ratio_list$waterdept_HEPA <- ratio_list$waterdept_HEPA %>%
+  mutate(is_HEPA = "yes")
 
-  #Installation
-  geom_vline(
-    aes(xintercept=as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'),
-        alpha=1,
-        linetype='solid'),
-    lwd=1.25) +
-  
-  #Labels
-  labs(title="Effect of HEPA Purifiers on Air Concentration", 
-       subtitle= "Revere City Hall: Water Department Room", 
-       x="Date", 
-       y="Indoor/Outdoor Particle Concentration (CPC)", 
-       color="Metrics") +
-  #Reverse order of legend
-  guides(
-    color = guide_legend(reverse=TRUE)
-    ) +
-  scale_linetype_discrete(
-    name="", 
-    labels = c('HEPA Purifier Installation')
-    ) + 
-  #limits
-  ylim(0,1) +
-  xlim(as.POSIXct("2021-01-06 8:46:00", tz='America/New_York'),as.POSIXct("2021-01-13 12:09:00", tz='America/New_York')) +
-  #Omit gradient aesthetic of datapoints
-  guides(alpha=FALSE)
+waterdept_combined <- rbind(ratio_list$waterdept, ratio_list$waterdept_HEPA)
 
+# Combine Auditor data
+ratio_list$auditor <- ratio_list$auditor %>%
+  mutate(is_HEPA = "no")
 
-waterdept_CPC_timeplot
+ratio_list$auditor_HEPA <- ratio_list$auditor_HEPA %>%
+  mutate(is_HEPA = "yes")
 
-ggsave("waterdept_timeplot.png")
+auditor_combined <- rbind(ratio_list$auditor, ratio_list$auditor_HEPA)
 
-```
+# Combine Main Room data
+ratio_list$mainroom <- ratio_list$mainroom %>%
+  mutate(is_HEPA = "no")
 
-```{r}
-waterdept_CPC_timeplot <- ggplot(data=ratio_list$waterdept, aes(x=date1min, y=neph_bin0_ratio)) + 
-  # Data Points
-  geom_point(aes(alpha=1/10)) +
-  geom_point(data=ratio_list$waterdept_HEPA,
-             aes(alpha=1/10)) +
+ratio_list$mainroom_HEPA <- ratio_list$mainroom_HEPA %>%
+  mutate(is_HEPA = "yes")
 
-  #Mean before HEPA
-  geom_segment(
-    aes(x=as.POSIXct("2021-01-06 8:46:00", tz='America/New_York'),
-        y=mean_ratios$neph_bin0[1],
-        xend=as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'),
-        yend=mean_ratios$neph_bin0[1],
-        color="Mean Concentration Pre-HEPA"),
-    lwd=1.25) +
-  
-  #Mean after HEPA
-  geom_segment(
-    aes(x=as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'),
-        y=mean_ratios$neph_bin0[4],
-        xend=as.POSIXct("2021-01-13 12:08:00", tz='America/New_York'),
-        yend=mean_ratios$neph_bin0[4],
-        color="Mean Concentration Post-HEPA"),
-    lwd=1.25) +
-
-  #Installation
-  geom_vline(
-    aes(xintercept=as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'),
-        alpha=1,
-        linetype='solid'),
-    lwd=1.25) +
-  
-  #Labels
-  labs(title="Effect of HEPA Purifiers on Air Concentration", 
-       subtitle= "Revere City Hall: Water Department Room", 
-       x="Date", 
-       y="Indoor/Outdoor Nephlometer Bin O Ratio", 
-       color="Metrics") +
-  #Reverse order of legend
-  guides(
-    color = guide_legend(reverse=TRUE)
-    ) +
-  scale_linetype_discrete(
-    name="", 
-    labels = c('HEPA Purifier Installation')
-    ) + 
-  #limits
-  ylim(0,1) +
-  xlim(as.POSIXct("2021-01-06 8:46:00", tz='America/New_York'),as.POSIXct("2021-01-13 12:09:00", tz='America/New_York')) +
-  #Omit gradient aesthetic of datapoints
-  guides(alpha=FALSE)
-
-
-waterdept_CPC_timeplot
-
-ggsave("waterdept_neph_bin0_timeplot.png")
-
-```
-
-
-Let's investigate the data by using a boxplot. Before we do that, though, we must make our data tidy.
-
-```{r}
-waterdept_tidy <- ratio_list$waterdept %>%
-  gather('concent_ratio', 
-'pm1_ratio', 'bin0_ratio', 'bin0_ratio', 'neph_bin0_ratio', 'pm25_ratio', key="ratio_type", value="value")
-
-waterdept_HEPA_tidy <- ratio_list$waterdept_HEPA %>%
-  rename(concent_ratio.HEPA = concent_ratio,
-         pm1_ratio.HEPA = pm1_ratio,
-         bin0_ratio.HEPA = bin0_ratio,
-         neph_bin0_ratio.HEPA = neph_bin0_ratio,
-         pm25_ratio.HEPA = pm25_ratio) %>%
-  gather('concent_ratio.HEPA', 
-'pm1_ratio.HEPA', 'bin0_ratio.HEPA', 'neph_bin0_ratio.HEPA', 'pm25_ratio.HEPA', key="ratio_type", value="value")
-
-waterdept_tidy <- rbind(waterdept_tidy, waterdept_HEPA_tidy)
-
+mainroom_combined <- rbind(ratio_list$mainroom, ratio_list$mainroom_HEPA)
 ```
 
 
 ```{r}
+source.labs <- c("Bin 0", "CPC Concent.", "Neph. Bin 0", "PM1", "PM2.5")
+names(source.labs) <- c("bin0_ratio", "concent_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio")
 
-waterdept_boxplot <- ggplot(data=waterdept_tidy, aes(x=ratio_type, y=value)) +
-  geom_boxplot(aes(fill=ratio_type)) +
+waterdept_boxplot <- ggplot(data=waterdept_combined, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
   
-  # facet_grid(. ~ ratio_type, scales='free_x') +
+  facet_grid(. ~ source, scales='free_x', 
+             labeller = labeller(source = source.labs),
+             switch = "x") +
   
-  scale_x_discrete(breaks=c("bin0_ratio", "bin0_ratio.HEPA",
-                            "concent_ratio", "concent_ratio.HEPA",
-                            "neph_bin0_ratio", "neph_bin0_ratio.HEPA",
-                            "pm1_ratio","pm1_ratio.HEPA", 
-                            "pm25_ratio","pm25_ratio.HEPA"),
-                   labels=c("Bin 0", "Bin 0 (HEPA)", 
-                            "CPC Concent.", "CPC Concent. (HEPA)",
-                            "Neph. Bin 0", "Neph. Bin 0 (HEPA)",
-                            "PM1", "PM1 (HEPA)",
-                            "PM2.5", "PM2.5 (HEPA)")) + 
   
-  theme(axis.text.x = element_text(angle = 50, hjust=1)) + 
-  
-  labs(title="Effect of HEPA Purifiers on Particle Ratios", 
-       subtitle= "Revere City Hall: Water Department Room", 
-       x="Particle Ratio Type", 
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere City Hall: Water Department Room",
+       x="Particle Ratio Type",
        y="Indoor/Outdoor Ratio") +
+
   
-  scale_fill_discrete(name = "Particle Ratio Type", 
-                      labels = c("Bin 0", "Bin 0 (HEPA)", 
-                                 "CPC Concentration", "CPC Concentration (HEPA)",
-                                 "Nephlometer Bin 0", "Nephlometer Bin 0 (HEPA)",
-                                 "PM1", "PM1 (HEPA)",
-                                 "PM2.5", "PM2.5 (HEPA)")) + 
+  scale_fill_brewer(name = "Sensor Measurements",
+                    labels = c("Initial Recording", 
+                                 "After HEPA Installation"),
+                    palette="Blues") +
   
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+
   ylim(0,1)
 
 waterdept_boxplot
-ggsave("waterdept_boxplot.png")
+ggsave("waterdept_box.png")
 ```
 
-
-
 ```{r}
-auditor_CPC_timeplot <- ggplot(data=ratio_list$auditor, aes(x=date1min, y=concent_ratio)) + 
-  # Data Points
-  geom_point(aes(alpha=1/10)) +  
-  geom_point(data=ratio_list$auditor_HEPA, 
-             aes(alpha=1/10)) +
-
-  #Mean before HEPA
-  geom_segment(
-    aes(x=as.POSIXct("2021-01-13 12:49:00", tz='America/New_York'), 
-        y=mean_ratios$conc[2], 
-        xend=as.POSIXct("2021-01-19 09:20:00", tz='America/New_York'), 
-        yend=mean_ratios$conc[2], 
-        color="Mean Concentration Pre-HEPA"),
-    lwd=1.25) + 
+auditor_boxplot <- ggplot(data=auditor_combined, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
   
-  #Mean after HEPA
-  geom_segment(
-    aes(x=as.POSIXct("2021-01-19 09:20:00", tz='America/New_York'), 
-        y=mean_ratios$conc[5], 
-        xend=as.POSIXct("2021-01-25 09:03:00", tz='America/New_York'), 
-        yend=mean_ratios$conc[5], 
-        color="Mean Concentration Post-HEPA"), 
-    lwd=1.25) +
-    
-  #Installation
-  geom_vline(
-    aes(xintercept=as.POSIXct("2021-01-19 09:20:00", tz='America/New_York'), 
-        alpha=1, 
-        linetype='solid'), 
-    lwd=1.25) + 
-  #Labels
-  labs(title="Effect of HEPA Purifiers on Air Concentration", 
-       subtitle= "Revere City Hall: Auditor Room", 
-       x="Date", 
-       y="Indoor/Outdoor Particle Concentration (CPC)", 
-       color="Metrics") +
-  #Reverse order of legend
-  guides(
-    color = guide_legend(reverse=TRUE)
-    ) +
-  scale_linetype_discrete(
-    name="", 
-    labels = c('HEPA Purifier Installation')
-    ) + 
-  #limits
-  ylim(0,1) +
-  xlim(as.POSIXct("2021-01-13 12:49:00", tz='America/New_York'),as.POSIXct("2021-01-25 09:03:00", tz='America/New_York')) +
-  #Omit gradient aesthetic of datapoints
-  guides(alpha=FALSE)
-
-auditor_CPC_timeplot
-ggsave("auditor_timeplot.png")
-```
-```{r}
-auditor_tidy <- ratio_list$auditor %>%
-  gather('concent_ratio', 
-'pm1_ratio', 'bin0_ratio', 'bin0_ratio', 'neph_bin0_ratio', 'pm25_ratio', key="ratio_type", value="value")
-
-auditor_HEPA_tidy <- ratio_list$auditor_HEPA %>%
-  rename(concent_ratio.HEPA = concent_ratio,
-         pm1_ratio.HEPA = pm1_ratio,
-         bin0_ratio.HEPA = bin0_ratio,
-         neph_bin0_ratio.HEPA = neph_bin0_ratio,
-         pm25_ratio.HEPA = pm25_ratio) %>%
-  gather('concent_ratio.HEPA', 
-'pm1_ratio.HEPA', 'bin0_ratio.HEPA', 'neph_bin0_ratio.HEPA', 'pm25_ratio.HEPA', key="ratio_type", value="value")
-
-auditor_tidy <- rbind(auditor_tidy, auditor_HEPA_tidy)
-
-```
-
-
-```{r}
-
-auditor_boxplot <- ggplot(data=auditor_tidy, aes(x=ratio_type, y=value)) +
-  geom_boxplot(aes(fill=ratio_type)) +
+  facet_grid(. ~ source, scales='free_x', 
+             labeller = labeller(source = source.labs),
+             switch = "x") +
   
-  # facet_grid(. ~ ratio_type, scales='free_x') +
+
   
-  scale_x_discrete(breaks=c("bin0_ratio", "bin0_ratio.HEPA",
-                            "concent_ratio", "concent_ratio.HEPA",
-                            "neph_bin0_ratio", "neph_bin0_ratio.HEPA",
-                            "pm1_ratio","pm1_ratio.HEPA", 
-                            "pm25_ratio","pm25_ratio.HEPA"),
-                   labels=c("Bin 0", "Bin 0 (HEPA)", 
-                            "CPC Concent.", "CPC Concent. (HEPA)",
-                            "Neph. Bin 0", "Neph. Bin 0 (HEPA)",
-                            "PM1", "PM1 (HEPA)",
-                            "PM2.5", "PM2.5 (HEPA)")) + 
-  
-  theme(axis.text.x = element_text(angle = 50, hjust=1)) + 
-  
-  labs(title="Effect of HEPA Purifiers on Particle Ratios", 
-       subtitle= "Revere City Hall: Auditor Room", 
-       x="Particle Ratio Type", 
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere City Hall: Auditor Room",
+       x="Particle Ratio Type",
        y="Indoor/Outdoor Ratio") +
+
+  scale_fill_brewer(name = "Sensor Measurements",
+                  labels = c("Initial Recording", 
+                               "After HEPA Installation"),
+                  palette="Blues") +
   
-  scale_fill_discrete(name = "Particle Ratio Type", 
-                      labels = c("Bin 0", "Bin 0 (HEPA)", 
-                                 "CPC Concentration", "CPC Concentration (HEPA)",
-                                 "Nephlometer Bin 0", "Nephlometer Bin 0 (HEPA)",
-                                 "PM1", "PM1 (HEPA)",
-                                 "PM2.5", "PM2.5 (HEPA)")) + 
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
   
   ylim(0,1)
 
 auditor_boxplot
-ggsave("auditor_boxplot.png")
+ggsave("auditor_box.png")
 ```
-
 ```{r}
-mainroom_CPC_timeplot <- ggplot(data=ratio_list$mainroom, aes(x=date1min, y=concent_ratio)) + 
-  # Data Points
-  geom_point(aes(alpha=1/10)) +  
-  geom_point(data=ratio_list$mainroom_HEPA, 
-             aes(alpha=1/10)) +
-
-  #Mean before HEPA
-  geom_segment(
-    aes(x=as.POSIXct("2021-01-25 09:50:00", tz='America/New_York'), 
-        y=mean_ratios$conc[3], 
-        xend=as.POSIXct("2021-01-27 12:30:00", tz='America/New_York'), 
-        yend=mean_ratios$conc[3], 
-        color="Mean Concentration Pre-HEPA"),
-    lwd=1.25) + 
+mainroom_boxplot <- ggplot(data=mainroom_combined, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
   
-  #Mean after HEPA
-  geom_segment(
-    aes(x=as.POSIXct("2021-01-27 12:30:00", tz='America/New_York'), 
-        y=mean_ratios$conc[6], 
-        xend=as.POSIXct("2021-01-27 19:53:00", tz='America/New_York'), 
-        yend=mean_ratios$conc[6], 
-        color="Mean Concentration Post-HEPA"), 
-    lwd=1.25) +
-    
-  #Installation
-  geom_vline(
-    aes(xintercept=as.POSIXct("2021-01-27 12:30:00", tz='America/New_York'), 
-        alpha=1, 
-        linetype='solid'), 
-    lwd=1.25) + 
-  #Labels
-  labs(title="Effect of HEPA Purifiers on Air Concentration", 
-       subtitle= "VFW: Main Room", 
-       x="Date", 
-       y="Indoor/Outdoor Particle Concentration (CPC)", 
-       color="Metrics") + 
-  #Reverse order of legend
-  guides(
-    color = guide_legend(reverse=TRUE)
-    ) +
-  scale_linetype_discrete(
-    name="", 
-    labels = c('HEPA Purifier Installation')
-    ) + 
-  #limits
-  ylim(0,1) +
-  xlim(as.POSIXct("2021-01-25 09:50:00", tz='America/New_York'),as.POSIXct("2021-01-27 19:53:00", tz='America/New_York')) +
-  #Omit gradient aesthetic of datapoints
-  guides(alpha=FALSE)
-
-mainroom_CPC_timeplot
-ggsave("mainroom_timeplot.png")
-```
-
-```{r}
-mainroom_tidy <- ratio_list$mainroom %>%
-  gather('concent_ratio', 
-'pm1_ratio', 'bin0_ratio', 'bin0_ratio', 'neph_bin0_ratio', 'pm25_ratio', key="ratio_type", value="value")
-
-mainroom_HEPA_tidy <- ratio_list$mainroom_HEPA %>%
-  rename(concent_ratio.HEPA = concent_ratio,
-         pm1_ratio.HEPA = pm1_ratio,
-         bin0_ratio.HEPA = bin0_ratio,
-         neph_bin0_ratio.HEPA = neph_bin0_ratio,
-         pm25_ratio.HEPA = pm25_ratio) %>%
-  gather('concent_ratio.HEPA', 
-'pm1_ratio.HEPA', 'bin0_ratio.HEPA', 'neph_bin0_ratio.HEPA', 'pm25_ratio.HEPA', key="ratio_type", value="value")
-
-mainroom_tidy <- rbind(mainroom_tidy, mainroom_HEPA_tidy)
-
-```
-
-
-```{r}
-mainroom_boxplot <- ggplot(data=mainroom_tidy, aes(x=ratio_type, y=value)) +
-  geom_boxplot(aes(fill=ratio_type)) +
+  facet_grid(. ~ source, scales='free_x', 
+             labeller = labeller(source = source.labs),
+             switch = "x") +
   
-  # facet_grid(. ~ ratio_type, scales='free_x') +
+
   
-  scale_x_discrete(breaks=c("bin0_ratio", "bin0_ratio.HEPA",
-                            "concent_ratio", "concent_ratio.HEPA",
-                            "neph_bin0_ratio", "neph_bin0_ratio.HEPA",
-                            "pm1_ratio","pm1_ratio.HEPA", 
-                            "pm25_ratio","pm25_ratio.HEPA"),
-                   labels=c("Bin 0", "Bin 0 (HEPA)", 
-                            "CPC Concent.", "CPC Concent. (HEPA)",
-                            "Neph. Bin 0", "Neph. Bin 0 (HEPA)",
-                            "PM1", "PM1 (HEPA)",
-                            "PM2.5", "PM2.5 (HEPA)")) + 
-  
-  theme(axis.text.x = element_text(angle = 50, hjust=1)) + 
-  
-  labs(title="Effect of HEPA Purifiers on Particle Ratios", 
-       subtitle= "Revere City Hall: Main Room", 
-       x="Particle Ratio Type", 
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "VFW: Main Room",
+       x="Particle Ratio Type",
        y="Indoor/Outdoor Ratio") +
+
+  scale_fill_brewer(name = "Sensor Measurements",
+                  labels = c("Initial Recording", 
+                               "After HEPA Installation"),
+                  palette="Blues") +
   
-  scale_fill_discrete(name = "Particle Ratio Type", 
-                      labels = c("Bin 0", "Bin 0 (HEPA)", 
-                                 "CPC Concentration", "CPC Concentration (HEPA)",
-                                 "Nephlometer Bin 0", "Nephlometer Bin 0 (HEPA)",
-                                 "PM1", "PM1 (HEPA)",
-                                 "PM2.5", "PM2.5 (HEPA)")) + 
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
   
   ylim(0,1)
 
 mainroom_boxplot
-ggsave("mainroom_boxplot.png")
+ggsave("mainroom_box.png")
 ```
-
-```{r}
-print(mean_ratios$conc[3])
-```
-
