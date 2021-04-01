@@ -489,7 +489,7 @@ First, we're going to look at statistics of the data, to make sure that there is
 ```{r}
 data_check_test <- function(sensor){
   
-  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
+  temp_df <- sensor[, c("co", "no" , "correctedNO", "no2", "o3" , "co2",  "pm1" ,  "bin0") ] #define which variables to inspect
   
   na_count <- apply(temp_df, 2,  function(x) sum(is.na(x))) #count the number of NA values
   
@@ -514,7 +514,7 @@ We'll create two functions: one which computes the percentiles and one which com
 ```{r}
 data_check_percentiles <- function(sensor){
   
-  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
+  temp_df <- sensor[, c( "co", "no" , "correctedNO", "no2", "o3" , "co2",  "pm1" ,  "bin0") ] #define which variables to inspect
   
   percentiles <-apply(temp_df, 2,  function(x) quantile(x, probs =c(0.25, 0.75), na.rm = TRUE)) # apply the quantile function, which calculates percentiles
   
@@ -522,7 +522,7 @@ data_check_percentiles <- function(sensor){
 }
 data_check_mean <- function(sensor){
   
-  temp_df <- sensor[, c( "co", "no" , "no2", "o3" ,  "pm1" , "co2", "no_ae", "bin0") ] #define which variables to inspect
+  temp_df <- sensor[, c( "co", "no" , "correctedNO", "no2", "o3" , "co2",  "pm1" ,  "bin0") ] #define which variables to inspect
   
   mean_vals <-apply(temp_df, 2,  function(x) mean(x, na.rm = TRUE)) #apply the mean function
   
@@ -1017,10 +1017,32 @@ mapply(
 After checking in Igor, we'll import the data back in. 
 
 ```{r}
-temp = list.files(path = "./data/quant_aq/", pattern = "^.*_NaN.*\\.csv", full.names = TRUE) #specify files we're looking for
+#importing igor files
+temp = list.files(path = "./data/cleaned_in_igor/", pattern = "*.csv", full.names = TRUE) #specify files we're looking for
 snfiles_correction = sapply(temp, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
-names(snfiles_correction) <- lapply(names(snfiles), function(x) substr(x, 17, 26)) #change the names
-names(snfiles) <- lapply(names(snfiles), function(x) str_replace(x, "SN", "sn"))
+names(snfiles_correction) <- lapply(names(snfiles_correction), function(x) substr(x, 24, 27)) #change the names
+names(snfiles_correction) <- lapply(names(snfiles_correction), function(x) str_replace(x, "SN", "sn"))
+```
+
+```{r}
+format_dates <- function(sensor){
+  sensor$date <- ymd_hms(sensor$date, tz = "UTC")
+  sensor$date_local <- ymd_hms(sensor$date_local, tz = "America/New_York")
+  
+  return(sensor)
+}
+```
+
+
+```{r}
+#importing snfiles back in
+temp2 = list.files(path = "./", pattern = "*.csv", full.names = TRUE) #specify files we're looking for
+snfiles = sapply(temp2, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
+names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6)) #change the names
+
+#reformatting the dates 
+snfiles <- lapply(snfiles, function(x) format_dates(x))
+
 ```
 
 
@@ -1029,16 +1051,43 @@ As an example, we'll work through sn45.
 First, we'll import all the data.
 
 ```{r}
-sn45cleaning <- fread("./data/quant_aq/SN45_NaN.*\\.csv", header = TRUE) #get the igor file for sn45
+#sn45cleaning <- fread("./data/quant_aq/SN45_NaN.*\\.csv", header = TRUE) #get the igor file for sn45
+sn45cleaning <- snfiles_correction$sn45
 ```
 
-If you look at the sn45cleaning file, you'll see that "CO2" is given with uppercase C and O. We'll change it to lowercase to match the dataset. 
+If you look at the sn45cleaning file, you'll see that the pollutants are given with uppercase letters. We'll change it to lowercase to match the dataset.
 
 ```{r}
-sn45cleaning$"Pollutants"[which(sn45cleaning$"Pollutants" == "CO2")] <- "co2"
+sprintf("Pollutant format before : %s", sn45cleaning$Pollutants[1] )
+
+sn45cleaning$Pollutants[which(sn45cleaning$Pollutants != "all")] <- tolower(sn45cleaning$Pollutants[which(sn45cleaning$Pollutants != "all")])
+
+sprintf("Pollutant format after : %s", sn45cleaning$Pollutants[1] )
 ```
 
+We'll also change all instances of "no" to "correctedNO". We'll do this because correctedNO is the no vector we want to look at and modify. Since the Pollutants vector is a list of strings, we have to go through each string and replace the "no" substring. We're going to look for "no, " with the comma, because otherwise, no2 will change as well. 
+
+```{r}
+sprintf("Pollutant format after : %s", sn45cleaning$Pollutants[1] )
+
+#change "Pollutants" item that's just an "no" string 
+sn45cleaning$"Pollutants"[which(sn45cleaning$"Pollutants" == "no")] <- "correctedNO"
+# change substrings 
+
+if(any(grepl("no, ", sn45cleaning$Pollutants, fixed = TRUE)) == TRUE){
+  indx <- grepl("no, ", sn45cleaning$Pollutants, fixed = TRUE)
+  sn45cleaning$Pollutants[indx] <- gsub("no, ", "correctedNO, ", sn45cleaning$Pollutants[indx])
+}
+
+sprintf("Pollutant format after : %s", sn45cleaning$Pollutants[1] )
+```
+
+
 Next, we'll change the start and end vectors to be in datetime format. In order to convert, we first need to specify that "19" refers to 2019. We can do this by appending a "20" to the start and end strings. 
+
+```{r}
+sprintf("This is what the dates look like before: %s - %s", sn45cleaning$Start[1], sn45cleaning$End[1])
+```
 
 ```{r}
 sn45cleaning$Start <- paste("20", sn45cleaning$Start, sep="")
@@ -1051,7 +1100,6 @@ sn45cleaning$Start <- paste(sn45cleaning$Start, "00", sep="")
 sn45cleaning$End <- paste(sn45cleaning$End,"59", sep="")
 ```
 
-
 Now we can convert the start and end columns to datetime objects. 
 
 ```{r}
@@ -1059,7 +1107,28 @@ sn45cleaning$Start <- ymd_hms(sn45cleaning$Start, tz = "America/New_York")
 sn45cleaning$End <- ymd_hms(sn45cleaning$End, tz = "America/New_York")
 ```
 
-Since the file is now formatted, we can use it to modify the data. We're going to loop through start and end interval, and change them one by one. Since there's no "all" column in the data, we'll use an if statement to specify that that means all the pollutants. 
+```{r}
+sprintf("This is what the dates look like after: %s - %s", sn45cleaning$Start[1], sn45cleaning$End[1])
+```
+
+Since the file is now formatted, we can use it to modify the data. We're going to loop through each start and end interval, and change them one by one. 
+
+Since there's no "all" items in the data, we'll use an if statement to specify that that means all the pollutants. 
+
+Since other items could be a list of some pollutants, we'll have to check that it is a list by checking if there are any commas in the Pollutants item. If there are, we split the string, and change the pollutants one by one. 
+
+Otherwise, if a Pollutant item is just one pollutant (like "co"), then we can just change it directly 
+
+First, we'll print the values before the change: 
+
+```{r}
+for(i in 1:nrow(sn45cleaning)){
+  listpollutants = as.vector(strsplit(sn45cleaning$Pollutants[i], ", ")[[1]])
+  print(subset(snfiles$sn45[which(date_local >= sn45cleaning$Start[i] & date_local <= sn45cleaning$End[i])] , select = c("date_local", listpollutants)))
+}
+```
+
+Now, we'll apply the change. 
 
 ```{r}
 for(i in 1:nrow(sn45cleaning)){ #loop through igor file
@@ -1068,24 +1137,51 @@ for(i in 1:nrow(sn45cleaning)){ #loop through igor file
   
   if (pollutant == "all"){ #if it's all
     
-    snfiles$sn45[snfiles$sn45$date >= sn45cleaning$Start[i] & snfiles$sn45$date  <= sn45cleaning$End[i], c(  "co", "no" , "no2", "o3" , "pm1" , "pm25","pm10", "co2" , "no_ae", "bin0") ]  <- NA
+    snfiles$sn45[snfiles$sn45$date_local >= sn45cleaning$Start[i] & snfiles$sn45$date_local  <= sn45cleaning$End[i], c(  "co", "no" ,"correctedNO", "no2", "o3" , "pm1" , "pm25","pm10", "co2" , "no_ae", "bin0") ]  <- NA
   }
+  
+  #if it's a list of pollutants
+  else if(grepl(",", pollutant, fixed = TRUE)){
+    listpollutants = as.list(strsplit(pollutant, ", ")[[1]])
+    
+    for(subpollutant in listpollutants){
+        snfiles$sn45[[subpollutant]][snfiles$sn45$date_local >= sn45cleaning$Start[i] & snfiles$sn45$date_local  <= sn45cleaning$End[i]] <- NA
+      }
+    }
   
   else{ #otherwise
     
-   snfiles$sn45[[pollutant]][snfiles$sn45$date >= sn45cleaning$Start[i] & snfiles$sn45$date  <= sn45cleaning$End[i]] <- NA
+   snfiles$sn45[[pollutant]][snfiles$sn45$date_local >= sn45cleaning$Start[i] & snfiles$sn45$date_local  <= sn45cleaning$End[i]] <- NA
   }
 
+  }
+```
+
+And print how it looks after.
+
+```{r}
+for(i in 1:nrow(sn45cleaning)){
+  listpollutants = as.vector(strsplit(sn45cleaning$Pollutants[i], ", ")[[1]])
+  print(subset(snfiles$sn45[which(date_local >= sn45cleaning$Start[i] & date_local <= sn45cleaning$End[i])] , select = c("date_local", listpollutants)))
 }
 ```
+
 
 Let's now put this whole process in two functions: one to format the igor files and one to modify the datasets. 
 
 ```{r}
 modify_igor <- function(igor_file){
   #changing string formatting
-  if(any(igor_file$Pollutants == "CO2")){
-    igor_file$"Pollutants"[which(igor_file$"Pollutants" == "CO2")] <- "co2"
+  if(any(igor_file$Pollutants != "all")){
+    igor_file$"Pollutants"[which(igor_file$"Pollutants" != "all")] <- tolower(igor_file$"Pollutants"[which(igor_file$"Pollutants" != "all")])
+  }
+  #making sure that the function runs on the cleaned NO
+  if(any(igor_file$Pollutants == "no")){
+    igor_file$"Pollutants"[which(igor_file$"Pollutants" == "no")] <- "correctedNO"
+  }
+  if(any(grepl("no, ", igor_file$Pollutants, fixed = TRUE)) == TRUE){
+    indx <- grepl("no, ", igor_file$Pollutants, fixed = TRUE)
+    igor_file$Pollutants[indx] <- gsub("no, ", "correctedNO, ", igor_file$Pollutants[indx])
   }
   #formatting dates
   igor_file$Start <- paste("20", igor_file$Start, sep="")
@@ -1103,17 +1199,23 @@ modify_igor <- function(igor_file){
 apply_igor <- function(igor_file, snfile){
   for(i in 1:nrow(igor_file)){ #loop through igor file
 
-  pollutant = igor_file$`Pollutants`[i] #get which pollutant we're observing
-  
-  if (pollutant == "all"){ #if it's all
+    pollutant = igor_file$`Pollutants`[i] #get which pollutant we're observing
     
-    snfile[snfile$date >= igor_file$Start[i] & snfile$date  <= igor_file$End[i], c(  "co", "no" , "no2", "o3" , "pm1" , "pm25","pm10", "co2" , "no_ae", "bin0") ]  <- NA
-  }
-  
-  else{ #otherwise
-    
-   snfile[[pollutant]][snfile$date >= igor_file$Start[i] & snfile$date  <= igor_file$End[i]] <- NA
-  }
+    if (pollutant == "all"){ #if it's all
+      
+      snfile[snfile$date_local >= igor_file$Start[i] & snfile$date_local  <= igor_file$End[i], c(  "co", "no" ,"correctedNO", "no2", "o3" , "pm1" , "pm25","pm10", "co2" , "no_ae", "bin0") ]  <- NA
+    }
+    #if it's a list of pollutants
+    else if(grepl(",", pollutant, fixed = TRUE) == TRUE){
+      listpollutants = as.list(strsplit(pollutant, ", ")[[1]]) #it's ", " to get rid of the extra space
+      for(subpollutant in listpollutants){
+        snfile[[subpollutant]][snfile$date_local >= igor_file$Start[i] & snfile$date_local  <= igor_file$End[i]] <- NA
+      }
+    }
+    else{ #otherwise
+      
+     snfile[[pollutant]][snfile$date_local >= igor_file$Start[i] & snfile$date_local  <= igor_file$End[i]] <- NA
+    }
 
   }
   return(snfile)
@@ -1125,7 +1227,10 @@ Now, we'll apply it to all the files
 ```{r}
 snfiles_correction <- lapply(snfiles_correction, function(x) modify_igor(x)) #modify all the igor files
 
-snfiles <-  sapply(names(snfiles), function(k) apply_igor(snfiles_correction[[k]], snfiles[[k]])) #apply the igor corrections, by matching corrections and snfiles by name
+#one list wasn't changed correctly
+snfiles_correction[["sn72"]][2]$Pollutants <- "co, co2, correctedNO, no2, o3"
+
+snfiles <-  sapply(names(snfiles), function(k) apply_igor(snfiles_correction[[k]], snfiles[[k]]), simplify = FALSE, USE.NAMES = TRUE) #apply the igor corrections, by matching corrections and snfiles by name
 
 ```
 
@@ -1140,6 +1245,48 @@ lapply(snfiles, function(x) data_check_test(x))
 lapply(snfiles, function(x) data_check_percentiles(x))
 lapply(snfiles, function(x) data_check_mean(x))
 ```
+
+```{r}
+for (i in seq(length(names(snfiles)))){
+
+  timePlot(snfiles[[i]], pollutant = c("no2", "co", "correctedNO", "bin0", "pm1"),y.relation = "free", main = paste0(names(snfiles)[i], "Time Plots"))
+}
+```
+
+It looks like sn67 has one negative NO value, so we will inspect it it: 
+
+```{r}
+min_indx <- which.min(snfiles$sn67$correctedNO)
+
+```
+
+```{r}
+timePlot(snfiles$sn67[(min_indx - 1): (min_indx + 3) ,], pollutant = c("correctedNO", "no2"), y.relation = "free")
+```
+
+Upon closer inspection, it looks like it is a period of time when the data is negative, so we'll remove the chunk: 
+
+```{r}
+snfiles$sn67[(min_indx-1):(min_indx+3), "correctedNO"] <- NA
+```
+
+It also looks like sn72 has some high values: 
+
+```{r}
+library(ggplot2)
+max_indx <- which.max(snfiles$sn72$no2)
+
+ggplot(data=snfiles$sn72[(max_indx - 7): (max_indx + 5),], aes(x=date_local, y=no2)) +
+  geom_line()+
+  geom_point()
+
+ggplot(data=snfiles$sn72[(max_indx - 7): (max_indx + 5),], aes(x=date_local, y=correctedNO)) +
+  geom_line()+
+  geom_point()
+#timePlot(snfiles$sn72[(max_indx - 7): (max_indx + 10),], ("correctedNO", "no2"))
+View(snfiles$sn72[(max_indx - 10): (max_indx + 10), c("date_local", "correctedNO", "no2")])
+```
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
