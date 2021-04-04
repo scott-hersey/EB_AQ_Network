@@ -1013,9 +1013,21 @@ mapply(
   MoreArgs=list(row.names=FALSE, sep=",")
 )
 ```
+# Integrating Igor Data and Final Check
 
 After checking in Igor, we'll import the data back in. 
 
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(baseline) # for baseline correction
+```
+
+We'll import the igor files and make sure the files are listed correctly
 ```{r}
 #importing igor files
 temp = list.files(path = "./data/cleaned_in_igor/", pattern = "*.csv", full.names = TRUE) #specify files we're looking for
@@ -1023,6 +1035,8 @@ snfiles_correction = sapply(temp, function(x) fread(file=x, data.table = TRUE) ,
 names(snfiles_correction) <- lapply(names(snfiles_correction), function(x) substr(x, 24, 27)) #change the names
 names(snfiles_correction) <- lapply(names(snfiles_correction), function(x) str_replace(x, "SN", "sn"))
 ```
+
+Next, we're going to import the sensor data back into R, if needed. We're going to use the following function to format the dates in the imported files. 
 
 ```{r}
 format_dates <- function(sensor){
@@ -1033,10 +1047,10 @@ format_dates <- function(sensor){
 }
 ```
 
-
+And now we can import the files. 
 ```{r}
 #importing snfiles back in
-temp2 = list.files(path = "./", pattern = "*.csv", full.names = TRUE) #specify files we're looking for
+temp2 = list.files(path = "./", pattern = "*-for-igor.csv", full.names = TRUE) #specify files we're looking for
 snfiles = sapply(temp2, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
 names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6)) #change the names
 
@@ -1046,12 +1060,11 @@ snfiles <- lapply(snfiles, function(x) format_dates(x))
 ```
 
 
-As an example, we'll work through sn45. 
+As an example, we'll work through integrating the igor data for sn45. 
 
-First, we'll import all the data.
+First, we'll rename the data, for ease of use.
 
 ```{r}
-#sn45cleaning <- fread("./data/quant_aq/SN45_NaN.*\\.csv", header = TRUE) #get the igor file for sn45
 sn45cleaning <- snfiles_correction$sn45
 ```
 
@@ -1246,6 +1259,8 @@ lapply(snfiles, function(x) data_check_percentiles(x))
 lapply(snfiles, function(x) data_check_mean(x))
 ```
 
+We'll also plot the data.
+
 ```{r}
 for (i in seq(length(names(snfiles)))){
 
@@ -1253,40 +1268,184 @@ for (i in seq(length(names(snfiles)))){
 }
 ```
 
-It looks like sn67 has one negative NO value, so we will inspect it it: 
+
+## Removing Points Based on Final analysis 3/31 
+
+On 3/31 Scott and Alli did a final run-through of the data. We picked out some erronenous points, which we're going to remove now: 
+
+Here are the intervals we talked about:
+sn46 : 2019-09-11 17:23-17:35
+sn49 : any erroneous bin data (more on this below)
+sn62 : 2021-01-31 10:19:00-10:22:00
+       2020-12-15 23:32:00-23:38:00
+       2020-12-30 18:18:00-20:00:00
+       start - 2019-09-11 15:56:00
+sn67 : 2021-02-05 19:04:00 - 2021-02-06 02:30:00
+sn72 : 2020-09-23 11:16:00-18:00:00
+
+For the dates listed above, we will be removing no,no2,co,o3
 
 ```{r}
-min_indx <- which.min(snfiles$sn67$correctedNO)
+snfiles$sn46[which(date_local > "2019-09-11 17:23:00" & date_local < "2019-09-11 17:35:00" ), c("correctedNO", "no2", "co", "o3")] <- NA
 
+snfiles$sn62[which(date_local > "2021-01-31 10:19:00" & date_local < "2021-01-31 10:22:00" ), c("correctedNO", "no2", "co", "o3")] <- NA
+snfiles$sn62[which(date_local > "2020-12-15 23:32:00" & date_local < "2020-12-15 23:38:00" ), c("correctedNO", "no2", "co", "o3")] <- NA
+snfiles$sn62[which(date_local > "2020-12-30 18:18:00" & date_local < "2020-12-30 20:00:00" ), c("correctedNO", "no2", "co", "o3")] <- NA
+snfiles$sn62[which(date_local < "2019-09-11 15:56:00" ), c("correctedNO", "no2", "co", "o3")] <- NA
+
+snfiles$sn67[which(date_local > "2021-02-05 19:04:00" & date_local < "2021-02-06 02:30:00" ), c("correctedNO", "no2", "co", "o3")] <- NA
+
+snfiles$sn72[which(date_local > "2020-09-23 11:16:00" & date_local < "2020-09-23 18:00:00" ), c("correctedNO", "no2", "co", "o3")] <- NA
 ```
 
 ```{r}
-timePlot(snfiles$sn67[(min_indx - 1): (min_indx + 3) ,], pollutant = c("correctedNO", "no2"), y.relation = "free")
+listpollutants =  c("correctedNO", "no2", "co", "o3")
+print(subset(snfiles$sn46[which(date_local >= "2019-09-11 17:23:00" & date_local <= "2019-09-11 17:35:00")] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn62[which(date_local > "2021-01-31 10:19:00" & date_local < "2021-01-31 10:22:00" )] , select = c("date_local", listpollutants)))
+print(subset(snfiles$sn62[which(date_local > "2020-12-15 23:32:00" & date_local < "2020-12-15 23:38:00" )] , select = c("date_local", listpollutants)))
+print(subset(snfiles$sn62[which(date_local > "2020-12-30 18:18:00" & date_local < "2020-12-30 20:00:00" )] , select = c("date_local", listpollutants)))
+print(subset(snfiles$sn62[which(date_local < "2019-09-11 15:56:00")] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn67[which(date_local > "2021-02-05 19:04:00" & date_local < "2021-02-06 02:30:00")] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn72[which(date_local > "2020-09-23 11:16:00" & date_local < "2020-09-23 18:00:00" )] , select = c("date_local", listpollutants)))
+
+
 ```
 
-Upon closer inspection, it looks like it is a period of time when the data is negative, so we'll remove the chunk: 
+
+When we looked at bin0 data, we also realized that we have to include a filter for 0-valued bin values. We'll make a function for that below and apply it. 
+
+
+We'll check how many data points will be set to NA:
 
 ```{r}
-snfiles$sn67[(min_indx-1):(min_indx+3), "correctedNO"] <- NA
-```
+checkBins <- function(sensor){
+  print(sum(sensor$bin0 == 0, na.rm = TRUE))
+}
 
-It also looks like sn72 has some high values: 
+lapply(snfiles, function(x) checkBins(x))
+```
+And we'll create and apply the filter: 
 
 ```{r}
-library(ggplot2)
-max_indx <- which.max(snfiles$sn72$no2)
+clean_bins <- function(sensor){
+  if(any(sensor$bin0  == 0) == TRUE){
+    sprintf("deleting %f entries", sum(which(sensor$bin0 == 0)))
+    sensor$bin0[which(sensor$bin0 == 0)] <- NA
+    sensor$bin1[which(sensor$bin0 == 0)] <- NA
+    sensor$bin2[which(sensor$bin0 == 0)] <- NA
+    sensor$bin3[which(sensor$bin0 == 0)] <- NA
+    sensor$bin4[which(sensor$bin0 == 0)] <- NA
+  }
 
-ggplot(data=snfiles$sn72[(max_indx - 7): (max_indx + 5),], aes(x=date_local, y=no2)) +
-  geom_line()+
-  geom_point()
+  sensor$bin1[which(sensor$bin1 == 0)] <- NA
+  sensor$bin2[which(sensor$bin2 == 0)] <- NA
+  sensor$bin3[which(sensor$bin3 == 0)] <- NA
+  sensor$bin4[which(sensor$bin4 == 0)] <- NA
 
-ggplot(data=snfiles$sn72[(max_indx - 7): (max_indx + 5),], aes(x=date_local, y=correctedNO)) +
-  geom_line()+
-  geom_point()
-#timePlot(snfiles$sn72[(max_indx - 7): (max_indx + 10),], ("correctedNO", "no2"))
-View(snfiles$sn72[(max_indx - 10): (max_indx + 10), c("date_local", "correctedNO", "no2")])
+  return(sensor)
+}
 ```
 
+
+This is what those datapoints looked like before:
+```{r}
+listpollutants = c("bin0", "bin1", "bin2", "bin3", "bin4", "bin5")
+
+print(subset(snfiles$sn45[which(snfiles$sn45$bin0 == 0)] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn46[which(snfiles$sn46$bin0 == 0)] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn49[which(snfiles$sn49$bin0 == 0)] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn62[which(snfiles$sn62$bin0 == 0)] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn67[which(snfiles$sn67$bin0 == 0)] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn72[which(snfiles$sn72$bin0 == 0)] , select = c("date_local", listpollutants)))
+```
+
+
+```{r}
+snfiles <- lapply(snfiles, function(x) clean_bins(x))
+```
+
+And this is what they look like after.
+
+```{r}
+listpollutants = c("bin0", "bin1", "bin2", "bin3", "bin4", "bin5")
+
+print(subset(snfiles$sn45[which(snfiles$sn45$bin0 == 0)] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn46[which(snfiles$sn46$bin0 == 0)] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn49[which(snfiles$sn49$bin0 == 0)] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn62[which(snfiles$sn62$bin0 == 0)] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn67[which(snfiles$sn67$bin0 == 0)] , select = c("date_local", listpollutants)))
+
+print(subset(snfiles$sn72[which(snfiles$sn72$bin0 == 0)] , select = c("date_local", listpollutants)))
+```
+
+We'll plot and check one last time: 
+
+```{r}
+for (i in seq(length(names(snfiles2)))){
+
+  timePlot(snfiles[[i]], pollutant = c("no2", "co", "correctedNO", "bin0", "pm1"),y.relation = "free", main = paste0(names(snfiles)[i], "Time Plots"))
+}
+```
+
+And we'll remove the final extraneous point.
+
+```{r}
+snfiles$sn62[which(date_local == "2021-01-30 10:19:00"), "no2"] <- NA
+```
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+# Export 
+
+Now we can export the cleaned data into csvs. 
+
+## Split pre-covid and post-covid
+
+Since we are keeping pre-covid and post-covid times separate in our analysis, we'll separate the files: 
+
+```{r}
+snfiles$sn45_before <- snfiles$sn45[date_local < "2020-03-01 00:00:00 EST"]
+snfiles$sn45_after <- snfiles$sn45[date_local > "2020-04-01 00:00:00 EST"]
+
+snfiles$sn46_before <- snfiles$sn46[date_local < "2020-03-01 00:00:00 EST"]
+snfiles$sn46_after <- snfiles$sn46[date_local > "2020-04-01 00:00:00 EST"]
+
+snfiles$sn49_before <- snfiles$sn49[date_local < "2020-03-01 00:00:00 EST"]
+snfiles$sn49_after <- snfiles$sn49[date_local > "2020-04-01 00:00:00 EST"]
+
+snfiles$sn62_before <- snfiles$sn62[date_local < "2020-03-01 00:00:00 EST"]
+snfiles$sn62_after <- snfiles$sn62[date_local > "2020-04-01 00:00:00 EST"]
+
+snfiles$sn67_before <- snfiles$sn67[date_local < "2020-03-01 00:00:00 EST"]
+snfiles$sn67_after <- snfiles$sn67[date_local > "2020-04-01 00:00:00 EST"]
+
+snfiles$sn72_before <- snfiles$sn72[date_local < "2020-03-01 00:00:00 EST"]
+snfiles$sn72_after <- snfiles$sn72[date_local > "2020-04-01 00:00:00 EST"]
+```
+
+
+## Export
+
+Since we want to save the datasets to files with representative names, we can use mapply (like lapply but with more functionality). For each dataset, we can set the name we used when we set snfiles as the file names. 
+
+```{r}
+mapply(
+  fwrite, #apply function write table
+  x=snfiles, file=paste(names(snfiles), "csv", sep=".")
+)
+```
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -1299,9 +1458,10 @@ Polar plots are a tool that shows the relationship between pollutant concentrati
 ```{r}
 generate_overall_polarplots <- function(sn, snstring){
   #generates the polar plots for the variables we are interested in 
-  polarPlot(sn, pollutant = "no", main = paste0(snstring, " NO Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "correctedNO", main = paste0(snstring, " NO Polar Plot", sep= " "))
   polarPlot(sn, pollutant = "no2", main = paste0(snstring, " NO2 Polar Plot", sep= " "))
   polarPlot(sn, pollutant = "co",  main = paste0(snstring, " CO Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "co2",  main = paste0(snstring, " CO Polar Plot", sep= " "))
   polarPlot(sn, pollutant = "bin0",  main = paste0(snstring, " bin0 Polar Plot", sep= " "))
   polarPlot(sn, pollutant = "pm1",  main = paste0(snstring, " PM1 Polar Plot", sep= " "))
 
@@ -1319,9 +1479,11 @@ generate_overall_polarplots(snfiles$sn45, "sn45")
 We can also apply this function as a for loop to the datasets. We can also loop through the dataset names, and add those to the titles. 
 
 ```{r}
-for (i in seq(length(names(snfiles)))){
- generate_overall_polarplots(snfiles[[i]], names(snfiles)[i])
-}
+# pdf("polarplots.pdf")
+# for (i in seq(length(names(snfiles)))){
+#  generate_overall_polarplots(snfiles[[i]], names(snfiles)[i])
+# }
+# dev.off()
 ```
 
 
@@ -1331,12 +1493,27 @@ for (i in seq(length(names(snfiles)))){
 Diurnal plots show the relationship between pollutant concentration and time (on the scale of hours, days and months). To create diurnal profiles for all of the sensors, we can apply the same method as we did to create polar plots.
 
 ```{r}
-for (i in seq(length(names(snfiles)))){
+for (i in seq(from= 7, to =17, by = 2)){
 
-  timeVariation(snfiles[[i]], pollutant = c("no2"), main = paste0(names(snfiles)[i], " NO2 Diurnal Profile"))
+  timeVariation(snfiles[[i]], pollutant = c("co", "no2", "correctedNO"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
 
-  timeVariation(snfiles[[i]], pollutant = c("pm1", "co", "no", "bin0", "bin1"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
+  timeVariation(snfiles[[i]], pollutant = c("pm1", "pm2", "bin0", "bin1"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
 }
+```
+
+```{r}
+for (i in 1:3){
+
+  timeVariation(snfiles[[i]], pollutant = c( "co", "no2", "correctedNO"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
+
+  timeVariation(snfiles[[i]], pollutant = c("pm1", "pm2.5", "bin0", "bin1"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
+}
+```
+
+```{r}
+pdf("diurnal-plot-sn45.pdf")
+timeVariation(snfiles$sn45_before, pollutant = c( "co", "no2", "correctedNO"), normalise = TRUE, main = paste0(names(snfiles)[i], "pre-covid Normalized Group of Pollutants Diurnal Profile"))
+dev.off()
 ```
 
 
@@ -1345,53 +1522,18 @@ for (i in seq(length(names(snfiles)))){
 We will make a correlation plot, using openair's corPlot function. 
 
 ```{r}
+pdf("cor-plots.pdf")
 for (i in seq(length(names(snfiles)))){
   
-  corPlot(snfiles[[i]], main = paste0(names(snfiles)[i], " CorPlot Profile"))
+  corPlot(snfiles[[i]], pollutants = c("correctedNO", "no2", "co", "o3","co2", "bin0", "pm1", "temp_manifold", "rh_manifold", "pressure", "ws"), main = paste0(names(snfiles)[i], " CorPlot Profile"))
 
 }
+
+dev.off()
 ```
-
-
-# Export 
-
-The last thing we'll do is export the data into csvs. 
-
-## Split pre-covid and post-covid
-
-Since we are keeping pre-covid and post-covid times separate in our analysis, we'll separate the files: 
 
 ```{r}
-snfiles$sn45_before <- snfiles$sn45[date < "2020-03-01 00:00:00 EST"]
-snfiles$sn45_after <- snfiles$sn45[date > "2020-04-01 00:00:00 EST"]
-
-snfiles$sn46_before <- snfiles$sn46[date < "2020-03-01 00:00:00 EST"]
-snfiles$sn46_after <- snfiles$sn46[date > "2020-04-01 00:00:00 EST"]
-
-snfiles$sn49_before <- snfiles$sn49[date < "2020-03-01 00:00:00 EST"]
-snfiles$sn49_after <- snfiles$sn49[date > "2020-04-01 00:00:00 EST"]
-
-snfiles$sn62_before <- snfiles$sn62[date < "2020-03-01 00:00:00 EST"]
-snfiles$sn62_after <- snfiles$sn62[date > "2020-04-01 00:00:00 EST"]
-
-snfiles$sn67_before <- snfiles$sn67[date < "2020-03-01 00:00:00 EST"]
-snfiles$sn67_after <- snfiles$sn67[date > "2020-04-01 00:00:00 EST"]
-
-snfiles$sn72_before <- snfiles$sn72[date < "2020-03-01 00:00:00 EST"]
-snfiles$sn72_after <- snfiles$sn72[date > "2020-04-01 00:00:00 EST"]
+corPlot(snfiles[[7]], pollutants = c("correctedNO", "no2", "co", "o3","co2", "bin0", "pm1", "temp_manifold", "rh_manifold", "pressure", "ws"), main = paste0(names(snfiles)[7], " CorPlot Profile"))
 ```
 
 
-## Export
-
-Since we want to save the datasets to files with representative names, we can use mapply (like lapply but with more functionality). For each dataset, we can set the name we used when we set snfiles as the file names. 
-
-```{r}
-# mapply(
-#   write.table, #apply function write table
-#   x=snfiles, file=paste(names(snfiles), "csv", sep="."), #for each element in snfiles, use its name to make a csv of it
-#   MoreArgs=list(row.names=FALSE, sep=",")
-# )
-```
-
-Place the exported files into the data folder.
