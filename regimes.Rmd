@@ -6,6 +6,12 @@ title: "Regimes"
 
 In this notebook, we will analyze data that answers the question "What regime is associated with the most pollution?". In this case, when we say regime, we mean varieties in time and location that are associated with different airport activity. For instance, SN45 is situated close to the northern runway at Logan. That runway has periods when it is being used, and when it is not being used; thus, the sensor data during those two different regimes could result in different sensor readings. 
 
+Another way of phrasing this analysis is "how does wind speed and direction affect sensor readings?" and "how do LTOs affect sensor readings?" We'll be answering this question using the regimes mentioned above, and we'll analyze different regimes by generating boxplots.
+
+# Importing 
+
+## Import Necessary Libraries
+
 ```{r}
 library(lubridate)
 library(openair)
@@ -16,26 +22,50 @@ library(Rmisc)
 library(ggplot2)
 ```
 
+## Import Data 
+
+Since the data's dates will need to be formatted when imported, we'll call the format_date function below:
+```{r}
+format_dates <- function(sensor){
+  sensor$date <- ymd_hms(sensor$date, tz = "UTC")
+  sensor$date_local <- ymd_hms(sensor$date_local, tz = "America/New_York")
+  
+  return(sensor)
+}
+```
 
 ```{r}
-sn45 <- fread("./data/cleaned_sn45.csv", header = TRUE, data.table = TRUE)
-sn45$date <- ymd_hms(sn45$date)
-tz(sn45$date) <- "America/New_York"
-sn45copy <- sn45 #to test using multiple datasets
+#importing snfiles 
+temp2 = list.files(path = "./data/final/", pattern = "*before.csv", full.names = TRUE) #specify files we're looking for
+snfiles = sapply(temp2, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
+names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6)) #change the names
 
-snfiles <- list("sn45" = sn45, "sn45_copy" = sn45copy)
+#reformatting the dates 
+snfiles <- lapply(snfiles, function(x) format_dates(x))
 
 ```
 
+# Wind Speed and Direction
 
-# Creating Regimes 
+To test how wind speed and direction affect sensor readings, we'll create a set of functions that allow the user to easily input which wind directions and wind speeds they want to check, then plot them on a box plot. 
 
-## Upwind - Downwind 
+We'll walk through these functions and what they do by using SN45 as an example.
+
+## Create a regimes vector 
+
+First, we're going to create an additional column in the dataset, that states which regime each data row is in, given some conditions. The user chooses what the regimes are, and how they are defined. 
+
+In order to do this, first we'll start by just creating a column of NAs in SN45. 
 
 ```{r}
-sn45$regime <- NA 
+sn45 <- snfiles$sn45 # create sn45 vector
 
+sn45$regime <- NA # create column of NAs
+```
 
+Next, we'll populate that column based on some set of conditions. In this case, I'm using one of the regime definitions defined in the Regimes Description spreadhseet, on the Eastie Google Drive.
+
+```{r}
 sn45$regime[which(sn45$ws >= 2.5 & sn45$wd>  140 & sn45$wd < 270)] <- "140 - 270  and higher speeds"
 
 sn45$regime[which(sn45$ws >= 2.5 & sn45$wd>  140 & sn45$wd < 180)] <- "140 - 180 downwind and higher speeds"
@@ -43,9 +73,15 @@ sn45$regime[which(sn45$ws >= 2.5 & sn45$wd>  140 & sn45$wd < 180)] <- "140 - 180
 sn45$regime[which(sn45$ws < 2.5)] <- "downwind and lower speeds"
 
 sn45$regime[which(is.na(sn45$regime))] <- "upwind"
-
-
 ```
+
+We can see what this looks like: 
+
+```{r}
+View(sn45$regime)
+```
+
+Now, we'll create a generalized function out of the above code. This code assumes that there are two regimes which have different wind directions but wind speeds higher than a certain value, one regime that has a lower wind speed, and one other regime that encompasses the rest.  
 
 ```{r}
 create_regime_vector <- function(dataset, ws_val, wdlist, stringlist){
@@ -64,6 +100,8 @@ create_regime_vector <- function(dataset, ws_val, wdlist, stringlist){
 }
 ```
 
+We can apply this function to all our datasets at once by creating nested lists. The order in the list corresponds to the order that snfiles are in (ie sn45, sn46, sn49.. etc)
+
 ```{r}
 wd = list(list(140, 270, 140, 180), list(140, 270, 140, 180))
 
@@ -79,7 +117,12 @@ for(i in 1:length(snfiles)){
 }
 ```
 
-# Transform Data
+## Transform Data
+
+In order to use our boxplots function, the snfiles data has to be in a much different format. We're going to put it in the right format in this section.
+
+First, we're going to make a function that creates a column in the data, that just states the name of the dataset it belongs to. 
+
 ```{r}
 map_sensor <- function(dataset, sensorname){
   dataset$sn <- sensorname
@@ -87,14 +130,14 @@ map_sensor <- function(dataset, sensorname){
 }
 ```
 
+And apply it:
 ```{r}
 names = c("sn45", "sn45copy")
-
 
 snfiles3 <- mapply("map_sensor", dataset = snfiles2, sensorname = names, SIMPLIFY = FALSE)
 ```
 
-
+Next, we're going to convert the data from short format into long format. We can read more about this here [](). We're only going to extract the variables we need, using the measure.vars parameter. The id variables identify where the data is coming from.
 ```{r}
 melt_dataframes <- function(dataset){
   dataset.melted <- melt.data.table(dataset, id.vars = c("regime", "sn"), measure.vars = c("no", "no2", "pm1") )
@@ -106,18 +149,19 @@ melt_dataframes <- function(dataset){
 snfiles.melted <- lapply(snfiles3, function(x) melt_dataframes(x))
 ```
 
+Now, we're going to bind all of the data together, so that we can plot it on the same boxplot.
+
 ```{r}
-#combine into one dataset
-merged_df <- do.call("rbind", snfiles.melted)
+merged_df <- do.call("rbind", snfiles.melted) #combine into one dataset
 ```
 
-
-# Generating Boxplots 
+To make it easier to identify the differences between data, we're going to make sensor name and regime into one column
 
 ```{r}
 merged_df$group <- paste(merged_df$sn, merged_df$regime)
 ```
 
+## Generating Boxplots 
 
 
 ```{r}
@@ -136,4 +180,31 @@ g <- ggplot(data = transform(merged_df, x= factor(group)), aes(x=group, y=value,
 
 g+ theme( axis.text.x = element_blank())
 ```
+
+
+# Wind and LTOs 
+
+
+We're going to do a similar process here compared to the wind speed section above.
+
+## Preparing LTO Data 
+One of the components that will be different is preparing a dataset of flight times to be used for LTO regimes. 
+
+A lot of the code in this section will be done in separate helper functions that will get called in.
+
+We'll import and format the flight. 
+```{r}
+#import the data 
+
+#View what it looks like 
+#head()
+```
+
+
+```{r}
+#import the formatting function 
+
+#run the formatting function
+```
+
 
