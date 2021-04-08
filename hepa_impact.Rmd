@@ -16,34 +16,72 @@ library(readr) #read .csv files
 library(ggplot2) #plotting
 ```
 
-## HEPA Impact Plot
+# HEPA Impact Plots
 
 This notebook focuses on creating visuals to highlight the impact of HEPA
 purifiers on particle concentration in classrooms.
 
-### Setup
+## Setup
 In hepa_main.Rmd, un-comment the code in the chunk at line 486 to download the 
-processed data as .csv files. 
+processed data as .csv files. This will be our starting point.
 
-We will start by importing them here. We need to manually set concent_ratio as 
-a double.
+
+## Import Data
+
+We will start by importing the datasets here. We need to manually set 
+the values as doubles.
 
 ```{r}
 waterdept_ratio <- read_csv('waterdept_ratio.csv')
 
 auditor_ratio <- read_csv('auditor_ratio.csv', col_types = cols(
-  concent_ratio = col_double()
+  concent_ratio = col_double(),
+  concent_1.indoor = col_double(),
+  concent_1.outdoor = col_double(),
+  bin0_ratio = col_double(),
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0_ratio = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25_ratio = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10_ratio = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
 ))
 
 mainroom_ratio <- read_csv('mainroom_ratio.csv', col_types = cols(
-  concent_ratio = col_double()
+  concent_ratio = col_double(),
+  concent_1.indoor = col_double(),
+  concent_1.outdoor = col_double(),
+  bin0_ratio = col_double(),
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0_ratio = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25_ratio = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10_ratio = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
 ))
 
-head(waterdept_ratio)
+# head(waterdept_ratio)
 ```
 
 Looking at hepa_main.Rmd, it seems that it's more useful to keep all structures
-as a list.
+as a list. That way, if we need to apply the same function to each data frame, 
+we can do so with a function.
 
 ```{r}
 ratio_list <- list(
@@ -55,12 +93,9 @@ ratio_list <- list(
 ```
 
 
-To make the data frame more manageable, we'll only select these columns:
-date1min, 
-concent_ratio, 
-bin0.outdoor & bin0.indoor, 
-neph_bin0.outdoor, & neph_bin0.indoor, 
-pm1_ratio
+To make the data frame more manageable, we'll only select specific columns. We 
+will also calculate indoor/outdoor ratios for all particle sizes.
+
 
 ```{r}
 simplify_ratio_data <- function(room) {
@@ -108,9 +143,12 @@ time_to_eastern <- function(room) {
 ratio_list <- lapply(ratio_list,  function(x) time_to_eastern(x)) # Fix time zone
 ```
 
+Here, you can see a snippet of one of the data frames.
+
 ```{r}
 head(ratio_list$auditor)
 ```
+
 It is good practice that a dataset be *tidy*. We will make this data tidier by
 transposing the columns.
 
@@ -124,9 +162,6 @@ ratio_list <- lapply(ratio_list,  function(x) tidy_data(x))
 
 head(ratio_list$auditor)
 ```
-
-
-
 
 We will now filter the data for work hours to focus on the impact the purifiers
 have on the people in these buildings. For City Hall and VFW, let's say that 
@@ -194,6 +229,9 @@ names = c("auditor", "waterdept", "mainroom", "auditor", "waterdept", "mainroom"
 is_HEPA = c("pre", "pre", "pre", "post", "post", "post")
 
 calculate_mean_ratio <- function(room) {
+  
+  # Calculate mean conc before and after for indoor, outdoor, and ratio
+  # Calculate standard deviations for all as well
   conc <- room %>%
     filter(source=="concent_ratio") %>%
     summarize(mean(ratio, na.rm=TRUE)) %>%
@@ -349,6 +387,7 @@ calculate_mean_ratio <- function(room) {
     rename(pm10_sd.outdoor = "sd(ratio, na.rm = TRUE)")
   
   
+  # Connect into one dataframe
   mean_ratios = cbind(conc, conc_sd, conc.indoor, conc_sd.indoor, conc.outdoor, conc_sd.outdoor,
                       bin0, bin0_sd, bin0.indoor, bin0_sd.indoor, bin0.outdoor, bin0_sd.outdoor,
                       neph_bin0, neph_bin0_sd, neph_bin0.indoor, neph_bin0_sd.indoor, neph_bin0.outdoor, neph_bin0_sd.outdoor, 
@@ -361,9 +400,11 @@ calculate_mean_ratio <- function(room) {
 mean_ratios <- lapply(ratio_list, function(x) calculate_mean_ratio(x)) %>%
   bind_rows() 
 
+# Add labels to dataframe
 mean_ratios <- cbind(name = names, mean_ratios)
 mean_ratios <- cbind(mean_ratios, is_HEPA)
 
+# Pivot wider for easier readability upon export
 mean_ratios <- mean_ratios %>%
   pivot_wider(names_from = is_HEPA, names_sep = '.', values_from = -name) %>%
   mutate(conc_reduction = (conc.pre - conc.post)/conc.pre,
@@ -376,11 +417,15 @@ mean_ratios <- mean_ratios %>%
 mean_ratios
 
 ```
+Here, we'll export the data to a .csv file for further data analysis.
+
 ```{r}
 write.table(mean_ratios, "revere_mean_ratios.csv", append = FALSE, sep = ",", dec = ".",
             row.names = TRUE, col.names = TRUE)
 ```
 
+
+## Plot Concentration Changes
 
 Let's investigate the data by using boxplots. Before we do that, though, we 
 must distinguish which data is before and after the purifier installation.
@@ -395,6 +440,8 @@ ratio_list$waterdept_HEPA <- ratio_list$waterdept_HEPA %>%
 
 waterdept_combined <- rbind(ratio_list$waterdept, ratio_list$waterdept_HEPA)
 
+
+# Prep for boxplot
 waterdept_boxplot_ratios <- waterdept_combined %>%
   filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
 
@@ -413,6 +460,7 @@ auditor_combined <- rbind(ratio_list$auditor, ratio_list$auditor_HEPA)
 auditor_boxplot_ratios <- auditor_combined %>%
   filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
 
+# Prep for boxplot
 auditor_boxplot_ratios$source <- factor(auditor_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
                         "pm1_ratio", "pm25_ratio", "pm10_ratio"))
 
@@ -428,6 +476,7 @@ mainroom_combined <- rbind(ratio_list$mainroom, ratio_list$mainroom_HEPA)
 mainroom_boxplot_ratios <- mainroom_combined %>%
   filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
 
+# Prep for boxplot
 mainroom_boxplot_ratios$source <- factor(mainroom_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
                         "pm1_ratio", "pm25_ratio", "pm10_ratio"))
 ```
@@ -435,9 +484,13 @@ mainroom_boxplot_ratios$source <- factor(mainroom_boxplot_ratios$source , levels
 ```{r}
 waterdept_boxplot_ratios
 ```
+We will use the built-in ggplot2 boxplot and adjust the visuals to our needs.
 
+### Water Department Room
 
 ```{r}
+
+# Nice labels for facet_grid
 source.labs <- c("CPC Conc.", "Bin 0", "Neph. Bin 0", "PM1", "PM2.5", "PM10")
 names(source.labs) <- c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
                         "pm1_ratio", "pm25_ratio", "pm10_ratio")
@@ -445,90 +498,110 @@ names(source.labs) <- c("concent_ratio", "bin0_ratio", "neph_bin0_ratio",
 waterdept_boxplot <- ggplot(data=waterdept_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
   geom_boxplot() +
   
+  # separate visually by measurement and move labels to bottom of boxplot
   facet_grid(. ~ source, scales='free_x',
              labeller = labeller(source = source.labs),
              switch = "x") +
   
-  
+  # label graph
   labs(title="Effect of HEPA Purifiers on Particle Ratios",
        subtitle= "Revere City Hall: Water Department Room",
        x="Particle Ratio Type",
        y="Indoor/Outdoor Ratio") +
 
-  
+  # Change legend and use blue theme
   scale_fill_brewer(name = "Sensor Measurements",
                     labels = c("Initial Recording", 
                                  "After HEPA Installation"),
                     palette="Blues") +
   
 
-  
+  # Clean up axes
   theme(
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank()) +
 
+  # Set limits  
   ylim(0,1)
 
 waterdept_boxplot
+
+# Save image
 ggsave("waterdept_box.png")
 ```
+
+### Auditor Room
 
 ```{r}
 auditor_boxplot <- ggplot(data=auditor_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
   geom_boxplot() +
   
+  # separate visually by measurement and move labels to bottom of boxplot
   facet_grid(. ~ source, scales='free_x', 
              labeller = labeller(source = source.labs),
              switch = "x") +
   
 
-  
+  # label graph
   labs(title="Effect of HEPA Purifiers on Particle Ratios",
        subtitle= "Revere City Hall: Auditor Room",
        x="Particle Ratio Type",
        y="Indoor/Outdoor Ratio") +
 
+  # Change legend and use blue theme
   scale_fill_brewer(name = "Sensor Measurements",
                   labels = c("Initial Recording", 
                                "After HEPA Installation"),
                   palette="Blues") +
   
+  # Clean up axes
   theme(
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank()) +
   
+  # Set limits
   ylim(0,1)
 
 auditor_boxplot
+
+# Save image
 ggsave("auditor_box.png")
 ```
+### VFW Main Room
+
 ```{r}
 mainroom_boxplot <- ggplot(data=mainroom_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
   geom_boxplot() +
   
+  # separate visually by measurement and move labels to bottom of boxplot
   facet_grid(. ~ source, scales='free_x', 
              labeller = labeller(source = source.labs),
              switch = "x") +
   
 
-  
+  # label graph
   labs(title="Effect of HEPA Purifiers on Particle Ratios",
        subtitle= "VFW: Main Room",
        x="Particle Ratio Type",
        y="Indoor/Outdoor Ratio") +
 
+  # Change legend and use blue theme
   scale_fill_brewer(name = "Sensor Measurements",
                   labels = c("Initial Recording", 
                                "After HEPA Installation"),
                   palette="Blues") +
   
+  # Clean up axes
   theme(
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank()) +
   
+  # Set limits
   ylim(0,1)
 
 mainroom_boxplot
+
+# Save image
 ggsave("mainroom_box.png")
 ```
 
