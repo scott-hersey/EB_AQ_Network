@@ -69,12 +69,26 @@ simplify_ratio_data <- function(room) {
     mutate(bin0_ratio = bin0.indoor/bin0.outdoor) %>%
     mutate(neph_bin0_ratio = neph_bin0.indoor/neph_bin0.outdoor) %>%
     mutate(pm25_ratio = pm25.indoor/pm25.outdoor) %>%
+    mutate(pm10_ratio = pm10.indoor/pm10.outdoor) %>%
     select(date1min, 
-           concent_ratio, 
+           concent_ratio,
+           concent_1.indoor,
+           concent_1.outdoor,
            bin0_ratio,
+           bin0.indoor,
+           bin0.outdoor,
            neph_bin0_ratio,
+           neph_bin0.indoor,
+           neph_bin0.outdoor,
            pm1_ratio,
-           pm25_ratio)
+           pm1.indoor,
+           pm1.outdoor,
+           pm25_ratio,
+           pm25.indoor,
+           pm25.outdoor,
+           pm10_ratio,
+           pm10.indoor,
+           pm10.outdoor)
     
   return(room)
 }
@@ -175,6 +189,10 @@ installation, as well as the standard deviations. We'll store this in another
 dataset, which we will also tidy up.
 
 ```{r}
+names = c("auditor", "waterdept", "mainroom", "auditor", "waterdept", "mainroom")
+
+is_HEPA = c("pre", "pre", "pre", "post", "post", "post")
+
 calculate_mean_ratio <- function(room) {
   conc <- room %>%
     filter(source=="concent_ratio") %>%
@@ -184,6 +202,23 @@ calculate_mean_ratio <- function(room) {
     filter(source=="concent_ratio") %>%
     summarize(sd(ratio, na.rm=TRUE)) %>%
     rename(conc_sd = "sd(ratio, na.rm = TRUE)")
+  conc.indoor <- room %>%
+    filter(source=="concent_1.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(conc.indoor = "mean(ratio, na.rm = TRUE)")
+  conc_sd.indoor <- room %>%
+    filter(source=="concent_1.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(conc_sd.indoor = "sd(ratio, na.rm = TRUE)")  
+  conc.outdoor <- room %>%
+    filter(source=="concent_1.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(conc.outdoor = "mean(ratio, na.rm = TRUE)")
+  conc_sd.outdoor <- room %>%
+    filter(source=="concent_1.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(conc_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
   
   bin0 <- room %>%
     filter(source=="bin0_ratio") %>%
@@ -193,6 +228,22 @@ calculate_mean_ratio <- function(room) {
     filter(source=="bin0_ratio") %>%
     summarize(sd(ratio, na.rm=TRUE)) %>%
     rename(bin0_sd = "sd(ratio, na.rm = TRUE)")
+  bin0.indoor <- room %>%
+    filter(source=="bin0.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(bin0.indoor = "mean(ratio, na.rm = TRUE)")
+  bin0_sd.indoor <- room %>%
+    filter(source=="bin0.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(bin0_sd.indoor = "sd(ratio, na.rm = TRUE)")
+    bin0.outdoor <- room %>%
+    filter(source=="bin0.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(bin0.outdoor = "mean(ratio, na.rm = TRUE)")
+  bin0_sd.outdoor <- room %>%
+    filter(source=="bin0.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(bin0_sd.outdoor = "sd(ratio, na.rm = TRUE)")
   
   neph_bin0 <- room %>%
     filter(source=="neph_bin0_ratio") %>%
@@ -202,6 +253,23 @@ calculate_mean_ratio <- function(room) {
     filter(source=="neph_bin0_ratio") %>%
     summarize(sd(ratio, na.rm=TRUE)) %>%
     rename(neph_bin0_sd = "sd(ratio, na.rm = TRUE)")
+  neph_bin0.indoor <- room %>%
+    filter(source=="neph_bin0.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0.indoor = "mean(ratio, na.rm = TRUE)")
+  neph_bin0_sd.indoor <- room %>%
+    filter(source=="neph_bin0.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  neph_bin0.outdoor <- room %>%
+    filter(source=="neph_bin0.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0.outdoor = "mean(ratio, na.rm = TRUE)")
+  neph_bin0_sd.outdoor <- room %>%
+    filter(source=="neph_bin0.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
   
   pm1 <- room %>%
     filter(source=="pm1_ratio") %>%
@@ -211,6 +279,23 @@ calculate_mean_ratio <- function(room) {
     filter(source=="pm1_ratio") %>%
     summarize(sd(ratio, na.rm=TRUE)) %>%
     rename(pm1_sd = "sd(ratio, na.rm = TRUE)")
+  pm1.indoor <- room %>%
+    filter(source=="pm1.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm1.indoor = "mean(ratio, na.rm = TRUE)")
+  pm1_sd.indoor <- room %>%
+    filter(source=="pm1.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm1_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  pm1.outdoor <- room %>%
+    filter(source=="pm1.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm1.outdoor = "mean(ratio, na.rm = TRUE)")
+  pm1_sd.outdoor <- room %>%
+    filter(source=="pm1.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm1_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
   
   pm25 <- room %>%
     filter(source=="pm25_ratio") %>%
@@ -220,30 +305,76 @@ calculate_mean_ratio <- function(room) {
     filter(source=="pm25_ratio") %>%
     summarize(sd(ratio, na.rm=TRUE)) %>%
     rename(pm25_sd = "sd(ratio, na.rm = TRUE)")
-
+  pm25.indoor <- room %>%
+    filter(source=="pm25.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm25.indoor = "mean(ratio, na.rm = TRUE)")
+  pm25_sd.indoor <- room %>%
+    filter(source=="pm25.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm25_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  pm25.outdoor <- room %>%
+    filter(source=="pm25.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm25.outdoor = "mean(ratio, na.rm = TRUE)")
+  pm25_sd.outdoor <- room %>%
+    filter(source=="pm25.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm25_sd.outdoor = "sd(ratio, na.rm = TRUE)")
   
-  mean_ratios = cbind(conc, conc_sd, bin0, bin0_sd, neph_bin0, neph_bin0_sd, pm1, pm1_sd, pm25, pm25_sd)
+
+  pm10 <- room %>%
+    filter(source=="pm10_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm10 = "mean(ratio, na.rm = TRUE)")
+  pm10_sd <- room %>%
+    filter(source=="pm10_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm10_sd = "sd(ratio, na.rm = TRUE)")
+  pm10.indoor <- room %>%
+    filter(source=="pm10.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm10.indoor = "mean(ratio, na.rm = TRUE)")
+  pm10_sd.indoor <- room %>%
+    filter(source=="pm10.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm10_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  pm10.outdoor <- room %>%
+    filter(source=="pm10.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm10.outdoor = "mean(ratio, na.rm = TRUE)")
+  pm10_sd.outdoor <- room %>%
+    filter(source=="pm10.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm10_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+  
+  mean_ratios = cbind(conc, conc_sd, conc.indoor, conc_sd.indoor, conc.outdoor, conc_sd.outdoor,
+                      bin0, bin0_sd, bin0.indoor, bin0_sd.indoor, bin0.outdoor, bin0_sd.outdoor,
+                      neph_bin0, neph_bin0_sd, neph_bin0.indoor, neph_bin0_sd.indoor, neph_bin0.outdoor, neph_bin0_sd.outdoor, 
+                      pm1, pm1_sd, pm1.indoor, pm1_sd.indoor, pm1.outdoor, pm1_sd.outdoor,
+                      pm25, pm25_sd, pm25.indoor, pm25_sd.indoor, pm25.outdoor, pm25_sd.outdoor,
+                      pm10, pm10_sd, pm10.indoor, pm10_sd.indoor, pm10.outdoor, pm10_sd.outdoor)
   return(mean_ratios)
 }
 
-mean_concent_ratios <- lapply(ratio_list, function(x) calculate_mean_ratio(x))
-
-mean_ratios <- bind_rows(mean_concent_ratios) 
-
-names = c("auditor", "waterdept", "mainroom", "auditor", "waterdept", "mainroom")
-
-is_HEPA = c("no", "no", "no", "yes", "yes", "yes")
+mean_ratios <- lapply(ratio_list, function(x) calculate_mean_ratio(x)) %>%
+  bind_rows() 
 
 mean_ratios <- cbind(name = names, mean_ratios)
-
 mean_ratios <- cbind(mean_ratios, is_HEPA)
 
-mean_ratios<- mean_ratios %>%
-                pivot_longer(-c(name, is_HEPA), 
-                names_to = "source", 
-                values_to = "mean_ratio")
+mean_ratios <- mean_ratios %>%
+  pivot_wider(names_from = is_HEPA, names_sep = '.', values_from = -name) %>%
+  mutate(conc_reduction = (conc.pre - conc.post)/conc.pre,
+         bin0_reduction = (bin0.pre - bin0.post)/bin0.pre,
+         neph_bin0_reduction = (neph_bin0.pre - neph_bin0.post)/neph_bin0.pre,
+         pm1_reduction = (pm1.pre - pm1.post)/pm1.pre,
+         pm25_reduction = (pm25.pre - pm25.post)/pm25.pre,
+         pm10_reduction = (pm10.pre - pm10.post)/pm10.pre)
 
 mean_ratios
+
 ```
 ```{r}
 write.table(mean_ratios, "revere_mean_ratios.csv", append = FALSE, sep = ",", dec = ".",
@@ -264,6 +395,12 @@ ratio_list$waterdept_HEPA <- ratio_list$waterdept_HEPA %>%
 
 waterdept_combined <- rbind(ratio_list$waterdept, ratio_list$waterdept_HEPA)
 
+waterdept_boxplot_ratios <- waterdept_combined %>%
+  filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+waterdept_boxplot_ratios$source <- factor(waterdept_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
 # Combine Auditor data
 ratio_list$auditor <- ratio_list$auditor %>%
   mutate(is_HEPA = "no")
@@ -273,6 +410,12 @@ ratio_list$auditor_HEPA <- ratio_list$auditor_HEPA %>%
 
 auditor_combined <- rbind(ratio_list$auditor, ratio_list$auditor_HEPA)
 
+auditor_boxplot_ratios <- auditor_combined %>%
+  filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+auditor_boxplot_ratios$source <- factor(auditor_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
 # Combine Main Room data
 ratio_list$mainroom <- ratio_list$mainroom %>%
   mutate(is_HEPA = "no")
@@ -281,18 +424,28 @@ ratio_list$mainroom_HEPA <- ratio_list$mainroom_HEPA %>%
   mutate(is_HEPA = "yes")
 
 mainroom_combined <- rbind(ratio_list$mainroom, ratio_list$mainroom_HEPA)
+
+mainroom_boxplot_ratios <- mainroom_combined %>%
+  filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+mainroom_boxplot_ratios$source <- factor(mainroom_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+```
+
+```{r}
+waterdept_boxplot_ratios
 ```
 
 
 ```{r}
-source.labs <- c("Bin 0", "CPC Concent.", "Neph. Bin 0", "PM1", "PM2.5")
-names(source.labs) <- c("bin0_ratio", "concent_ratio", "neph_bin0_ratio", 
-                        "pm1_ratio", "pm25_ratio")
+source.labs <- c("CPC Conc.", "Bin 0", "Neph. Bin 0", "PM1", "PM2.5", "PM10")
+names(source.labs) <- c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio")
 
-waterdept_boxplot <- ggplot(data=waterdept_combined, aes(x=source, y=ratio, fill=is_HEPA)) +
+waterdept_boxplot <- ggplot(data=waterdept_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
   geom_boxplot() +
   
-  facet_grid(. ~ source, scales='free_x', 
+  facet_grid(. ~ source, scales='free_x',
              labeller = labeller(source = source.labs),
              switch = "x") +
   
@@ -308,6 +461,8 @@ waterdept_boxplot <- ggplot(data=waterdept_combined, aes(x=source, y=ratio, fill
                                  "After HEPA Installation"),
                     palette="Blues") +
   
+
+  
   theme(
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank()) +
@@ -319,7 +474,7 @@ ggsave("waterdept_box.png")
 ```
 
 ```{r}
-auditor_boxplot <- ggplot(data=auditor_combined, aes(x=source, y=ratio, fill=is_HEPA)) +
+auditor_boxplot <- ggplot(data=auditor_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
   geom_boxplot() +
   
   facet_grid(. ~ source, scales='free_x', 
@@ -348,7 +503,7 @@ auditor_boxplot
 ggsave("auditor_box.png")
 ```
 ```{r}
-mainroom_boxplot <- ggplot(data=mainroom_combined, aes(x=source, y=ratio, fill=is_HEPA)) +
+mainroom_boxplot <- ggplot(data=mainroom_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
   geom_boxplot() +
   
   facet_grid(. ~ source, scales='free_x', 
@@ -376,3 +531,4 @@ mainroom_boxplot <- ggplot(data=mainroom_combined, aes(x=source, y=ratio, fill=i
 mainroom_boxplot
 ggsave("mainroom_box.png")
 ```
+
