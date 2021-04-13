@@ -16,7 +16,7 @@ library(readr) #read .csv files
 library(ggplot2) #plotting
 ```
 
-# HEPA Impact Plots
+# HEPA Impact Plots for Revere City Hall and Revere VFW
 
 This notebook focuses on creating visuals to highlight the impact of HEPA
 purifiers on particle concentration in classrooms.
