@@ -1,0 +1,315 @@
+---
+title: "Data Check for ML Data"
+---
+
+# Import Data 
+
+## Import Libraries 
+
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(baseline) # for baseline correction
+```
+
+## Import finalized data 
+
+```{r}
+nm2 <- list.files(path = "./data/final_whole/", pattern = "*.csv", full.names = TRUE)
+snfiles <-  sapply(nm2,  FUN = function(x) fread(file=x,  data.table = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+```{r}
+names(snfiles) <- c("sn45", "sn46", "sn49", "sn62", "sn67", "sn72")
+```
+
+```{r}
+format_dates <- function(sensor){
+  sensor$date <- ymd_hms(sensor$date, tz = "UTC")
+  sensor$date_local <- ymd_hms(sensor$date_local, tz = "America/New_York")
+  
+  return(sensor)
+}
+```
+
+```{r}
+snfiles <- lapply(snfiles, function(x) format_dates(x))
+```
+
+## Import ML data 
+
+
+```{r}
+tempcsv <- list.files(path = "./data/MLdata/", pattern = "*.csv", full.names = TRUE)
+MLfiles = sapply(tempcsv, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
+names(MLfiles) <- c("sn45", "sn46", "sn49", "sn62", "sn67", "sn72")
+```
+
+```{r}
+extractColumns <- function(sensor){
+  sensor <- subset(sensor, select= c("timestamp", "co", "no", "no2", "o3", "flag" ))
+}
+```
+
+```{r}
+MLfiles <- lapply(MLfiles, function(x) extractColumns(x))
+```
+
+```{r}
+clean_sensor_data <- function(sensor){
+  sensor$date <- ymd_hms(sensor$timestamp, tz="UTC") #parse datetime
+  #sensor$date <- with_tz(sensor$date, "America/New_York") #change the time according to shifted timezone
+  sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
+  sensor$date <- round_date(ymd_hms(sensor$date, tz="UTC"), unit="minute") #round date for merging
+  sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
+  return(sensor)
+}
+
+get_localtime <- function(sensor){
+  ##sensor$date_local = sensor$date
+  sensor$date_local <- with_tz(sensor$date, tzone = "America/New_York")
+  return(sensor)
+}
+```
+```{r}
+MLfiles <- lapply(MLfiles, function(x) clean_sensor_data(x))
+MLfiles <- lapply(MLfiles, function(x) get_localtime(x))
+```
+
+
+## Merge data 
+
+In order to compare the data, we have to merge the datasets 
+
+```{r}
+snfiles <- sapply(names(snfiles), function(k) merge.data.table(snfiles[[k]], MLfiles[[k]], by.x="date_local", by.y = "date_local", all = FALSE, suffixes = c("", ".ML")), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+## Additional data cleaning 
+
+we will add the data cleaning for the flags QuantAQ created to both the final and ML data. 
+
+```{r}
+flagFilter <- function(sensor){
+  for(i in nrow(sensor)){
+    if(sensor$flag[i] & 1 == 1 | sensor$flag[i] & 2 == 2){
+      sensor$co[i] <- NA
+      sensor$co.ML[i] <- NA
+      sensor$no[i] <- NA
+      sensor$no.ML[i] <- NA
+      sensor$no2[i] <- NA
+      sensor$no2.ML[i] <- NA
+        }
+    
+    if(sensor$flag[i] & 4 == 4){
+      sensor$co[i] <- NA
+      sensor$co.ML[i] <- NA
+    }
+    
+    if(sensor$flag[i] & 8 == 8){
+      sensor$no[i] <- NA
+      sensor$no.ML[i] <- NA
+    }
+    
+    if(sensor$flag[i] & 16 == 16){
+      sensor$no2[i] <- NA
+      sensor$no2.ML[i] <- NA
+    }
+  }
+  
+  return(sensor)
+}
+```
+
+
+```{r}
+snfiles <- lapply(snfiles, function(x) flagFilter(x))
+```
+
+# Compare data 
+
+## time series 
+
+```{r}
+pdf("ML-with-nofilters.pdf")
+for (i in seq(length(names(snfiles)))){
+
+  timePlot(snfiles[[i]], pollutant = c("no2", "no2.ML", "co",  "co.ML", "correctedNO",  "no.ML",  "o3", "o3.ML"),y.relation = "free", main = paste0(names(snfiles)[i], "Time Plots"),   cols = c("red", "green", "blue", "purple", "orange", "brown", "pink", "black"))
+}
+
+dev.off()
+```
+
+## correlation plot 
+
+```{r}
+for (i in seq(length(names(snfiles)))){
+
+  corPlot(snfiles[[i]], pollutants = c("no2.ML", "no2", "co.ML", "co", "no.ML", "correctedNO",  "o3.ML", "o3"),y.relation = "free", main = paste0(names(snfiles)[i], "Correlation Plots"))
+}
+```
+
+
+# Adding Quick Filters 
+
+## Adding the filters 
+
+We will apply the following quick filters to the ML data :
+
+•	NO values higher than 1000 ppb on SN45
+•	NO2 values higher than 300 ppb on SN45
+•	All SN46 data after September 23, 2020 (recall that the sensor was moved)
+•	Startup data on SN46 at the very beginning of the time series (Sept. 11, 2019 17:22-17:41)
+•	NO values higher than 200 ppb on SN67
+•	NO2 values higher than 80 ppb on SN67
+
+
+```{r}
+snfiles$sn45$no.ML[which(snfiles$sn45$no.ML > 1000)]  <- NA
+snfiles$sn45$no2.ML[which(snfiles$sn45$no2.ML > 300)]  <- NA
+
+snfiles$sn67$no.ML[which(snfiles$sn67$no.ML > 200)]  <- NA
+snfiles$sn67$no2.ML[which(snfiles$sn67$no2.ML > 80)]  <- NA
+  
+snfiles$sn46 <- snfiles$sn46[which(date_local < "2020-09-23 00:00:00" & date_local > "2019-09-11 17:41:00")]
+```
+
+## Comparison 
+
+```{r}
+pdf("ML-with-quickfilters.pdf")
+for (i in seq(length(names(snfiles)))){
+
+  timePlot(snfiles[[i]], pollutant = c("no2", "no2.ML", "co",  "co.ML", "correctedNO",  "no.ML",  "o3", "o3.ML"),y.relation = "free", main = paste0(names(snfiles)[i], "Time Plots"),   cols = c("red", "green", "blue", "purple", "orange", "brown", "pink", "black"))
+}
+
+dev.off()
+```
+
+```{r}
+# for (i in seq(length(names(snfiles)))){
+# 
+#   corPlot(snfiles[[i]], pollutants = c("no2.ML", "no2", "co.ML", "co", "no.ML", "correctedNO",  "o3.ML", "o3"),y.relation = "free", main = paste0(names(snfiles)[i], "Correlation Plots"))
+# }
+```
+
+
+# Adding all data check filters 
+
+## Adding the filters 
+
+```{r}
+removeCOspikes <- function(sensor){
+  #calculate how much time elapses between data points
+  sensor$timediff <- c(NA, difftime(sensor$date[-1],
+                               sensor$date[-nrow(sensor)],
+                               units="mins"))
+  #find where there are jumps of an hour or more
+  jump_indices <- which(sensor$timediff > 60)
+  # set up which indices should be removed from the data 
+  sensor$removeCO <- "FALSE"
+  for(jump_index in jump_indices){
+    sensor[jump_index:(jump_index+20), removeCO := "TRUE"] 
+  }
+  #remove CO 
+  sensor$co.ML[sensor$removeCO == "TRUE"] <- NA 
+  
+  return(sensor)
+}
+```
+
+```{r}
+snfiles <- lapply(snfiles, function(x) removeCOspikes(x))
+```
+
+
+```{r}
+apply_flags <- function(sensor){
+  # creating a flags column to flag high values 
+  # flag number to pollutant definition given below:
+  # co - 1 
+  # co2 - 2
+  # no2 - 3
+  # bin0 - 4
+  # pm1 - 5
+  # no - 6
+  
+  sensor$flag <- replicate(nrow(sensor), c(), simplify = FALSE) #create flags column which has a list for every data point
+  sensor$flag[which(sensor$co.ML > 10000)] <- lapply(sensor$flag[which(sensor$co.ML > 10000)], function(x) c(x, 1)) #add 2 to the flags data points with high CO2 values
+
+  sensor$flag[which(sensor$no2.ML > 1000)] <- lapply(sensor$flag[which(sensor$no2.ML > 1000)], function(x) c(x, 3))
+  sensor$flag[which(sensor$no.ML > 300)] <- lapply(sensor$flag[which(sensor$no.ML > 300)], function(x) c(x, 6))
+
+  return(sensor)
+}
+```
+
+We can apply the flags to the sn dataframes: 
+
+```{r}
+snfiles <- lapply(snfiles, function(x) apply_flags(x)) 
+```
+
+
+```{r}
+remove_flags <- function(sensor, flag_val, pollutant){
+  sensor[which(sensor$flag %like% flag_val), pollutant] <- NA
+  return(sensor)
+}
+```
+
+```{r}
+flags_list = list(c(1,"co.ML"), c(2,"co2"), c(3,"no2.ML"), c(6, "no.ML"))
+for(i in flags_list){
+  snfiles <- lapply(snfiles, function(x) remove_flags(x, i[1], i[2]))
+}
+```
+
+```{r}
+snfiles$sn45$flag <- NULL 
+snfiles$sn46$flag <- NULL 
+snfiles$sn49$flag <- NULL 
+snfiles$sn62$flag <- NULL 
+snfiles$sn67$flag <- NULL 
+snfiles$sn72$flag <- NULL 
+```
+
+
+```{r}
+negative_value_filter <- function(sensor){
+  sensor$o3.ML <- replace(sensor$o3.ML, sensor$o3.ML < 0, 0)
+  sensor$co.ML <- replace(sensor$co.ML, sensor$co.ML <0, NA)
+  sensor$no2.ML <- replace(sensor$no2.ML, sensor$no2.ML <0, NA)
+  return(sensor)
+}
+```
+
+We'll apply this function to all the datasets:
+
+```{r}
+snfiles <- lapply(snfiles, function(x) negative_value_filter(x))
+```
+
+
+## Comparison 
+
+```{r}
+pdf("ML-with-allfilters.pdf")
+for (i in seq(length(names(snfiles)))){
+
+  timePlot(snfiles[[i]], pollutant = c("no2", "no2.ML", "co",  "co.ML", "correctedNO",  "no.ML",  "o3", "o3.ML"),y.relation = "free", main = paste0(names(snfiles)[i], "Time Plots"),   cols = c("red", "green", "blue", "purple", "orange", "brown", "pink", "black"))
+}
+
+dev.off()
+```
+
+```{r}
+# for (i in seq(length(names(snfiles)))){
+# 
+#   corPlot(snfiles[[i]], pollutants = c("no2.ML", "no2", "co.ML", "co", "no.ML", "correctedNO",  "o3.ML", "o3"),y.relation = "free", main = paste0(names(snfiles)[i], "Correlation Plots"))
+# }
+```
