@@ -53,13 +53,26 @@ veterans_ratio <- read_csv('veterans_ratio.csv', col_types = cols(
   pm10.outdoor = col_double()
 ))
 
+clerk_ratio <- read_csv('clerk_ratio.csv', col_types = cols(
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
 ratio_list <- list(
   "engineering" = engineering_ratio,
-  "veterans" = veterans_ratio
+  "veterans" = veterans_ratio,
+  "clerk" = clerk_ratio
   )
 
-ratio_list$veterans <- ratio_list$veterans %>%
-  rename(date1min = date)
 
 simplify_ratio_data <- function(room) {
   room <- room %>%
@@ -68,7 +81,7 @@ simplify_ratio_data <- function(room) {
     mutate(neph_bin0_ratio = neph_bin0.indoor/neph_bin0.outdoor) %>%
     mutate(pm25_ratio = pm25.indoor/pm25.outdoor) %>%
     mutate(pm10_ratio = pm10.indoor/pm10.outdoor) %>%
-    select(date1min,
+    select(date,
             bin0_ratio,
             bin0.indoor,
             bin0.outdoor,
@@ -92,14 +105,14 @@ ratio_list <- lapply(ratio_list,  function(x) simplify_ratio_data(x)) # Only sav
 
 tidy_data <- function(room) {
   room <- room %>%
-    pivot_longer(-date1min, names_to = "source", values_to = "ratio")
+    pivot_longer(-date, names_to = "source", values_to = "ratio")
 }
 
 ratio_list <- lapply(ratio_list,  function(x) tidy_data(x))
 
 
 time_to_eastern <- function(room) {
-  tz(room$date1min) <- "America/New_York"
+  tz(room$date) <- "America/New_York"
   return(room)
 }
 
@@ -114,8 +127,8 @@ normal work hours are M-F from 8am to 5pm ET.
 ```{r}
 filter_workday <- function(room) {
   room <- room %>%
-    filter(hour(date1min) >= 8 & hour(date1min) <= 17) %>%
-    filter(wday(date1min) %in% 2:6)
+    filter(hour(date) >= 8 & hour(date) <= 17) %>%
+    filter(wday(date) %in% 2:6)
 }
 
 ratio_list <- lapply(ratio_list,  function(x) filter_workday(x))
@@ -127,20 +140,28 @@ installation.
 
 ```{r}
 ratio_list$engineering_HEPA <- ratio_list$veterans %>%
-  filter(date1min > as.POSIXct("2021-01-11 10:45:00", tz='America/New_York'),
-         date1min < as.POSIXct("2021-01-13 12:15:00", tz='America/New_York'))
+  filter(date > as.POSIXct("2021-01-11 10:45:00", tz='America/New_York'),
+         date < as.POSIXct("2021-01-13 12:15:00", tz='America/New_York'))
+ratio_list$engineering <- ratio_list$engineering %>%
+  filter(date > as.POSIXct("2021-01-06 9:17:00", tz='America/New_York'), 
+         date < as.POSIXct("2021-01-11 10:45:00", tz='America/New_York'))
 
 ratio_list$veterans_HEPA <- ratio_list$veterans %>%
-  filter(date1min > as.POSIXct("2021-01-27 09:30:00", tz='America/New_York'),
-         date1min < as.POSIXct("2021-01-29 11:54:00", tz='America/New_York'))
-
-ratio_list$engineering <- ratio_list$engineering %>%
-  filter(date1min > as.POSIXct("2021-01-06 9:17:00", tz='America/New_York'), 
-         date1min < as.POSIXct("2021-01-11 10:45:00", tz='America/New_York'))
-
+  filter(date > as.POSIXct("2021-01-27 09:30:00", tz='America/New_York'),
+         date < as.POSIXct("2021-01-29 11:54:00", tz='America/New_York'))
 ratio_list$veterans <- ratio_list$veterans %>%
-  filter(date1min > as.POSIXct("2021-01-25 10:14:00", tz='America/New_York'), 
-         date1min < as.POSIXct("2021-01-27 09:30:00", tz='America/New_York'))
+  filter(date > as.POSIXct("2021-01-25 10:14:00", tz='America/New_York'), 
+         date < as.POSIXct("2021-01-27 09:30:00", tz='America/New_York'))
+
+ratio_list$clerk_HEPA <- ratio_list$clerk %>%
+  filter(date > as.POSIXct("2021-01-19 09:11:00", tz='America/New_York'),
+         date < as.POSIXct("2021-01-25 08:51:00", tz='America/New_York'))
+ratio_list$clerk <- ratio_list$clerk %>%
+  filter(date > as.POSIXct("2021-01-13 12:30:00", tz='America/New_York'), 
+         date < as.POSIXct("2021-01-19 09:11:00", tz='America/New_York'))
+
+
+
 ```
 
 ```{r}
@@ -292,8 +313,8 @@ calculate_mean_ratio <- function(room) {
 mean_ratios <- lapply(ratio_list, function(x) calculate_mean_ratio(x)) %>%
   bind_rows() 
 
-names = c("engineering", "veterans", "engineering", "veterans")
-is_HEPA = c("pre", "pre", "post", "post")
+names = c("engineering", "veterans", "clerk", "engineering", "veterans", "clerk")
+is_HEPA = c("pre", "pre", "pre", "post", "post", "post")
 
 mean_ratios <- cbind(name = names, mean_ratios)
 mean_ratios <- cbind(mean_ratios, is_HEPA)
@@ -311,7 +332,7 @@ mean_ratios
 ```{r}
 write.table(mean_ratios, "revere_mean_pm_ratios.csv", 
             append = FALSE, sep = ",", dec = ".",
-            row.names = TRUE, col.names = TRUE)
+            row.names = FALSE, col.names = TRUE)
 ```
 
 
@@ -319,7 +340,7 @@ Let's make plots. We'll plot neph_bin0, pm1, and pm2.5 against time, then plot
 all of those (and bin0) on a boxplot.
 
 ```{r}
-# Combine Water Department data
+# Combine Veterans data
 ratio_list$veterans <- ratio_list$veterans %>%
   mutate(is_HEPA = "no")
 
@@ -332,6 +353,36 @@ veterans_boxplot_ratios <- veterans_combined %>%
   filter(source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
 
 veterans_boxplot_ratios$source <- factor(veterans_boxplot_ratios$source , levels=c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
+# Combine Engineering data
+ratio_list$engineering <- ratio_list$engineering %>%
+  mutate(is_HEPA = "no")
+
+ratio_list$engineering_HEPA <- ratio_list$engineering_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+engineering_combined <- rbind(ratio_list$engineering, ratio_list$engineering_HEPA)
+
+engineering_boxplot_ratios <- engineering_combined %>%
+  filter(source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+engineering_boxplot_ratios$source <- factor(engineering_boxplot_ratios$source , levels=c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
+# Combine Clerk's Office data
+ratio_list$clerk <- ratio_list$clerk %>%
+  mutate(is_HEPA = "no")
+
+ratio_list$clerk_HEPA <- ratio_list$clerk_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+clerk_combined <- rbind(ratio_list$clerk, ratio_list$clerk_HEPA)
+
+clerk_boxplot_ratios <- clerk_combined %>%
+  filter(source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+clerk_boxplot_ratios$source <- factor(clerk_boxplot_ratios$source , levels=c("bin0_ratio", "neph_bin0_ratio", 
                         "pm1_ratio", "pm25_ratio", "pm10_ratio"))
 ```
 
@@ -372,4 +423,74 @@ veterans_boxplot
 ggsave("veterans_box.png")
 ```
 
+```{r}
+source.labs <- c("Bin 0", "Neph. Bin 0", "PM1", "PM2.5", "PM10")
+names(source.labs) <- c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio")
 
+engineering_boxplot <- ggplot(data=engineering_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  facet_grid(. ~ source, scales='free_x',
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+  
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere City Hall: Engineering Room",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  
+  scale_fill_brewer(name = "Sensor Measurements",
+                    labels = c("Initial Recording", 
+                                 "After HEPA Installation"),
+                    palette="Blues") +
+  
+
+  
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+
+  ylim(0,1)
+
+engineering_boxplot
+ggsave("engineering_box.png")
+```
+
+```{r}
+source.labs <- c("Bin 0", "Neph. Bin 0", "PM1", "PM2.5", "PM10")
+names(source.labs) <- c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio")
+
+clerk_boxplot <- ggplot(data=clerk_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  facet_grid(. ~ source, scales='free_x',
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+  
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere City Hall: Clerk's Office",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  
+  scale_fill_brewer(name = "Sensor Measurements",
+                    labels = c("Initial Recording", 
+                                 "After HEPA Installation"),
+                    palette="Blues") +
+  
+
+  
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+
+  ylim(0,1)
+
+clerk_boxplot
+ggsave("clerk_box.png")
+```

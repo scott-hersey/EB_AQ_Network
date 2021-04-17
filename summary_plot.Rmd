@@ -1,0 +1,74 @@
+---
+title: "SAPHE Summary HEPA"
+author: "Megan Ku"
+date: "4/16/2021"
+output: html_document
+---
+
+```{r setup, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(readr) #read .csv files
+library(ggplot2) #plotting
+```
+
+## Import Summary Data
+
+```{r}
+city_hall_cpc = read_csv("revere_mean_ratios.csv")
+city_hall_pm = read_csv("revere_mean_pm_ratios.csv")
+
+revere_high_cpc = read_csv("RH_mean_ratios.csv")
+revere_high_pm = read_csv("RH_pm_mean_ratios.csv")
+
+little_folks_cpc = read_csv("LF_mean_ratios.csv")
+little_folks_pm = read_csv("LF_pm_mean_ratios.csv")
+```
+
+```{r}
+city_hall_cpc 
+```
+
+
+## Create groupings
+
+```{r}
+# Groups: ideal, filtration pre-pilot, open source
+summary_data <- bind_rows(city_hall_cpc, city_hall_pm, revere_high_cpc, revere_high_pm, little_folks_cpc, little_folks_pm)
+summary_data$group <- "ideal"
+summary_data$group[summary_data$name %in% c("auditor","superintendent", "superintendent_assist", "class120", "classc11", "class210")] <- "filtration pre-pilot"
+summary_data$group[summary_data$name %in% c("waterdept","clerk")] <- "open to outdoor air"
+summary_data
+```
+
+## Calculate group means
+
+```{r}
+summary_mean <- summary_data %>%
+  group_by(group) %>%
+  mutate(concent_ratio = mean(conc_reduction, na.rm = TRUE)) %>%
+  mutate(concent_error = sd(conc_reduction, na.rm = TRUE)) %>%
+  mutate(bin0_ratio = mean(bin0_reduction, na.rm = TRUE)) %>%
+  mutate(bin0_error = sd(bin0_reduction, na.rm = TRUE)) %>%
+  mutate(neph_bin0_ratio = mean(neph_bin0_reduction, na.rm = TRUE)) %>%
+  mutate(neph_bin0_error = sd(neph_bin0_reduction, na.rm = TRUE)) %>%
+  mutate(pm1_ratio = mean(pm1_reduction, na.rm = TRUE)) %>%
+  mutate(pm1_error = sd(pm1_reduction, na.rm = TRUE)) %>%
+  mutate(pm25_ratio = mean(pm25_reduction, na.rm = TRUE)) %>%
+  mutate(pm25_error = sd(pm25_reduction, na.rm = TRUE)) %>%
+  mutate(pm10_ratio = mean(pm10_reduction, na.rm = TRUE)) %>%
+  mutate(pm10_error = sd(pm10_reduction, na.rm = TRUE)) %>%
+  select(concent_ratio, concent_error, bin0_ratio, bin0_error, neph_bin0_ratio, 
+         neph_bin0_error, pm1_ratio, pm1_error, pm25_ratio, pm25_error,
+         pm10_ratio, pm10_error, group) %>%
+  unique()
+  
+summary_mean
+
+write.table(summary_mean, "summary_table.csv", append = FALSE, sep = ",", dec = ".",
+            row.names = FALSE, col.names = TRUE)
+```

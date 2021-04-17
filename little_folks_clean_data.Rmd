@@ -237,7 +237,7 @@ LF_cpc_list2 <- lapply(LF_cpc_list, average_cpc)
 The function we are using is also based on line 74 of the initial analysis walkthrough. 
 
 ```{r}
-LF_rooms <- sapply(names(LF_cpc_list), function(k) merge(LF_cpc_list2[[k]], LF_pm_list[[k]], by.x = "date1min", by.y = "date", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
+LF_rooms <- sapply(names(LF_cpc_list), function(k) merge(LF_cpc_list2[[k]], LF_pm_list[[k]], by.x = "date1min", by.y = "date", all = TRUE), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 ---------------------------------------------------------------------------------------------------------------------------------------------

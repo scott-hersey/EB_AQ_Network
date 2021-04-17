@@ -1,0 +1,1354 @@
+---
+title: "hepa_impact"
+author: "Megan Ku"
+date: "3/4/2021"
+output: html_document
+---
+
+```{r setup, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(readr) #read .csv files
+library(ggplot2) #plotting
+```
+
+# HEPA Impact Plots for Revere City Hall and Revere VFW
+
+This notebook focuses on creating visuals to highlight the impact of HEPA
+purifiers on particle concentration in classrooms.
+
+## Setup
+Run the notebook revere_high_clean_data.Rmd, which will create ratio .csv files for each room. This will be our starting point.
+
+## Import Data
+
+We will start by importing the datasets here. We need to manually set the values as doubles.
+
+```{r}
+business <- read_csv('RH_business_ratio.csv', col_types = cols(
+  concent_ratio = col_double(),
+  concent_1.indoor = col_double(),
+  concent_1.outdoor = col_double(),
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
+principal <- read_csv('RH_principal_ratio.csv', col_types = cols(
+  concent_ratio = col_double(),
+  concent_1.indoor = col_double(),
+  concent_1.outdoor = col_double(),
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
+superintendent <- read_csv('RH_superintendent_ratio.csv', col_types = cols(
+  concent_ratio = col_double(),
+  concent_1.indoor = col_double(),
+  concent_1.outdoor = col_double(),
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
+class210 <- read_csv('RH_class210_ratio.csv', col_types = cols(
+  concent_ratio = col_double(),
+  concent_1.indoor = col_double(),
+  concent_1.outdoor = col_double(),
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
+classc11 <- read_csv('RH_classc11_ratio.csv', col_types = cols(
+  concent_ratio = col_double(),
+  concent_1.indoor = col_double(),
+  concent_1.outdoor = col_double(),
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
+class120 <- read_csv('RH_class120_ratio.csv', col_types = cols(
+  concent_ratio = col_double(),
+  concent_1.indoor = col_double(),
+  concent_1.outdoor = col_double(),
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
+## PM-only rooms
+
+business_s2 <- read_csv('RH_business_s2_ratio.csv', col_types = cols(
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
+principal_s1 <- read_csv('RH_principal_s1_ratio.csv', col_types = cols(
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
+principal_s2 <- read_csv('RH_principal_s2_ratio.csv', col_types = cols(
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
+superintendent_assist <- read_csv('RH_superintendent_assist_ratio.csv', col_types = cols(
+  bin0.indoor = col_double(),
+  bin0.outdoor = col_double(),
+  neph_bin0.indoor = col_double(),
+  neph_bin0.outdoor = col_double(),
+  pm1_ratio = col_double(),
+  pm1.indoor = col_double(),
+  pm1.outdoor = col_double(),
+  pm25.indoor = col_double(),
+  pm25.outdoor = col_double(),
+  pm10.indoor = col_double(),
+  pm10.outdoor = col_double()
+))
+
+```
+
+Like with the preprocessing code, we'll store the dataframe as a list.
+
+```{r}
+RH_ratio_list <- list(
+  "business" = business,
+  "principal" = principal,
+  "superintendent" = superintendent,
+  "class210" = class210,
+  "classc11" = classc11,
+  "class120" = class120
+  )
+
+RH_pm_ratio_list <- list(
+  "business_s2" = business_s2,
+  "principal_s1" = principal_s1,
+  "principal_s2" = principal_s2,
+  "superintendent_assist" = superintendent_assist
+  )
+```
+
+
+To make the data frame more manageable, we'll only select specific columns. We 
+will also calculate indoor/outdoor ratios for all particle sizes.
+
+
+```{r}
+simplify_ratio_data <- function(room) {
+  room <- room %>%
+    # Add/delete relevant columns here
+    mutate(bin0_ratio = bin0.indoor/bin0.outdoor) %>%
+    mutate(neph_bin0_ratio = neph_bin0.indoor/neph_bin0.outdoor) %>%
+    mutate(pm25_ratio = pm25.indoor/pm25.outdoor) %>%
+    mutate(pm10_ratio = pm10.indoor/pm10.outdoor) %>%
+    select(date1min, 
+           concent_ratio,
+           concent_1.indoor,
+           concent_1.outdoor,
+           bin0_ratio,
+           bin0.indoor,
+           bin0.outdoor,
+           neph_bin0_ratio,
+           neph_bin0.indoor,
+           neph_bin0.outdoor,
+           pm1_ratio,
+           pm1.indoor,
+           pm1.outdoor,
+           pm25_ratio,
+           pm25.indoor,
+           pm25.outdoor,
+           pm10_ratio,
+           pm10.indoor,
+           pm10.outdoor)
+    
+  return(room)
+}
+
+RH_ratio_list <- lapply(RH_ratio_list,  function(x) simplify_ratio_data(x)) # Only save columns of importance 
+
+simplify_pm_ratio_data <- function(room) {
+  
+  
+  room <- room %>%
+    # Add/delete relevant columns here
+    rename(date1min = date)%>%
+    mutate(bin0_ratio = bin0.indoor/bin0.outdoor) %>%
+    mutate(neph_bin0_ratio = neph_bin0.indoor/neph_bin0.outdoor) %>%
+    mutate(pm25_ratio = pm25.indoor/pm25.outdoor) %>%
+    mutate(pm10_ratio = pm10.indoor/pm10.outdoor) %>%
+    select(date1min,
+            bin0_ratio,
+            bin0.indoor,
+            bin0.outdoor,
+            neph_bin0_ratio,
+            neph_bin0.indoor,
+            neph_bin0.outdoor,
+            pm1_ratio,
+            pm1.indoor,
+            pm1.outdoor,
+            pm25_ratio,
+            pm25.indoor,
+            pm25.outdoor,
+            pm10_ratio,
+            pm10.indoor,
+            pm10.outdoor)
+  return(room)
+}
+
+RH_pm_ratio_list <- lapply(RH_pm_ratio_list,  function(x) simplify_pm_ratio_data(x)) # Only save columns of importance 
+```
+
+Since times were imported as UTC, the below code block switches them back to
+Eastern.
+
+```{r}
+time_to_eastern <- function(room) {
+  tz(room$date1min) <- "America/New_York"
+  return(room)
+}
+
+RH_ratio_list <- lapply(RH_ratio_list,  function(x) time_to_eastern(x)) # Fix time zone
+RH_pm_ratio_list <- lapply(RH_pm_ratio_list,  function(x) time_to_eastern(x)) # Fix time zone
+```
+
+It is good practice that a dataset be *tidy*. We will make this data tidier by
+transposing the columns.
+
+```{r}
+tidy_data <- function(room) {
+  room <- room %>%
+    pivot_longer(-date1min, names_to = "source", values_to = "ratio")
+}
+
+RH_ratio_list <- lapply(RH_ratio_list,  function(x) tidy_data(x))
+RH_pm_ratio_list <- lapply(RH_pm_ratio_list,  function(x) tidy_data(x))
+
+```
+```{r}
+RH_ratio_list
+```
+
+
+
+We will now filter the data for work hours to focus on the impact the purifiers
+have on the people in these buildings. For Revere High, let's say that 
+normal work hours are M-F from 7am to 4pm ET.
+
+```{r}
+filter_workday <- function(room) {
+  room <- room %>%
+    filter(hour(date1min) >= 7 & hour(date1min) <= 16) %>%
+    filter(wday(date1min) %in% 2:6)
+}
+
+RH_ratio_list <- lapply(RH_ratio_list,  function(x) filter_workday(x))
+RH_pm_ratio_list <- lapply(RH_pm_ratio_list,  function(x) filter_workday(x))
+
+```
+<!-- The main room has a lot of data points that go to (nearly) zero, so we're going  -->
+<!-- to delete those rows. I inspected the data and noticed that these points were -->
+<!-- scattered among 0 readings. -->
+
+<!-- ```{r} -->
+<!-- ratio_list$mainroom <- ratio_list$mainroom %>% -->
+<!--   subset(ratio > 0.0001) -->
+<!-- ``` -->
+
+
+Let's filter the data for the times before and after the HEPA purifiers were
+installed. Dataframes with '_HEPA' indicate data taken post HEPA purifier 
+installation.
+
+```{r}
+# Principal's office
+RH_ratio_list$principal_HEPA <- RH_ratio_list$principal %>%
+  filter(date1min > as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 07:55:00", tz='America/New_York'))
+RH_ratio_list$principal <- RH_ratio_list$principal %>%
+  filter(date1min > as.POSIXct("2021-03-09 09:20:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'))
+
+# Business office
+RH_ratio_list$business_HEPA <- RH_ratio_list$business %>%
+  filter(date1min > as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 08:11:00", tz='America/New_York'))
+RH_ratio_list$business <- RH_ratio_list$business %>%
+  filter(date1min > as.POSIXct("2021-03-09 08:22:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'))
+
+# Superintendent's office
+RH_ratio_list$superintendent_HEPA <- RH_ratio_list$superintendent %>%
+  filter(date1min > as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 08:26:00", tz='America/New_York'))
+RH_ratio_list$superintendent <- RH_ratio_list$superintendent %>%
+  filter(date1min > as.POSIXct("2021-03-09 08:28:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'))
+
+# Classroom 120
+RH_ratio_list$class120_HEPA <- RH_ratio_list$class120 %>%
+  filter(date1min > as.POSIXct("2021-03-17 12:20:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-25 15:00:00", tz='America/New_York'))
+RH_ratio_list$class120 <- RH_ratio_list$class120 %>%
+  filter(date1min > as.POSIXct("2021-03-15 09:20:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-17 12:20:00", tz='America/New_York'))
+
+# Classroom C11
+RH_ratio_list$classc11_HEPA <- RH_ratio_list$classc11 %>%
+  filter(date1min > as.POSIXct("2021-03-17 12:20:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-20 20:00:00", tz='America/New_York')) #stopped counting 3/20 @8pm
+RH_ratio_list$classc11 <- RH_ratio_list$classc11 %>%
+  filter(date1min > as.POSIXct("2021-03-15 09:49:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-17 12:20:00", tz='America/New_York'))
+
+# Classroom 210
+RH_ratio_list$class210_HEPA <- RH_ratio_list$class210 %>%
+  filter(date1min > as.POSIXct("2021-03-17 12:20:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-25 15:00:00", tz='America/New_York'))
+RH_ratio_list$class210 <- RH_ratio_list$class210 %>%
+  filter(date1min > as.POSIXct("2021-03-15 09:32:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-17 12:20:00", tz='America/New_York'))
+
+# Principal's Office side rooms
+RH_pm_ratio_list$principal_s1_HEPA <- RH_pm_ratio_list$principal_s1 %>%
+  filter(date1min > as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 07:55:00", tz='America/New_York'))
+RH_pm_ratio_list$principal_s1 <- RH_pm_ratio_list$principal_s1 %>%
+  filter(date1min > as.POSIXct("2021-03-09 09:33:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'))
+
+RH_pm_ratio_list$principal_s2_HEPA <- RH_pm_ratio_list$principal_s2 %>%
+  filter(date1min > as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 07:55:00", tz='America/New_York'))
+RH_pm_ratio_list$principal_s2 <- RH_pm_ratio_list$principal_s2 %>%
+  filter(date1min > as.POSIXct("2021-03-09 09:33:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'))
+
+# Business office side rooms
+RH_pm_ratio_list$business_s2_HEPA <- RH_pm_ratio_list$business_s2 %>%
+  filter(date1min > as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 19:53:00", tz='America/New_York'))
+RH_pm_ratio_list$business_s2 <- RH_pm_ratio_list$business_s2 %>%
+  filter(date1min > as.POSIXct("2021-03-09 08:28:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'))
+
+# Assistant superintendent room
+RH_pm_ratio_list$superintendent_assist_HEPA <- RH_pm_ratio_list$superintendent_assist %>%
+  filter(date1min > as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 08:26:00", tz='America/New_York'))
+RH_pm_ratio_list$superintendent_assist <- RH_pm_ratio_list$superintendent_assist %>%
+  filter(date1min > as.POSIXct("2021-03-09 08:12:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'))
+```
+```{r}
+RH_ratio_list
+```
+```{r}
+RH_pm_ratio_list
+```
+
+Let's calculate the mean concentration ratios before and after the HEPA 
+installation, as well as the standard deviations. We'll store this in another 
+dataset, which we will also tidy up.
+
+```{r}
+names = c("business", "principal","superintendent","class210","classc11", "class120", 
+          "business", "principal","superintendent","class210","classc11", "class120")
+
+is_HEPA = c("pre", "pre", "pre","pre", "pre", "pre", "post", "post", "post","post", "post", "post")
+
+calculate_mean_ratio <- function(room) {
+  
+  # Calculate mean conc before and after for indoor, outdoor, and ratio
+  # Calculate standard deviations for all as well
+  conc <- room %>%
+    filter(source=="concent_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(conc = "mean(ratio, na.rm = TRUE)")
+  conc_sd <- room %>%
+    filter(source=="concent_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(conc_sd = "sd(ratio, na.rm = TRUE)")
+  conc.indoor <- room %>%
+    filter(source=="concent_1.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(conc.indoor = "mean(ratio, na.rm = TRUE)")
+  conc_sd.indoor <- room %>%
+    filter(source=="concent_1.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(conc_sd.indoor = "sd(ratio, na.rm = TRUE)")  
+  conc.outdoor <- room %>%
+    filter(source=="concent_1.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(conc.outdoor = "mean(ratio, na.rm = TRUE)")
+  conc_sd.outdoor <- room %>%
+    filter(source=="concent_1.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(conc_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+  
+  bin0 <- room %>%
+    filter(source=="bin0_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(bin0 = "mean(ratio, na.rm = TRUE)")
+  bin0_sd <- room %>%
+    filter(source=="bin0_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(bin0_sd = "sd(ratio, na.rm = TRUE)")
+  bin0.indoor <- room %>%
+    filter(source=="bin0.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(bin0.indoor = "mean(ratio, na.rm = TRUE)")
+  bin0_sd.indoor <- room %>%
+    filter(source=="bin0.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(bin0_sd.indoor = "sd(ratio, na.rm = TRUE)")
+    bin0.outdoor <- room %>%
+    filter(source=="bin0.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(bin0.outdoor = "mean(ratio, na.rm = TRUE)")
+  bin0_sd.outdoor <- room %>%
+    filter(source=="bin0.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(bin0_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+  neph_bin0 <- room %>%
+    filter(source=="neph_bin0_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0 = "mean(ratio, na.rm = TRUE)")
+  neph_bin0_sd <- room %>%
+    filter(source=="neph_bin0_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0_sd = "sd(ratio, na.rm = TRUE)")
+  neph_bin0.indoor <- room %>%
+    filter(source=="neph_bin0.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0.indoor = "mean(ratio, na.rm = TRUE)")
+  neph_bin0_sd.indoor <- room %>%
+    filter(source=="neph_bin0.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  neph_bin0.outdoor <- room %>%
+    filter(source=="neph_bin0.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0.outdoor = "mean(ratio, na.rm = TRUE)")
+  neph_bin0_sd.outdoor <- room %>%
+    filter(source=="neph_bin0.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+  
+  pm1 <- room %>%
+    filter(source=="pm1_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm1 = "mean(ratio, na.rm = TRUE)")
+  pm1_sd <- room %>%
+    filter(source=="pm1_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm1_sd = "sd(ratio, na.rm = TRUE)")
+  pm1.indoor <- room %>%
+    filter(source=="pm1.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm1.indoor = "mean(ratio, na.rm = TRUE)")
+  pm1_sd.indoor <- room %>%
+    filter(source=="pm1.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm1_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  pm1.outdoor <- room %>%
+    filter(source=="pm1.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm1.outdoor = "mean(ratio, na.rm = TRUE)")
+  pm1_sd.outdoor <- room %>%
+    filter(source=="pm1.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm1_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+  
+  pm25 <- room %>%
+    filter(source=="pm25_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm25 = "mean(ratio, na.rm = TRUE)")
+  pm25_sd <- room %>%
+    filter(source=="pm25_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm25_sd = "sd(ratio, na.rm = TRUE)")
+  pm25.indoor <- room %>%
+    filter(source=="pm25.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm25.indoor = "mean(ratio, na.rm = TRUE)")
+  pm25_sd.indoor <- room %>%
+    filter(source=="pm25.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm25_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  pm25.outdoor <- room %>%
+    filter(source=="pm25.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm25.outdoor = "mean(ratio, na.rm = TRUE)")
+  pm25_sd.outdoor <- room %>%
+    filter(source=="pm25.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm25_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+
+  pm10 <- room %>%
+    filter(source=="pm10_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm10 = "mean(ratio, na.rm = TRUE)")
+  pm10_sd <- room %>%
+    filter(source=="pm10_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm10_sd = "sd(ratio, na.rm = TRUE)")
+  pm10.indoor <- room %>%
+    filter(source=="pm10.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm10.indoor = "mean(ratio, na.rm = TRUE)")
+  pm10_sd.indoor <- room %>%
+    filter(source=="pm10.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm10_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  pm10.outdoor <- room %>%
+    filter(source=="pm10.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm10.outdoor = "mean(ratio, na.rm = TRUE)")
+  pm10_sd.outdoor <- room %>%
+    filter(source=="pm10.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm10_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+  
+  # Connect into one dataframe
+  mean_ratios = cbind(conc, conc_sd, conc.indoor, conc_sd.indoor, conc.outdoor, conc_sd.outdoor,
+                      bin0, bin0_sd, bin0.indoor, bin0_sd.indoor, bin0.outdoor, bin0_sd.outdoor,
+                      neph_bin0, neph_bin0_sd, neph_bin0.indoor, neph_bin0_sd.indoor, neph_bin0.outdoor, neph_bin0_sd.outdoor, 
+                      pm1, pm1_sd, pm1.indoor, pm1_sd.indoor, pm1.outdoor, pm1_sd.outdoor,
+                      pm25, pm25_sd, pm25.indoor, pm25_sd.indoor, pm25.outdoor, pm25_sd.outdoor,
+                      pm10, pm10_sd, pm10.indoor, pm10_sd.indoor, pm10.outdoor, pm10_sd.outdoor)
+  return(mean_ratios)
+}
+
+
+mean_ratios <- lapply(RH_ratio_list, function(x) calculate_mean_ratio(x)) %>%
+  bind_rows() 
+
+# Add labels to dataframe
+mean_ratios <- cbind(name = names, mean_ratios)
+mean_ratios <- cbind(mean_ratios, is_HEPA)
+
+# Pivot wider for easier readability upon export
+mean_ratios <- mean_ratios %>%
+  pivot_wider(names_from = is_HEPA, names_sep = '.', values_from = -name) %>%
+  mutate(conc_reduction = (conc.pre - conc.post)/conc.pre,
+         bin0_reduction = (bin0.pre - bin0.post)/bin0.pre,
+         neph_bin0_reduction = (neph_bin0.pre - neph_bin0.post)/neph_bin0.pre,
+         pm1_reduction = (pm1.pre - pm1.post)/pm1.pre,
+         pm25_reduction = (pm25.pre - pm25.post)/pm25.pre,
+         pm10_reduction = (pm10.pre - pm10.post)/pm10.pre)
+
+mean_ratios
+
+```
+Let's do the same for the PM-only data.
+
+```{r}
+calculate_pm_mean_ratio <- function(room) {
+  bin0 <- room %>%
+    filter(source=="bin0_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(bin0 = "mean(ratio, na.rm = TRUE)")
+  bin0_sd <- room %>%
+    filter(source=="bin0_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(bin0_sd = "sd(ratio, na.rm = TRUE)")
+  bin0.indoor <- room %>%
+    filter(source=="bin0.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(bin0.indoor = "mean(ratio, na.rm = TRUE)")
+  bin0_sd.indoor <- room %>%
+    filter(source=="bin0.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(bin0_sd.indoor = "sd(ratio, na.rm = TRUE)")
+    bin0.outdoor <- room %>%
+    filter(source=="bin0.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(bin0.outdoor = "mean(ratio, na.rm = TRUE)")
+  bin0_sd.outdoor <- room %>%
+    filter(source=="bin0.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(bin0_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+  neph_bin0 <- room %>%
+    filter(source=="neph_bin0_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0 = "mean(ratio, na.rm = TRUE)")
+  neph_bin0_sd <- room %>%
+    filter(source=="neph_bin0_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0_sd = "sd(ratio, na.rm = TRUE)")
+  neph_bin0.indoor <- room %>%
+    filter(source=="neph_bin0.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0.indoor = "mean(ratio, na.rm = TRUE)")
+  neph_bin0_sd.indoor <- room %>%
+    filter(source=="neph_bin0.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  neph_bin0.outdoor <- room %>%
+    filter(source=="neph_bin0.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0.outdoor = "mean(ratio, na.rm = TRUE)")
+  neph_bin0_sd.outdoor <- room %>%
+    filter(source=="neph_bin0.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(neph_bin0_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+  
+  pm1 <- room %>%
+    filter(source=="pm1_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm1 = "mean(ratio, na.rm = TRUE)")
+  pm1_sd <- room %>%
+    filter(source=="pm1_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm1_sd = "sd(ratio, na.rm = TRUE)")
+  pm1.indoor <- room %>%
+    filter(source=="pm1.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm1.indoor = "mean(ratio, na.rm = TRUE)")
+  pm1_sd.indoor <- room %>%
+    filter(source=="pm1.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm1_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  pm1.outdoor <- room %>%
+    filter(source=="pm1.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm1.outdoor = "mean(ratio, na.rm = TRUE)")
+  pm1_sd.outdoor <- room %>%
+    filter(source=="pm1.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm1_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+  
+  pm25 <- room %>%
+    filter(source=="pm25_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm25 = "mean(ratio, na.rm = TRUE)")
+  pm25_sd <- room %>%
+    filter(source=="pm25_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm25_sd = "sd(ratio, na.rm = TRUE)")
+  pm25.indoor <- room %>%
+    filter(source=="pm25.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm25.indoor = "mean(ratio, na.rm = TRUE)")
+  pm25_sd.indoor <- room %>%
+    filter(source=="pm25.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm25_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  pm25.outdoor <- room %>%
+    filter(source=="pm25.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm25.outdoor = "mean(ratio, na.rm = TRUE)")
+  pm25_sd.outdoor <- room %>%
+    filter(source=="pm25.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm25_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+  
+
+  pm10 <- room %>%
+    filter(source=="pm10_ratio") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm10 = "mean(ratio, na.rm = TRUE)")
+  pm10_sd <- room %>%
+    filter(source=="pm10_ratio") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm10_sd = "sd(ratio, na.rm = TRUE)")
+  pm10.indoor <- room %>%
+    filter(source=="pm10.indoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm10.indoor = "mean(ratio, na.rm = TRUE)")
+  pm10_sd.indoor <- room %>%
+    filter(source=="pm10.indoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm10_sd.indoor = "sd(ratio, na.rm = TRUE)")
+  pm10.outdoor <- room %>%
+    filter(source=="pm10.outdoor") %>%
+    summarize(mean(ratio, na.rm=TRUE)) %>%
+    rename(pm10.outdoor = "mean(ratio, na.rm = TRUE)")
+  pm10_sd.outdoor <- room %>%
+    filter(source=="pm10.outdoor") %>%
+    summarize(sd(ratio, na.rm=TRUE)) %>%
+    rename(pm10_sd.outdoor = "sd(ratio, na.rm = TRUE)")
+
+  
+    mean_ratios = cbind(bin0, bin0_sd, bin0.indoor, bin0_sd.indoor, bin0.outdoor, bin0_sd.outdoor,
+                      neph_bin0, neph_bin0_sd, neph_bin0.indoor, neph_bin0_sd.indoor, neph_bin0.outdoor, neph_bin0_sd.outdoor, 
+                      pm1, pm1_sd, pm1.indoor, pm1_sd.indoor, pm1.outdoor, pm1_sd.outdoor,
+                      pm25, pm25_sd, pm25.indoor, pm25_sd.indoor, pm25.outdoor, pm25_sd.outdoor,
+                      pm10, pm10_sd, pm10.indoor, pm10_sd.indoor, pm10.outdoor, pm10_sd.outdoor)
+  return(mean_ratios)
+}
+
+pm_mean_ratios <- lapply(RH_pm_ratio_list, function(x) calculate_pm_mean_ratio(x)) %>%
+  bind_rows() 
+
+pm_names = c("business_s2", "principal_s1", "principal_s2", "superintendent_assist",
+          "business_s2", "principal_s1", "principal_s2", "superintendent_assist")
+is_HEPA = c("pre", "pre","pre", "pre", "post", "post", "post", "post")
+
+pm_mean_ratios <- cbind(name = pm_names, pm_mean_ratios)
+pm_mean_ratios <- cbind(pm_mean_ratios, is_HEPA)
+
+pm_mean_ratios <- pm_mean_ratios %>%
+  pivot_wider(names_from = is_HEPA, names_sep = '.', values_from = -name) %>%
+  mutate(bin0_reduction = (bin0.pre - bin0.post)/bin0.pre,
+         neph_bin0_reduction = (neph_bin0.pre - neph_bin0.post)/neph_bin0.pre,
+         pm1_reduction = (pm1.pre - pm1.post)/pm1.pre,
+         pm25_reduction = (pm25.pre - pm25.post)/pm25.pre,
+         pm10_reduction = (pm10.pre - pm10.post)/pm10.pre)
+
+pm_mean_ratios
+```
+
+Here we'll export the data for further use.
+
+```{r}
+write.table(mean_ratios, "RH_mean_ratios.csv", append = FALSE, sep = ",", dec = ".",
+            row.names = FALSE, col.names = TRUE)
+
+write.table(pm_mean_ratios, "RH_pm_mean_ratios.csv", append = FALSE, sep = ",", dec = ".",
+            row.names = FALSE, col.names = TRUE)
+```
+
+## Plot Concentration Changes
+
+Let's investigate the data by using boxplots. Before we do that, though, we 
+must distinguish which data is before and after the purifier installation.
+
+```{r}
+# Combine Business Room data
+RH_ratio_list$business <- RH_ratio_list$business %>%
+  mutate(is_HEPA = "no")
+
+RH_ratio_list$business_HEPA <- RH_ratio_list$business_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+business_combined <- rbind(RH_ratio_list$business, RH_ratio_list$business_HEPA)
+
+
+# Prep for boxplot
+business_boxplot_ratios <- business_combined %>%
+  filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+business_boxplot_ratios$source <- factor(business_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
+# Combine Principal data
+RH_ratio_list$principal <- RH_ratio_list$principal %>%
+  mutate(is_HEPA = "no")
+
+RH_ratio_list$principal_HEPA <- RH_ratio_list$principal_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+principal_combined <- rbind(RH_ratio_list$principal, RH_ratio_list$principal_HEPA)
+
+principal_boxplot_ratios <- principal_combined %>%
+  filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+# Prep for boxplot
+principal_boxplot_ratios$source <- factor(principal_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
+# Combine Superintendent data
+RH_ratio_list$superintendent <- RH_ratio_list$superintendent %>%
+  mutate(is_HEPA = "no")
+
+RH_ratio_list$superintendent_HEPA <- RH_ratio_list$superintendent_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+superintendent_combined <- rbind(RH_ratio_list$superintendent, RH_ratio_list$superintendent_HEPA)
+
+superintendent_boxplot_ratios <- superintendent_combined %>%
+  filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+# Prep for boxplot
+superintendent_boxplot_ratios$source <- factor(superintendent_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
+
+# Combine Class120 data
+RH_ratio_list$class120 <- RH_ratio_list$class120 %>%
+  mutate(is_HEPA = "no")
+
+RH_ratio_list$class120_HEPA <- RH_ratio_list$class120_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+class120_combined <- rbind(RH_ratio_list$class120, RH_ratio_list$class120_HEPA)
+
+class120_boxplot_ratios <- class120_combined %>%
+  filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+# Prep for boxplot
+class120_boxplot_ratios$source <- factor(class120_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
+# Combine Class C11 data
+RH_ratio_list$classc11 <- RH_ratio_list$classc11 %>%
+  mutate(is_HEPA = "no")
+
+RH_ratio_list$classc11_HEPA <- RH_ratio_list$classc11_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+classc11_combined <- rbind(RH_ratio_list$classc11, RH_ratio_list$classc11_HEPA)
+
+classc11_boxplot_ratios <- classc11_combined %>%
+  filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+# Prep for boxplot
+classc11_boxplot_ratios$source <- factor(classc11_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
+# Combine Class 210 data
+RH_ratio_list$class210 <- RH_ratio_list$class210 %>%
+  mutate(is_HEPA = "no")
+
+RH_ratio_list$class210_HEPA <- RH_ratio_list$class210_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+class210_combined <- rbind(RH_ratio_list$class210, RH_ratio_list$class210_HEPA)
+
+class210_boxplot_ratios <- class210_combined %>%
+  filter(source == "concent_ratio" | source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+# Prep for boxplot
+class210_boxplot_ratios$source <- factor(class210_boxplot_ratios$source , levels=c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+```
+
+```{r}
+class120_boxplot_ratios
+```
+We will use the built-in ggplot2 boxplot and adjust the visuals to our needs.
+
+### Admin Offices
+
+#### Business Office
+
+```{r}
+
+# Nice labels for facet_grid
+source.labs <- c("CPC Conc.", "Bin 0", "Neph. Bin 0", "PM1", "PM2.5", "PM10")
+names(source.labs) <- c("concent_ratio", "bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio")
+
+business_boxplot <- ggplot(data=business_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  # separate visually by measurement and move labels to bottom of boxplot
+  facet_grid(. ~ source, scales='free_x',
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+  # label graph
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere High School: Business Office",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  # Change legend and use blue theme
+  scale_fill_brewer(name = "Sensor Measurements",
+                    labels = c("Initial Recording", 
+                                 "After HEPA Installation"),
+                    palette="Blues") +
+  
+
+  # Clean up axes
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+
+  # Set limits  
+  ylim(0,1)
+
+business_boxplot
+
+# Save image
+ggsave("RH_business_box.png")
+```
+
+### Principal's Office
+
+```{r}
+principal_boxplot <- ggplot(data=principal_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  # separate visually by measurement and move labels to bottom of boxplot
+  facet_grid(. ~ source, scales='free_x', 
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+
+  # label graph
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere High School: Principal's Office",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  # Change legend and use blue theme
+  scale_fill_brewer(name = "Sensor Measurements",
+                  labels = c("Initial Recording", 
+                               "After HEPA Installation"),
+                  palette="Blues") +
+  
+  # Clean up axes
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+  
+  # Set limits
+  ylim(0,2)
+
+principal_boxplot
+
+# Save image
+ggsave("RH_principal_box.png")
+```
+### Superintendent's office
+
+```{r}
+superintendent_boxplot <- ggplot(data=superintendent_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  # separate visually by measurement and move labels to bottom of boxplot
+  facet_grid(. ~ source, scales='free_x', 
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+
+  # label graph
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere High School: Superintendent's Office",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  # Change legend and use blue theme
+  scale_fill_brewer(name = "Sensor Measurements",
+                  labels = c("Initial Recording", 
+                               "After HEPA Installation"),
+                  palette="Blues") +
+  
+  # Clean up axes
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+  
+  # Set limits
+  ylim(0,2)
+
+superintendent_boxplot
+
+# Save image
+ggsave("RH_superintendent_box.png")
+```
+
+## Class 120
+
+```{r}
+class120_boxplot <- ggplot(data=class120_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  # separate visually by measurement and move labels to bottom of boxplot
+  facet_grid(. ~ source, scales='free_x', 
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+
+  # label graph
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere High School: Classroom 120",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  # Change legend and use blue theme
+  scale_fill_brewer(name = "Sensor Measurements",
+                  labels = c("Initial Recording", 
+                               "After HEPA Installation"),
+                  palette="Blues") +
+  
+  # Clean up axes
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+  
+  # Set limits
+  ylim(0,2)
+
+class120_boxplot
+
+# Save image
+ggsave("RH_class120_box.png")
+```
+
+## Class C11
+
+```{r}
+classc11_boxplot <- ggplot(data=classc11_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  # separate visually by measurement and move labels to bottom of boxplot
+  facet_grid(. ~ source, scales='free_x', 
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+
+  # label graph
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere High School: Classroom C11",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  # Change legend and use blue theme
+  scale_fill_brewer(name = "Sensor Measurements",
+                  labels = c("Initial Recording", 
+                               "After HEPA Installation"),
+                  palette="Blues") +
+  
+  # Clean up axes
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+  
+  # Set limits
+  ylim(0,1)
+
+classc11_boxplot
+
+# Save image
+ggsave("RH_classc11_box.png")
+```
+
+## Classroom 210
+
+```{r}
+class210_boxplot <- ggplot(data=class210_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  # separate visually by measurement and move labels to bottom of boxplot
+  facet_grid(. ~ source, scales='free_x', 
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+
+  # label graph
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere High School: Classroom 210",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  # Change legend and use blue theme
+  scale_fill_brewer(name = "Sensor Measurements",
+                  labels = c("Initial Recording", 
+                               "After HEPA Installation"),
+                  palette="Blues") +
+  
+  # Clean up axes
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+  
+  # Set limits
+  ylim(0,1)
+
+class210_boxplot
+
+# Save image
+ggsave("RH_class210_box.png")
+```
+
+```{r}
+# Combine Business Office Side Room 2 data
+RH_pm_ratio_list$business_s2 <- RH_pm_ratio_list$business_s2 %>%
+  mutate(is_HEPA = "no")
+
+RH_pm_ratio_list$business_s2_HEPA <- RH_pm_ratio_list$business_s2_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+business_s2_combined <- rbind(RH_pm_ratio_list$business_s2, RH_pm_ratio_list$business_s2_HEPA)
+
+business_s2_boxplot_ratios <- business_s2_combined %>%
+  filter(source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+business_s2_boxplot_ratios$source <- factor(business_s2_boxplot_ratios$source , levels=c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
+
+# Combine Principal's Office Side Room 1 data
+RH_pm_ratio_list$principal_s1 <- RH_pm_ratio_list$principal_s1 %>%
+  mutate(is_HEPA = "no")
+
+RH_pm_ratio_list$principal_s1_HEPA <- RH_pm_ratio_list$principal_s1_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+principal_s1_combined <- rbind(RH_pm_ratio_list$principal_s1, RH_pm_ratio_list$principal_s1_HEPA)
+
+principal_s1_boxplot_ratios <- principal_s1_combined %>%
+  filter(source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+principal_s1_boxplot_ratios$source <- factor(principal_s1_boxplot_ratios$source , levels=c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
+# Combine Principal's Office Side Room 2 data
+RH_pm_ratio_list$principal_s2 <- RH_pm_ratio_list$principal_s2 %>%
+  mutate(is_HEPA = "no")
+
+RH_pm_ratio_list$principal_s2_HEPA <- RH_pm_ratio_list$principal_s2_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+principal_s2_combined <- rbind(RH_pm_ratio_list$principal_s2, RH_pm_ratio_list$principal_s2_HEPA)
+
+principal_s2_boxplot_ratios <- principal_s2_combined %>%
+  filter(source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+principal_s2_boxplot_ratios$source <- factor(principal_s2_boxplot_ratios$source , levels=c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+
+# Combine Assistant Superintendent's Office data
+RH_pm_ratio_list$superintendent_assist <- RH_pm_ratio_list$superintendent_assist %>%
+  mutate(is_HEPA = "no")
+
+RH_pm_ratio_list$superintendent_assist_HEPA <- RH_pm_ratio_list$superintendent_assist_HEPA %>%
+  mutate(is_HEPA = "yes")
+
+superintendent_assist_combined <- rbind(RH_pm_ratio_list$superintendent_assist, RH_pm_ratio_list$superintendent_assist_HEPA)
+
+superintendent_assist_boxplot_ratios <- superintendent_assist_combined %>%
+  filter(source == "bin0_ratio"| source == "neph_bin0_ratio" | source == "pm1_ratio" | source == "pm25_ratio" | source ==  "pm10_ratio")
+
+superintendent_assist_boxplot_ratios$source <- factor(superintendent_assist_boxplot_ratios$source , levels=c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio"))
+```
+
+```{r}
+source.labs <- c("Bin 0", "Neph. Bin 0", "PM1", "PM2.5", "PM10")
+names(source.labs) <- c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio")
+
+business_s2_boxplot <- ggplot(data=business_s2_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  facet_grid(. ~ source, scales='free_x',
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+  
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere High School: Business Office Side Room 2",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  
+  scale_fill_brewer(name = "Sensor Measurements",
+                    labels = c("Initial Recording", 
+                                 "After HEPA Installation"),
+                    palette="Blues") +
+  
+
+  
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+
+  ylim(0,1)
+
+business_s2_boxplot
+ggsave("RH_business_s2_box.png")
+```
+
+```{r}
+source.labs <- c("Bin 0", "Neph. Bin 0", "PM1", "PM2.5", "PM10")
+names(source.labs) <- c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio")
+
+principal_s1_boxplot <- ggplot(data=principal_s1_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  facet_grid(. ~ source, scales='free_x',
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+  
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere High School: Principal's Office Side Room 1",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  
+  scale_fill_brewer(name = "Sensor Measurements",
+                    labels = c("Initial Recording", 
+                                 "After HEPA Installation"),
+                    palette="Blues") +
+  
+
+  
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+
+  ylim(0,1)
+
+principal_s1_boxplot
+ggsave("RH_principal_s1_box.png")
+```
+
+```{r}
+source.labs <- c("Bin 0", "Neph. Bin 0", "PM1", "PM2.5", "PM10")
+names(source.labs) <- c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio")
+
+principal_s2_boxplot <- ggplot(data=principal_s2_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  facet_grid(. ~ source, scales='free_x',
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+  
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere High School: Principal's Office Side Room 2",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  
+  scale_fill_brewer(name = "Sensor Measurements",
+                    labels = c("Initial Recording", 
+                                 "After HEPA Installation"),
+                    palette="Blues") +
+  
+
+  
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+
+  ylim(0,1)
+
+principal_s2_boxplot
+ggsave("RH_principal_s2_box.png")
+```
+
+```{r}
+source.labs <- c("Bin 0", "Neph. Bin 0", "PM1", "PM2.5", "PM10")
+names(source.labs) <- c("bin0_ratio", "neph_bin0_ratio", 
+                        "pm1_ratio", "pm25_ratio", "pm10_ratio")
+
+superintendent_assist_boxplot <- ggplot(data=superintendent_assist_boxplot_ratios, aes(x=source, y=ratio, fill=is_HEPA)) +
+  geom_boxplot() +
+  
+  facet_grid(. ~ source, scales='free_x',
+             labeller = labeller(source = source.labs),
+             switch = "x") +
+  
+  
+  labs(title="Effect of HEPA Purifiers on Particle Ratios",
+       subtitle= "Revere High School: Assistant Superintendent's Office",
+       x="Particle Ratio Type",
+       y="Indoor/Outdoor Ratio") +
+
+  
+  scale_fill_brewer(name = "Sensor Measurements",
+                    labels = c("Initial Recording", 
+                                 "After HEPA Installation"),
+                    palette="Blues") +
+  
+
+  
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()) +
+
+  ylim(0,1)
+
+superintendent_assist_boxplot
+ggsave("RH_superintendent_assist_box.png")
+```
