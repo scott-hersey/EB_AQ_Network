@@ -245,7 +245,9 @@ mainroom_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 202
 
 veterans_al_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Veterans AL MOD030", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE)))
 
-engineering_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Engineering CH CPC015 MOD030", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE))) 
+engineering_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Veterans AL MOD030", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE))) 
+
+clerk_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Veterans AL MOD030", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE))) 
 
 outdoor_al_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 2021/Outdoor AL CPC016 MOD045", pattern="*.csv", full.names = TRUE), function(x) fread(file=x, header = TRUE))) 
 
@@ -256,7 +258,7 @@ waterdept_PM <- do.call(cbind, lapply(list.files(path="./City Hall Data - Jan 20
 # combine PM data 
 
 pm_list = list( "auditor" = auditor_PM, "engineering" = engineering_PM, "outdoor_al" = outdoor_al_PM , "outdoor_ch" = outdoor_ch_PM ,
-                  "waterdept" = waterdept_PM, "mainroom" = mainroom_PM, "veterans" = veterans_al_PM)
+                  "waterdept" = waterdept_PM, "mainroom" = mainroom_PM, "veterans" = veterans_al_PM, "clerk" = clerk_PM)
 ```
 
 ```{r}
@@ -378,7 +380,7 @@ cpc_list2 <- lapply(cpc_list, average_cpc)
 The function we are using is also based on line 74 of the initial analysis walkthrough. 
 
 ```{r}
-rooms <- sapply(names(cpc_list), function(k) merge(cpc_list2[[k]], pm_list[[k]], by.x = "date1min", by.y = "date", all = FALSE), simplify = FALSE,USE.NAMES = TRUE)
+rooms <- sapply(names(cpc_list), function(k) merge(cpc_list2[[k]], pm_list[[k]], by.x = "date1min", by.y = "date", all = TRUE), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -462,11 +464,11 @@ We'll run this function on the datasets.
 
 ```{r}
 auditor_ratio <- ratio_merge(rooms$auditor, rooms$outdoor_ch, cpc = TRUE)
-engineering_ratio <- ratio_merge(rooms$engineering, rooms$outdoor_ch, cpc = TRUE)
+engineering_ratio <- ratio_merge(pm_list$engineering, rooms$outdoor_ch, cpc = FALSE)
 waterdept_ratio <- ratio_merge(rooms$waterdept, rooms$outdoor_ch, cpc = TRUE)
 mainroom_ratio <- ratio_merge(rooms$mainroom, rooms$outdoor_al, cpc = TRUE)
-
 veterans_ratio <- ratio_merge(pm_list$veterans, rooms$outdoor_al, cpc = FALSE)
+clerk_ratio <- ratio_merge(pm_list$clerk, rooms$outdoor_ch, cpc = FALSE)
 ```
 
 
@@ -477,7 +479,7 @@ veterans_ratio <- ratio_merge(pm_list$veterans, rooms$outdoor_al, cpc = FALSE)
 Make a list of the new dataframes: 
 
 ```{r}
-ratios <- list("engineering_ratio" = engineering_ratio, "waterdept_ratio" = waterdept_ratio, "mainroom_ratio" = mainroom_ratio, "auditor_ratio" = auditor_ratio, "veterans_ratio" = veterans_ratio)
+ratios <- list("engineering_ratio" = engineering_ratio, "waterdept_ratio" = waterdept_ratio, "mainroom_ratio" = mainroom_ratio, "auditor_ratio" = auditor_ratio, "veterans_ratio" = veterans_ratio, "clerk_ratio" = clerk_ratio)
 ```
 
 Export them:
