@@ -421,7 +421,7 @@ Here, we'll export the data to a .csv file for further data analysis.
 
 ```{r}
 write.table(mean_ratios, "revere_mean_ratios.csv", append = FALSE, sep = ",", dec = ".",
-            row.names = TRUE, col.names = TRUE)
+            row.names = FALSE, col.names = TRUE)
 ```
 
 
