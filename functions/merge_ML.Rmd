@@ -1,0 +1,134 @@
+---
+title: "Merge with ML"
+---
+
+A helper function to merge some snfiles with ML. 
+
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(baseline) # for baseline correction
+```
+
+Import snfiles 
+
+```{r}
+nm <- list.files(path = "./data/final_whole/", pattern = "*.csv", full.names = TRUE)
+snfiles <-  sapply(nm,  FUN = function(x) fread(file=x,  data.table = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+```{r}
+names(snfiles) <- c("sn45", "sn46", "sn49", "sn62", "sn67", "sn72")
+```
+
+
+```{r}
+format_dates <- function(sensor){
+  sensor$date <- ymd_hms(sensor$date, tz = "UTC")
+  sensor$date_local <- ymd_hms(sensor$date_local, tz = "America/New_York")
+  
+  return(sensor)
+}
+```
+
+```{r}
+snfiles <- lapply(snfiles, function(x) format_dates(x))
+```
+
+Import ML files 
+
+```{r}
+tempcsv <- list.files(path = "./data/csv/", pattern = "*.csv", full.names = TRUE)
+MLfiles = sapply(tempcsv, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
+names(MLfiles) <- lapply(names(MLfiles), function(x) substr(x, 12, 20)) #change the names
+
+names(MLfiles) <- lapply(names(MLfiles), function(x) str_replace(x, "SN000-0", "sn"))
+```
+
+```{r}
+extractColumns <- function(sensor){
+  sensor <- subset(sensor, select= c("timestamp", "co", "no", "no2", "o3", "flag" ))
+}
+```
+
+```{r}
+MLfiles <- lapply(MLfiles, function(x) extractColumns(x))
+```
+
+```{r}
+clean_sensor_data <- function(sensor){
+  sensor$date <- ymd_hms(sensor$timestamp, tz="UTC") #parse datetime
+  #sensor$date <- with_tz(sensor$date, "America/New_York") #change the time according to shifted timezone
+  sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
+  sensor$date <- round_date(ymd_hms(sensor$date, tz="UTC"), unit="minute") #round date for merging
+  sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
+  return(sensor)
+}
+
+get_localtime <- function(sensor){
+  ##sensor$date_local = sensor$date
+  sensor$date_local <- with_tz(sensor$date, tzone = "America/New_York")
+  return(sensor)
+}
+```
+```{r}
+MLfiles <- lapply(MLfiles, function(x) clean_sensor_data(x))
+MLfiles <- lapply(MLfiles, function(x) get_localtime(x))
+```
+
+
+Merge
+
+```{r}
+SnMl <- sapply(names(snfiles), function(k) merge.data.table(snfiles[[k]], MLfiles[[k]], by.x="date_local", by.y = "date_local", all = FALSE, suffixes = c("", ".ML")), simplify = FALSE,USE.NAMES = TRUE) #bind lists of final and raw dataframes
+```
+
+```{r}
+flagFilter <- function(sensor){
+  for(i in nrow(sensor)){
+    if(sensor$flag[i] & 1 == 1 | sensor$flag[i] & 2 == 2){
+      sensor$co[i] <- NA
+      sensor$co.ML[i] <- NA
+      sensor$no[i] <- NA
+      sensor$no.ML[i] <- NA
+      sensor$no2[i] <- NA
+      sensor$no2.ML[i] <- NA
+        }
+    
+    if(sensor$flag[i] & 4 == 4){
+      sensor$co[i] <- NA
+      sensor$co.ML[i] <- NA
+    }
+    
+    if(sensor$flag[i] & 8 == 8){
+      sensor$no[i] <- NA
+      sensor$no.ML[i] <- NA
+    }
+    
+    if(sensor$flag[i] & 16 == 16){
+      sensor$no2[i] <- NA
+      sensor$no2.ML[i] <- NA
+    }
+  }
+  
+  return(sensor)
+}
+```
+
+
+```{r}
+SnMl <- lapply(SnMl, function(x) flagFilter(x))
+```
+
+Export
+
+```{r}
+mapply(
+  fwrite, #apply function write table
+  x=SnMl, file=paste("old-ML-", names(snfiles), ".csv", sep="")
+)
+```
