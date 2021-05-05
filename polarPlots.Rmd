@@ -25,7 +25,7 @@ library(plotly)
 ## Importing Files 
 
 ```{r}
-nm <- list.files(path = "./", pattern = "*.csv", full.names = TRUE)
+nm <- list.files(path = "./", pattern = "-final-w-ML.csv", full.names = TRUE)
 snfiles <-  sapply(nm,  FUN = function(x) fread(file=x,  data.table = TRUE), simplify = FALSE,USE.NAMES = TRUE)
 ```
 
@@ -37,6 +37,7 @@ names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6))
 ```{r}
 set_vector <- function(snfile){
   snfile$date <- ymd_hms(snfile$date, tz = "America/New_York")
+  snfile$date_local <- ymd_hms(snfile$date_local, tz = "UTC")
   return(snfile)
 }
 snfiles <- sapply(snfiles, function(x) set_vector(x), simplify = FALSE,USE.NAMES = TRUE)
@@ -77,4 +78,26 @@ for (i in seq(length(names(snfiles)))){
 dev.off()
 ```
 
+# PM polar plots 
+
+We can also print polar plots of the PM data.
+
+```{r}
+generate_PM_polarplots <- function(sn, snstring){
+  #generates the polar plots for the variables we are interested in 
+  polarPlot(sn, pollutant = "pm1.ML", main = paste0(snstring, " PM1.ML Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "pm25.ML", main = paste0(snstring, " PM2.5.ML Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "pm10.ML", main = paste0(snstring, " PM10.ML Polar Plot", sep= " "))
+
+}
+```
+
+```{r}
+# pdf("both-PM-polarplots.pdf")
+for (i in seq(length(snfiles))){
+ generate_PM_polarplots(snfiles[[i]], names(snfiles)[i])
+}
+
+# dev.off()
+```
 

@@ -1,0 +1,102 @@
+---
+title: "Compare SN Files"
+---
+
+In the case that you have two versions of sensor files and you want to check how similar they are. 
+
+# Import Libraries
+
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(baseline) # for baseline correction
+library(ggplot2)
+```
+
+# Import SN files 
+
+First, we'll create a function that puts the data in the right TZ
+```{r}
+set_vector <- function(snfile){
+  snfile$date_local <- ymd_hms(snfile$date_local, tz = "America/new_York")
+  snfile$date <- ymd_hms(snfile$date, tz = "UTC")
+  return(snfile)
+}
+```
+
+Now, we'll import the first dataset
+
+```{r}
+nm <- list.files(path = "./", pattern = "*.csv", full.names = TRUE)
+snfiles <-  sapply(nm,  FUN = function(x) fread(file=x,  data.table = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+And rename them to just include "SN" and their sensor number. We'll do this by just snipping out the part we need from the current names, given by their file names.
+
+```{r}
+names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6)) 
+```
+
+And correct the TZ 
+
+```{r}
+snfiles <- sapply(snfiles, function(x) set_vector(x), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+We'll do the same for the second dataset.
+
+```{r}
+nm2 <- list.files(path = "./", pattern = "*.csv", full.names = TRUE)
+newSnfiles <-  sapply(nm2,  FUN = function(x) fread(file=x,  data.table = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+names(newSnfiles) <- lapply(names(newSnfiles), function(x) substr(x, 3, 6)) 
+newSnfiles <- sapply(newSnfiles, function(x) set_vector(x), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+
+# Common Dates 
+
+First, we'll create a function that checks how many common dates the two sensor files have.
+
+```{r}
+checkCommonality <- function(sensor, newsensor){
+  common.dates <- (sensor$date_local %in% newsensor$date_local)
+  print("dates in common")
+  print(length(common.dates))
+  print("number of sensor values")
+  print(nrow(sensor))
+  print("number of new sensor values")
+  print(nrow(newsensor))
+  print(" ")
+  print(" ")
+}
+
+```
+
+We'll apply this to the two lists of sensor files. This way, we'll check the two SN45 files (and SN46, Sn49 ..etc) against each other.
+
+```{r}
+lapply(names(snfiles), function(x) checkCommonality(snfiles[[x]], newSnfiles[[x]]))
+```
+
+# Plot Dates
+
+We'll plot the two versions of sensor files on the same graph. 
+
+In order to do this, first, we'll combine the two versions of the sensor files together.
+
+```{r}
+mergedNewOld <- lapply(names(snfiles), function(x) merge(snfiles[[x]], newSnfiles[[x]], by = "date", all = TRUE, suffixes = c(".new", ".old")))
+```
+
+```{r}
+pdf("new_and_old_data.pdf")
+for (i in seq(length(names(snfiles)))){
+
+  timePlot(mergedNewOld[[i]], pollutant = c("no2.old", "no2.new",  "correctedNO.old", "correctedNO.new", "co.old", "co.new", "bin0.old", "bin0.new", "pm1.old",  "pm1.new"),y.relation = "free", main = paste0(names(snfiles)[i], "Time Plots"))
+}
+dev.off()
+```

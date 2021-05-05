@@ -37,12 +37,12 @@ clean_sensor_data <- function(sensor){
 ```
 
 ```{r}
-temp = list.files(path = "./data/quant_aq/", pattern = "^.*-f0.*\\.csv", full.names = TRUE) #specify files we're looking for
-boxfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE) #importing them
+temp = list.files(path = "./data/boxdata/", pattern = "^.*-f0.*\\.csv", full.names = TRUE) #specify files we're looking for
+boxfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE) 
 ```
 
 ```{r}
-new_names <- lapply(names(boxfiles), function(x) substr(x, 17, 26)) #extract the real sensor names from the current names used in the list
+new_names <- lapply(names(boxfiles), function(x) substr(x, 16, 25)) #extract the real sensor names from the current names used in the list
 names(boxfiles) <- new_names #rename list names
 names(boxfiles)
 ```
@@ -71,12 +71,12 @@ raw_vars <- c("timestamp","bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "no_ae
 
 ```{r}
 #finding all final datasets
-temp2 = list.files(path = "./data/quant_aq_March2021", pattern = "^.*_final.*\\.csv", full.names = TRUE)
+temp2 = list.files(path = "./data/quantAQwebsitedata/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
 finalfiles = sapply(temp2,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
 #finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 
 #finding all raw datasets
-temp3 = list.files(path = "./data/quant_aq_March2021", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
+temp3 = list.files(path = "./data/quantAQwebsitedata/", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
 rawfiles = sapply(temp3, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE)
 #rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 ```
@@ -103,7 +103,6 @@ quantAQfiles <- sapply(names(rawfiles), function(k) merge.data.table(finalfiles[
 
 ```{r}
 enddates <- lapply(boxfiles, function(x) tail(x$date, n=1))
-enddates_vec <- unlist(enddates)
 ```
 
 # Cutting the QuantAQ data at the end date 
@@ -114,11 +113,6 @@ cut_quantAQfiles <- sapply(names(quantAQfiles), function(x) subset(quantAQfiles[
 
 # Joining the two datasets
 
-```{r}
-# joined_files <- sapply(names(cut_quantAQfiles), function(x) rbind(boxfiles$x, cut_quantAQfiles$x, fill = TRUE), simplify = FALSE,USE.NAMES = TRUE)
-# 
-#   joined_files <- do.call("rbind", apply(boxfiles, 1, gen.data))
-```
 
 ```{r}
 sn45joined <- rbind(boxfiles$sn45, cut_quantAQfiles$sn45, fill = TRUE)
@@ -134,14 +128,9 @@ joined_files <- list("sn45" = sn45joined, "sn46" = sn46joined, "sn49" = sn49join
 
 
 ```{r}
-#lapply(joined_files, function(x) plot(x$date, x$o3))
-```
-
-
-```{r}
 mapply(
   fwrite, #apply function write table
-  x=joined_files, file=paste(names(joined_files), "csv", sep="."), #for each dataframe, use its name to make a csv of it
+  x=joined_files, file=paste("./data/joined/", names(joined_files), ".csv", sep = ""), #for each dataframe, use its name to make a csv of it
   MoreArgs=list(row.names=FALSE, sep=",")
 )
 ```
@@ -151,4 +140,29 @@ mapply(
 lapply(joined_files, function(x) fread(x, file = paste(x, "csv", sep=".")))
 ```
 
+# Combining SN 49 raw files 
+
+Import all the files and rbind them together as they are being imported 
+
+```{r}
+# sn49files <- list.files(path = "./data/sn49_raw/", pattern = "*.csv", full.names = TRUE)
+# sn49raw <-  do.call(rbind, lapply(sn49files, function(x) fread(file=x) ) )
+```
+
+And put it in the right order:
+```{r}
+# sn49raw <- sn49raw[(order(ymd_hms(sn49raw$timestamp))),]
+```
+
+Use the unique function to remove duplicate rows 
+
+```{r}
+# sn49raw <- unique(sn49raw)
+```
+
+Save the resulting dataframe to a file
+
+```{r}
+# fwrite(sn49raw, file = "./data/quantAQwebsitedata/sn49_raw.csv")
+```
 

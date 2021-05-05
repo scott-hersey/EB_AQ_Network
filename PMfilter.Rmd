@@ -1,0 +1,217 @@
+---
+title: "PM Filter"
+---
+
+# Importing 
+
+```{r, warning= FALSE, error=FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(readr)
+library(ggplot2)
+library(sjmisc)
+library(plotly)
+```
+
+## Importing Files 
+
+```{r}
+nm <- list.files(path = "./", pattern = "-final-w-ML.csv", full.names = TRUE)
+snfiles <-  sapply(nm,  FUN = function(x) fread(file=x,  data.table = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+```{r}
+names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6)) 
+```
+
+
+```{r}
+set_vector <- function(snfile){
+  snfile$date <- ymd_hms(snfile$date, tz = "America/New_York")
+  snfile$date_local <- ymd_hms(snfile$date_local, tz = "UTC")
+  return(snfile)
+}
+snfiles <- sapply(snfiles, function(x) set_vector(x), simplify = FALSE,USE.NAMES = TRUE)
+```
+# Importing Important Functions 
+
+Here, we define a function that prints out the polar plots for the PM data.
+```{r}
+generate_PM_polarplots <- function(sn, snstring){
+  #generates the polar plots for the variables we are interested in 
+  polarPlot(sn, pollutant = "pm1.ML", main = paste0(snstring, " PM1.ML Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "pm25.ML", main = paste0(snstring, " PM2.5.ML Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "pm10.ML", main = paste0(snstring, " PM10.ML Polar Plot", sep= " "))
+
+}
+```
+# Explore Eastern PM data 
+
+In the polar plots of the PM data, there was an overwhelming easterly component. In this section, we'll filter out that component, and see if there's some temporal pattern between them. 
+
+Based on the polar plots we can estimate what the elevated pollutant levels from the eastern source are. In the following section, we'll filter out the eastern source by wind direction, wind speed and pollutant level. 
+
+We'll create a function that gathers the dates which the wind is coming from the East and exceeds 13 m/s. We also filter those dates for PM values that exceed given values, which are the flag parameters into the function.
+
+```{r}
+flagFilter <- function(noreaster_data, flag1, flag2, flag3){
+  
+  
+  PM1_date <- noreaster_data$date_local[which(noreaster_data$pm1.ML >= flag1 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  
+  PM25_date <- noreaster_data$date_local[which(noreaster_data$pm25.ML >= flag2 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  
+  PM10_date <- noreaster_data$date_local[which(noreaster_data$pm10.ML >= flag3 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  
+  noreaster_dates <- list("PM1 dates"= PM1_date, "PM 2.5 dates"= PM25_date, "PM10 dates"= PM10_date)
+  
+  return(noreaster_dates)
+}
+```
+
+```{r}
+sn45PMdates <- flagFilter(snfiles$sn45, 17, 17, 150)
+
+sn49PMdates <- flagFilter(snfiles$sn49, 15, 17, 125)
+sn62PMdates <- flagFilter(snfiles$sn62, 7, 9, 12)
+sn67PMdates <- flagFilter(snfiles$sn67, 22, 22, 175)
+sn72PMdates <- flagFilter(snfiles$sn72, 15, 17, 100)
+```
+
+
+We see that many of the dates listed in the datasets above took place in the mornings of 10/17/2019 and 1/16/2021. A quick google search shows that during these times there were storms with high (~40 mph) E winds. 
+
+# Filter by events 
+
+Let's try filtering just the aforementioned dates from the PM data.
+
+
+```{r}
+eventFilter <- function(noreaster_data, flag1, flag2, flag3){
+  
+  noreaster_data$pm1.ML[which(noreaster_data$date_local > "2019-10-16 22:00:00" & noreaster_data$date_local < "2019-10-17 12:00:00")] <- NA
+  noreaster_data$pm25.ML[which(noreaster_data$date_local > "2019-10-16 22:00:00" & noreaster_data$date_local < "2019-10-17 12:00:00")] <- NA
+  noreaster_data$pm10.ML[which(noreaster_data$date_local > "2019-10-16 22:00:00" & noreaster_data$date_local < "2019-10-17 12:00:00")] <- NA
+  
+    noreaster_data$pm1.ML[which(noreaster_data$date_local > "2021-01-16 00:00:00" & noreaster_data$date_local < "2021-01-16 12:00:00")] <- NA
+  noreaster_data$pm25.ML[which(noreaster_data$date_local > "2021-01-16 00:00:00" & noreaster_data$date_local < "2021-01-16 12:00:00")] <- NA
+  noreaster_data$pm10.ML[which(noreaster_data$date_local > "2021-01-16 00:00:00" & noreaster_data$date_local < "2021-01-16 12:00:00")] <- NA
+  
+  return(noreaster_data)
+}
+
+
+snfilesTest1 <- snfiles
+snfilesTest1$sn45 <- eventFilter(snfiles$sn45, 17, 17, 150)
+
+snfilesTest1$sn49 <- eventFilter(snfiles$sn49, 15, 17, 125)
+snfilesTest1$sn62 <- eventFilter(snfiles$sn62, 7, 9, 12)
+snfilesTest1$sn67 <- eventFilter(snfiles$sn67, 22, 22, 175)
+snfilesTest1$sn72 <- eventFilter(snfiles$sn72, 15, 17, 100)
+
+```
+
+We can print out the polar plots of the resulting data 
+
+```{r}
+# pdf("PM-events.pdf")
+for (i in seq(length(snfiles))){
+ generate_PM_polarplots(snfilesTest1[[i]], names(snfiles)[i])
+}
+# dev.off()
+```
+
+
+# Filter by ws-wd-PMlevels
+
+We can also try filtering the data the same way we found the storms: by filtering wind speed, wind direction and pollutant levels. We do this below 
+
+
+```{r}
+windFilter <- function(noreaster_data, flag1, flag2, flag3){
+  
+  noreaster_data$pm1.ML[which(noreaster_data$pm1.ML >= flag1 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  noreaster_data$pm25.ML[which(noreaster_data$pm25.ML >= flag2 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  noreaster_data$pm10.ML[which(noreaster_data$pm10.ML >= flag3 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  
+  return(noreaster_data)
+}
+
+
+snfilesTest2 <- snfiles
+snfilesTest2$sn45 <- windFilter(snfiles$sn45, 17, 17, 150)
+
+snfilesTest2$sn49 <- windFilter(snfiles$sn49, 15, 17, 125)
+snfilesTest2$sn62 <- windFilter(snfiles$sn62, 7, 9, 12)
+snfilesTest2$sn67 <- windFilter(snfiles$sn67, 22, 22, 175)
+snfilesTest2$sn72 <- windFilter(snfiles$sn72, 15, 17, 100)
+
+# pdf("PM-ws-wd-filter.pdf")
+for (i in seq(length(snfiles))){
+ generate_PM_polarplots(snfilesTest2[[i]], names(snfiles)[i])
+}
+# dev.off()
+```
+
+
+# Filter both 
+
+What does the data look like if we combine the two filters above? 
+
+
+```{r}
+bothFilter <- function(noreaster_data, flag1, flag2, flag3){
+  
+  noreaster_data$pm1.ML[which(noreaster_data$pm1.ML >= flag1 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  noreaster_data$pm25.ML[which(noreaster_data$pm25.ML >= flag2 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  noreaster_data$pm10.ML[which(noreaster_data$pm10.ML >= flag3 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  
+  noreaster_data$pm1.ML[which(noreaster_data$date_local > "2019-10-16 22:00:00" & noreaster_data$date_local < "2019-10-17 12:00:00")] <- NA
+  noreaster_data$pm25.ML[which(noreaster_data$date_local > "2019-10-16 22:00:00" & noreaster_data$date_local < "2019-10-17 12:00:00")] <- NA
+  noreaster_data$pm10.ML[which(noreaster_data$date_local > "2019-10-16 22:00:00" & noreaster_data$date_local < "2019-10-17 12:00:00")] <- NA
+  
+    noreaster_data$pm1.ML[which(noreaster_data$date_local > "2021-01-16 00:00:00" & noreaster_data$date_local < "2021-01-16 12:00:00")] <- NA
+  noreaster_data$pm25.ML[which(noreaster_data$date_local > "2021-01-16 00:00:00" & noreaster_data$date_local < "2021-01-16 12:00:00")] <- NA
+  noreaster_data$pm10.ML[which(noreaster_data$date_local > "2021-01-16 00:00:00" & noreaster_data$date_local < "2021-01-16 12:00:00")] <- NA
+  
+  return(noreaster_data)
+}
+```
+
+```{r}
+snfilesTest3 <- snfiles
+snfilesTest3$sn45 <- bothFilter(snfiles$sn45, 17, 17, 150)
+snfilesTest3$sn49 <- bothFilter(snfiles$sn49, 15, 17, 125)
+snfilesTest3$sn62 <- bothFilter(snfiles$sn62, 7, 9, 12)
+snfilesTest3$sn67 <- bothFilter(snfiles$sn67, 22, 22, 175)
+snfilesTest3$sn72 <- bothFilter(snfiles$sn72, 15, 17, 100)
+```
+
+
+```{r}
+# pdf("PM-with-bothfilters.pdf")
+for (i in seq(length(snfiles))){
+ generate_PM_polarplots(snfilesTest3[[i]], names(snfiles)[i])
+}
+# dev.off()
+```
+# Incorporate filter
+
+Now we can save the filtered data that we want to use
+
+```{r}
+# mapply(
+#   fwrite, #apply function write table
+#   x=snfilesTest2, file=paste(names(snfiles), "-final-w-ML-and-PM", ".csv", sep="")
+# )
+```
+
+
+
+
+
+
+
