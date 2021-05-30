@@ -1,0 +1,160 @@
+---
+title: "R Notebook"
+---
+
+In this notebook, we will create polar plots for regimes defined by LTOs. Mainly, the regimes we will be looking at are defined as: 
+  -data taken +/- 1 minute from an arrival 
+  -data taken +/- 1 minute from a departure
+
+To do this, we will import the necessary FAA and sensor data, use the minute-by-minute regime function, then create polar plots.
+
+# Importing
+
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(baseline) # for baseline correction
+```
+
+## Sensor Data
+```{r}
+nm2 <- list.files(path = ".", pattern = "*-w-ML.csv", full.names = TRUE) #importing sensor data
+snfiles <-  sapply(nm2,  FUN = function(x) fread(file=x,  data.table = TRUE), simplify = FALSE,USE.NAMES = TRUE) # reading in the data
+```
+
+```{r}
+names(snfiles) <- c("sn45", "sn46", "sn49", "sn62", "sn67", "sn72") #renaming the sensor dataframes in the dataframe list
+```
+
+```{r}
+format_dates <- function(sensor){
+  sensor$date <- ymd_hms(sensor$date, tz = "UTC") # puts dates in right format and time zone
+  sensor$date_local <- ymd_hms(sensor$date_local, tz = "America/New_York")
+  
+  return(sensor)
+}
+```
+
+```{r}
+snfiles <- lapply(snfiles, function(x) format_dates(x)) # applying the formatting function to all the dataframes
+```
+
+## Flight Data 
+
+```{r}
+flightdata <- fread("./data/flight/finalflightdf.csv") #import flight data
+
+flightdata$Date <- ymd_hms(flightdata$Date, tz = "America/New_York") #format flight data date
+```
+
+## Function 
+
+```{r}
+source("./functions/minute_regimes.R") #importing function that creates regimes
+```
+
+# SN 49 Analysis
+
+First, we will make regimes using the function above. The regimes will be grouped by the runway they are associated with. 
+
+```{r}
+runway22Rdf <- highres_regimes(snfiles$sn49, flightdata, runwaystring = "22R")
+runway9df <- highres_regimes(snfiles$sn49, flightdata, runwaystring = "9")
+runway27df <- highres_regimes(snfiles$sn49, flightdata, runwaystring = "27")
+runway9_27_combined <- rbind(runway9df$arrivals, runway9df$departures, runway27df$arrivals, runway27df$departures) #combining runways 9 and 27 so that we can look at their combined contribution
+```
+
+Next, we'll generate and export the polar plots. To not export the polar plots, comment out the "pdf" and "dev.off" code.
+
+```{r}
+pdf("SN49_regimes.pdf")
+polarPlot(runway22Rdf$departures, pollutant = "no.ML", main = "SN49 no.ML during 22R departures")
+polarPlot(runway22Rdf$departures, pollutant = "no2", main = "SN49 NO2 during 22R departures")
+polarPlot(runway22Rdf$departures, pollutant = "co",  main = "SN49 CO during 22R departures")
+
+polarPlot(runway9df$departures, pollutant = "no.ML", main = "SN49 no.ML during 9 departures")
+polarPlot(runway9df$departures, pollutant = "no2", main = "SN49 NO2 during 9 departures")
+polarPlot(runway9df$departures, pollutant = "co", main = "SN49 CO during 9 departures")
+
+polarPlot(runway27df$departures, pollutant = "no.ML", main = "SN49 no.ML during 27 departures")
+polarPlot(runway27df$departures, pollutant = "no2", main = "SN49 NO2 during 27 departures")
+polarPlot(runway27df$departures, pollutant = "co", main = "SN49 CO during 27 departures")
+
+polarPlot(runway27df$arrivals, pollutant = "no.ML", main = "SN49 no.ML during 27 arrivals")
+polarPlot(runway27df$arrivals, pollutant = "no2", main = "SN49 NO2 during 27 arrivals")
+polarPlot(runway27df$arrivals, pollutant = "co", main = "SN49 CO during 27 arrivals")
+
+polarPlot(runway9_27_combined, pollutant = "no.ML", main = "SN49 no.ML during 27 and 9 arrivals and departures")
+polarPlot(runway9_27_combined, pollutant = "no2", main = "SN49 NO2 during 27 and 9 arrivals and departures")
+polarPlot(runway9_27_combined, pollutant = "co", main = "SN49 CO during 27 and 9 arrivals and departures")
+
+
+dev.off()
+```
+# SN 67 Analysis
+
+We will do the same thing that we did for SN 49 above here and in all further analyses. 
+
+```{r}
+runway9df <- highres_regimes(snfiles$sn67, flightdata, runwaystring = "9")
+runway27df <- highres_regimes(snfiles$sn67, flightdata, runwaystring = "27")
+runway9_27_combined <- rbind(runway9df$arrivals, runway9df$departures, runway27df$arrivals, runway27df$departures)
+```
+
+
+```{r}
+pdf("SN67_regimes.pdf")
+
+polarPlot(runway9df$departures, pollutant = "no.ML", main = "SN67 no.ML during 9 departures")
+polarPlot(runway9df$departures, pollutant = "no2", main = "SN67 NO2 during 9 departures")
+polarPlot(runway9df$departures, pollutant = "co", main = "SN67 CO during 9 departures")
+
+polarPlot(runway27df$departures, pollutant = "no.ML", main = "SN67 no.ML during 27 departures")
+polarPlot(runway27df$departures, pollutant = "no2", main = "SN67 NO2 during 27 departures")
+polarPlot(runway27df$departures, pollutant = "co", main = "SN67 CO during 27 departures")
+
+polarPlot(runway27df$arrivals, pollutant = "no.ML", main = "SN67 no.ML during 27 arrivals")
+polarPlot(runway27df$arrivals, pollutant = "no2", main = "SN67 NO2 during 27 arrivals")
+polarPlot(runway27df$arrivals, pollutant = "co", main = "SN67 CO during 27 arrivals")
+
+polarPlot(runway9_27_combined, pollutant = "no.ML", main = "SN67 no.ML during 27 and 9 arrivals and departures")
+polarPlot(runway9_27_combined, pollutant = "no2", main = "SN67 NO2 during 27 and 9 arrivals and departures")
+polarPlot(runway9_27_combined, pollutant = "co", main = "SN67 CO during 27 and 9 arrivals and departures")
+
+
+dev.off()
+```
+
+
+# SN 45 Analysis 
+
+
+```{r}
+runway22Ldf <- highres_regimes(snfiles$sn45, flightdata, runwaystring = "22R")
+runway22Rdf <- highres_regimes(snfiles$sn45, flightdata, runwaystring = "22L")
+runway22_combined <- rbind(runway22Ldf$arrivals, runway22Ldf$departures, runway22Rdf$arrivals, runway22Rdf$departures)
+```
+
+
+```{r}
+pdf("SN45_regimes.pdf")
+
+polarPlot(runway22Rdf$departures, pollutant = "no.ML", main = "SN45 no.ML during 22R departures")
+polarPlot(runway22Rdf$departures, pollutant = "no2", main = "SN45 NO2 during 22R departures")
+polarPlot(runway22Rdf$departures, pollutant = "co", main = "SN45 CO during 22R departures")
+
+polarPlot(runway22Ldf$arrivals, pollutant = "no.ML", main = "SN45 no.ML during 22L arrivals")
+polarPlot(runway22Ldf$arrivals, pollutant = "no2", main = "SN45 NO2 during 22L arrivals")
+polarPlot(runway22Ldf$arrivals, pollutant = "co", main = "SN45 CO during 22L arrivals")
+
+polarPlot(runway22_combined, pollutant = "no.ML", main = "SN45 no.ML during 22L and 22R arrivals and departures")
+polarPlot(runway22_combined, pollutant = "no2", main = "SN45 NO2 during 22L and 22R arrivals and departures")
+polarPlot(runway22_combined, pollutant = "co", main = "SN45 CO during 22L and 22R arrivals and departures")
+
+
+dev.off()
+```
