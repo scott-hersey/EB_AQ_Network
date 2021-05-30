@@ -17,11 +17,11 @@ Note: The paragraph above and the following section will describe the downloadin
 
 Download the following QuantAQ files: 
 
-* SN45: final and raw data taken from 9/7/2019 to 3/7/2020
-* SN49: final and raw data taken from 9/7/2019 to 3/7/2020
-* SN62: final and raw data taken from 9/7/2019 to 3/7/2020
-* SN67: final and raw data taken from 9/7/2019 to 3/7/2020
-* SN72: final and raw data taken from 9/7/2019 to 3/7/2020
+* SN45: final and raw data taken from 9/7/2019 to 3/8/2020
+* SN49: final and raw data taken from 9/7/2019 to 3/8/2020
+* SN62: final and raw data taken from 9/7/2019 to 3/8/2020
+* SN67: final and raw data taken from 9/7/2019 to 3/8/2020
+* SN72: final and raw data taken from 9/7/2019 to 3/8/2020
 
 ## Meteorology Data 
 
@@ -35,7 +35,7 @@ Select the following variables:
 * Temperature (C)
 
 Select the date range: 
-* 9/7/2019 to 3/7/2021 (this dataset is not inclusive of the last date)
+* 9/7/2019 to 3/8/2021 (this dataset is not inclusive of the last date)
 
 Select this timezone: 
 * America/New_York 
@@ -118,14 +118,13 @@ Since the final and raw datasets could have a different number of rows, we'll me
 3/17 edit: In the newest version of the data I pulled from the QuantAQ website, the data weren't all synced to the same seconds. Therefore, we have to put all the data in ymd_hms format first, and round it to the nearest minute. 
 
 ```{r}
-clean_sensor_data <- function(sensor){
-  sensor$date <- ymd_hms(sensor$timestamp, tz="UTC") #parse datetime
-  sensor$date <- with_tz(sensor$date, "America/New_York") #change the time according to shifted timezone
-  sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
-  sensor$date <- round_date(ymd_hms(sensor$date, tz="America/New_York"), unit="minute") #round date for merging
-  sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
-  return(sensor)
-}
+# clean_sensor_data <- function(sensor){
+#   sensor$date <- ymd_hms(sensor$timestamp, tz="UTC") #parse datetime
+#   sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
+#   sensor$date <- round_date(ymd_hms(sensor$date, tz="America/New_York"), unit="minute") #round date for merging
+#   sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
+#   return(sensor)
+# }
 ```
 
 ```{r}
@@ -238,9 +237,8 @@ On 3/19, we decided to merge two dataframes (quantAQ and the box data), in order
 We saved the files in the data/quant_aq/merged data folder. We're going to import them directly here, without needing to remove columns. 
 
 ```{r}
-nm <- list.files(path = "./data/merged", pattern = "*.csv", full.names = TRUE)
+nm <- list.files(path = "./data/joined/", pattern = "*.csv", full.names = TRUE)
 snfiles <-  sapply(nm,  FUN = function(x) fread(file=x,  data.table = TRUE), simplify = FALSE,USE.NAMES = TRUE)
-
 ```
 ```{r}
 names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 15, 18)) #extract the real sensor names from the current names used in the list
@@ -345,7 +343,6 @@ First, let's standardize the date. The ymd_hms function puts datetime data in th
 We'll print a date vector at each step, to show what the functions are doing. 
 
 ```{r}
-
 # sprintf("unmodified timestamp : %s, timezone : %s", snfiles$sn45$timestamp[1], tz(snfiles$sn45$timestamp[1]))
 # 
 # snfiles$sn45$date <- lubridate::ymd_hms(snfiles$sn45$timestamp, tz="UTC") #parse datetime
@@ -648,7 +645,6 @@ snfiles <- lapply(snfiles, function(x) no_baseline_filter(x))
 Auxiliary electrodes indicate that the corresponding data could be incorrect. Because of that, we'll filter variables that have unexpected ae values. 
 
 In the future, we could add more auxiliary electrode checks. Therefore, we'll create an general auxiliary electrode function which takes in a variable and an auxiliary electrode. The equation will measure the standard deviation of the change in ae values, and pick out datapoints where the sd surpasses a limit that the user sets. We'll write the equation below: 
-
 
 
 ```{r}
@@ -1007,11 +1003,11 @@ snfiles <- lapply(snfiles, function(x) create_date_for_igor(x))
 We export using the following function: 
 
 ```{r}
-mapply(
-  fwrite, #apply function write table
-  x=snfiles, file=paste(names(snfiles), "-for-igor.csv", sep=""), #for each element in snfiles, use its name to make a csv of it
-  MoreArgs=list(row.names=FALSE, sep=",")
-)
+# mapply(
+#   fwrite, #apply function write table
+#   x=snfiles, file=paste(names(snfiles), "-for-igor.csv", sep=""), #for each element in snfiles, use its name to make a csv of it
+#   MoreArgs=list(row.names=FALSE, sep=",")
+# )
 ```
 # Integrating Igor Data and Final Check
 
@@ -1050,12 +1046,12 @@ format_dates <- function(sensor){
 And now we can import the files. 
 ```{r}
 #importing snfiles back in
-temp2 = list.files(path = "./", pattern = "*-for-igor.csv", full.names = TRUE) #specify files we're looking for
-snfiles = sapply(temp2, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
-names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6)) #change the names
-
-#reformatting the dates 
-snfiles <- lapply(snfiles, function(x) format_dates(x))
+# temp2 = list.files(path = "./", pattern = "*-for-igor.csv", full.names = TRUE) #specify files we're looking for
+# snfiles = sapply(temp2, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
+# names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6)) #change the names
+# 
+# #reformatting the dates 
+# snfiles <- lapply(snfiles, function(x) format_dates(x))
 
 ```
 
@@ -1254,9 +1250,9 @@ snfiles <-  sapply(names(snfiles), function(k) apply_igor(snfiles_correction[[k]
 We'll check the data again using the data checking functions from before. We'll do this to make sure that the data is correct to our knowledge, before we do any analysis. 
 
 ```{r}
-lapply(snfiles, function(x) data_check_test(x))
-lapply(snfiles, function(x) data_check_percentiles(x))
-lapply(snfiles, function(x) data_check_mean(x))
+# lapply(snfiles, function(x) data_check_test(x))
+# lapply(snfiles, function(x) data_check_percentiles(x))
+# lapply(snfiles, function(x) data_check_mean(x))
 ```
 
 We'll also plot the data.
@@ -1331,7 +1327,8 @@ And we'll create and apply the filter:
 
 ```{r}
 clean_bins <- function(sensor){
-  if(any(sensor$bin0  == 0) == TRUE){
+  num_zeros <- which(sensor$bin0 == 0)
+  if(length(num_zeros) > 0){
     sprintf("deleting %f entries", sum(which(sensor$bin0 == 0)))
     sensor$bin0[which(sensor$bin0 == 0)] <- NA
     sensor$bin1[which(sensor$bin0 == 0)] <- NA
@@ -1393,7 +1390,7 @@ print(subset(snfiles$sn72[which(snfiles$sn72$bin0 == 0)] , select = c("date_loca
 We'll plot and check one last time: 
 
 ```{r}
-for (i in seq(length(names(snfiles2)))){
+for (i in seq(length(names(snfiles)))){
 
   timePlot(snfiles[[i]], pollutant = c("no2", "co", "correctedNO", "bin0", "pm1"),y.relation = "free", main = paste0(names(snfiles)[i], "Time Plots"))
 }
@@ -1405,35 +1402,151 @@ And we'll remove the final extraneous point.
 snfiles$sn62[which(date_local == "2021-01-30 10:19:00"), "no2"] <- NA
 ```
 
+
+
+# QuantAQ Corrections
+
+After additional processing of the data by QuantAQ, we have determined that some other factors need to be changed. Mainly, we need to include a new ML model and eliminate data that we now know is erroneous. 
+
+## Removing erroneous data 
+
+It was discovered that following sensors experienced technical issues: 
+- SN46's O3 sensor
+- SN72's gas phase pollutants (o3, no, no2, co)
+
+We will remove them below: 
+
+```{r}
+snfiles$sn46$o3 <- NA
+
+snfiles$sn72$o3 <- NA
+snfiles$sn72$correctedNO <- NA
+snfiles$sn72$no <- NA
+snfiles$sn72$no2 <- NA
+snfiles$sn72$co <- NA
+```
+
+
+## correcting PM 
+
+We have discovered that PM data needs to be adjusted by a factor of 17.35. We will do that below by multiplying the PM vectors by that value. 
+
+```{r}
+correct_PM <- function(sensor){
+  sensor$pm1 <- sensor$pm1*17.35
+  sensor$pm25 <- sensor$pm25*17.35
+  sensor$pm10 <- sensor$pm10*17.35
+  return(sensor)
+}
+```
+
+```{r}
+snfiles <- lapply(snfiles, function(x) correct_PM(x))
+```
+
+
+```{r}
+mapply(
+  fwrite, #apply function write table
+  x=snfiles, file=paste("new-", names(snfiles), ".csv", sep="")
+)
+```
+
+
+## Adding new ML models 
+
+After we generated the files, new ML models came in, so we will integrate those into the data to see how well they match
+
+First, we'll import them and format the dates, same as what we do above.
+
+```{r}
+tempcsv <- list.files(path = "./data/MLdata/", pattern = "*.csv", full.names = TRUE)
+MLfiles = sapply(tempcsv, function(x) fread(file=x, data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE) #import them in
+names(MLfiles) <- c("sn45", "sn46", "sn49", "sn62", "sn67", "sn72")
+```
+
+```{r}
+extractColumns <- function(sensor){
+  sensor <- subset(sensor, select= c("timestamp",  "no", "flag", "pm1", "pm25", "pm10" ))
+}
+```
+
+```{r}
+MLfiles <- lapply(MLfiles, function(x) extractColumns(x))
+```
+
+```{r}
+clean_sensor_data <- function(sensor){
+  sensor$date <- ymd_hms(sensor$timestamp, tz="UTC") #parse datetime
+  #sensor$date <- with_tz(sensor$date, "America/New_York") #change the time according to shifted timezone
+  sensor <- mutate(sensor, originaldate = date) #keeping original times for comparing to flight data
+  sensor$date <- round_date(ymd_hms(sensor$date, tz="UTC"), unit="minute") #round date for merging
+  sensor<- sensor[order(sensor$originaldate),] #put it in chronological order
+  return(sensor)
+}
+
+get_localtime <- function(sensor){
+  ##sensor$date_local = sensor$date
+  sensor$date_local <- with_tz(sensor$date, tzone = "America/New_York")
+  return(sensor)
+}
+```
+```{r}
+MLfiles <- lapply(MLfiles, function(x) clean_sensor_data(x))
+MLfiles <- lapply(MLfiles, function(x) get_localtime(x))
+```
+
+
+
+Now, we're going to merge this dataframe with SN files. We're going to identify it by adding a suffix "ML"
+
+```{r}
+SnMl <- sapply(names(snfiles), function(k) merge.data.table(snfiles[[k]], MLfiles[[k]], by.x="date_local", by.y = "date_local", all = FALSE, suffixes = c("", ".ML")), simplify = FALSE,USE.NAMES = TRUE) #bind lists of final and raw dataframes
+```
+
+```{r}
+flagFilter <- function(sensor){
+  for(i in nrow(sensor)){
+    if(sensor$flag[i] & 1 == 1 | sensor$flag[i] & 2 == 2){
+      sensor$co[i] <- NA
+      sensor$co.ML[i] <- NA
+      sensor$no[i] <- NA
+      sensor$no.ML[i] <- NA
+      sensor$no2[i] <- NA
+      sensor$no2.ML[i] <- NA
+        }
+    
+    if(sensor$flag[i] & 4 == 4){
+      sensor$co[i] <- NA
+      sensor$co.ML[i] <- NA
+    }
+    
+    if(sensor$flag[i] & 8 == 8){
+      sensor$no[i] <- NA
+      sensor$no.ML[i] <- NA
+    }
+    
+    if(sensor$flag[i] & 16 == 16){
+      sensor$no2[i] <- NA
+      sensor$no2.ML[i] <- NA
+    }
+  }
+  
+  return(sensor)
+}
+```
+
+
+```{r}
+SnMl <- lapply(SnMl, function(x) flagFilter(x))
+```
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 # Export 
 
 Now we can export the cleaned data into csvs. 
-
-## Split pre-covid and post-covid
-
-Since we are keeping pre-covid and post-covid times separate in our analysis, we'll separate the files: 
-
-```{r}
-snfiles$sn45_before <- snfiles$sn45[date_local < "2020-03-01 00:00:00 EST"]
-snfiles$sn45_after <- snfiles$sn45[date_local > "2020-04-01 00:00:00 EST"]
-
-snfiles$sn46_before <- snfiles$sn46[date_local < "2020-03-01 00:00:00 EST"]
-snfiles$sn46_after <- snfiles$sn46[date_local > "2020-04-01 00:00:00 EST"]
-
-snfiles$sn49_before <- snfiles$sn49[date_local < "2020-03-01 00:00:00 EST"]
-snfiles$sn49_after <- snfiles$sn49[date_local > "2020-04-01 00:00:00 EST"]
-
-snfiles$sn62_before <- snfiles$sn62[date_local < "2020-03-01 00:00:00 EST"]
-snfiles$sn62_after <- snfiles$sn62[date_local > "2020-04-01 00:00:00 EST"]
-
-snfiles$sn67_before <- snfiles$sn67[date_local < "2020-03-01 00:00:00 EST"]
-snfiles$sn67_after <- snfiles$sn67[date_local > "2020-04-01 00:00:00 EST"]
-
-snfiles$sn72_before <- snfiles$sn72[date_local < "2020-03-01 00:00:00 EST"]
-snfiles$sn72_after <- snfiles$sn72[date_local > "2020-04-01 00:00:00 EST"]
-```
 
 
 ## Export
@@ -1443,7 +1556,7 @@ Since we want to save the datasets to files with representative names, we can us
 ```{r}
 mapply(
   fwrite, #apply function write table
-  x=snfiles, file=paste(names(snfiles), "csv", sep=".")
+  x=SnMl, file=paste(names(snfiles), "-final-w-ML", ".csv", sep="")
 )
 ```
 
@@ -1461,10 +1574,25 @@ generate_overall_polarplots <- function(sn, snstring){
   polarPlot(sn, pollutant = "correctedNO", main = paste0(snstring, " NO Polar Plot", sep= " "))
   polarPlot(sn, pollutant = "no2", main = paste0(snstring, " NO2 Polar Plot", sep= " "))
   polarPlot(sn, pollutant = "co",  main = paste0(snstring, " CO Polar Plot", sep= " "))
-  polarPlot(sn, pollutant = "co2",  main = paste0(snstring, " CO Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "co2",  main = paste0(snstring, " CO2 Polar Plot", sep= " "))
   polarPlot(sn, pollutant = "bin0",  main = paste0(snstring, " bin0 Polar Plot", sep= " "))
   polarPlot(sn, pollutant = "pm1",  main = paste0(snstring, " PM1 Polar Plot", sep= " "))
 
+}
+```
+
+```{r}
+generate_NO_polarplots <- function(sn, snstring){
+  #generates the polar plots for the variables we are interested in 
+  polarPlot(sn, pollutant = "correctedNO", main = paste0(snstring, " correctedNO Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "no.ML", main = paste0(snstring, " no.ML Polar Plot", sep= " "))
+}
+
+generate_PM_polarplots <- function(sn, snstring){
+  #generates the polar plots for the variables we are interested in 
+  polarPlot(sn, pollutant = "pm1.ML", main = paste0(snstring, " PM1 Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "pm25.ML", main = paste0(snstring, " PM2.5 Polar Plot", sep= " "))
+  polarPlot(sn, pollutant = "pm10.ML", main = paste0(snstring, " PM10 Polar Plot", sep= " "))
 }
 ```
 
@@ -1472,7 +1600,7 @@ The following chunk of code can also save the polar plots to a pdf. To do this, 
 
 ```{r}
 #pdf("cleaned_sn45_polarplots.csv")
-generate_overall_polarplots(snfiles$sn45, "sn45")
+# generate_overall_polarplots(snfiles$sn45, "sn45")
 #dev.off()
 ```
 
@@ -1488,31 +1616,53 @@ We can also apply this function as a for loop to the datasets. We can also loop 
 
 
 
+```{r}
+pdf("PM-polarplots.pdf")
+for (i in seq(length(names(snfiles)) )){
+ generate_PM_polarplots(snfiles[[i]], names(snfiles)[i])
+}
+dev.off()
+```
+
+
 ## Diurnal Plots 
 
 Diurnal plots show the relationship between pollutant concentration and time (on the scale of hours, days and months). To create diurnal profiles for all of the sensors, we can apply the same method as we did to create polar plots.
 
 ```{r}
-for (i in seq(from= 7, to =17, by = 2)){
-
-  timeVariation(snfiles[[i]], pollutant = c("co", "no2", "correctedNO"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
-
-  timeVariation(snfiles[[i]], pollutant = c("pm1", "pm2", "bin0", "bin1"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
-}
+# pdf("diurnal_plots.pdf")
+# for (i in seq(from= 7, to =17, by = 2)){
+# 
+#   timeVariation(snfiles[[i]],  pollutant = c( "co", "no2", "correctedNO"), local.tz = "America/New_York", normalise = TRUE, main = paste0(names(snfiles)[i], "pre-covid Normalized Group of Pollutants Diurnal Profile"))
+# }
+# 
+# dev.off()
 ```
 
 ```{r}
-for (i in 1:3){
+# for (i in 1:3){
+# 
+#   timeVariation(snfiles[[i]],  pollutant = c( "co", "no2", "correctedNO"), local.tz = "America/New_York", normalise = TRUE, main = paste0(names(snfiles)[i], "pre-covid Normalized Group of Pollutants Diurnal Profile"))
 
-  timeVariation(snfiles[[i]], pollutant = c( "co", "no2", "correctedNO"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
-
-  timeVariation(snfiles[[i]], pollutant = c("pm1", "pm2.5", "bin0", "bin1"), normalise = TRUE, main = paste0(names(snfiles)[i], " Normalized Group of Pollutants Diurnal Profile"))
-}
+# }
 ```
 
 ```{r}
-pdf("diurnal-plot-sn45.pdf")
-timeVariation(snfiles$sn45_before, pollutant = c( "co", "no2", "correctedNO"), normalise = TRUE, main = paste0(names(snfiles)[i], "pre-covid Normalized Group of Pollutants Diurnal Profile"))
+#pdf("diurnal-plot-sn45.pdf")
+# timeVariation(snfiles$sn45_before, pollutant = c( "co", "no2", "correctedNO"), normalise = TRUE, main = paste0(names(snfiles)[i], "pre-covid Normalized Group of Pollutants Diurnal Profile"))
+# 
+# timeVariation(snfiles$sn45_before, pollutant = c( "co", "no2", "correctedNO"), local.tz = "America/New_York", normalise = TRUE, main = paste0(names(snfiles)[i], "pre-covid Normalized Group of Pollutants Diurnal Profile"))
+#dev.off()
+```
+
+
+```{r}
+pdf("NO-diurnalplot.pdf")
+
+for (i in seq(length(names(snfiles)) -1 )){
+ timeVariation(SnMl[[i]], pollutant = c( "correctedNO", "no.ML"), normalise = FALSE, local.tz = "America/New_York", main = paste0(names(snfiles)[i], "corrected NO and no.ML Diurnal Profiles"))
+}
+
 dev.off()
 ```
 
@@ -1522,18 +1672,28 @@ dev.off()
 We will make a correlation plot, using openair's corPlot function. 
 
 ```{r}
-pdf("cor-plots.pdf")
-for (i in seq(length(names(snfiles)))){
-  
-  corPlot(snfiles[[i]], pollutants = c("correctedNO", "no2", "co", "o3","co2", "bin0", "pm1", "temp_manifold", "rh_manifold", "pressure", "ws"), main = paste0(names(snfiles)[i], " CorPlot Profile"))
-
-}
-
-dev.off()
+# pdf("cor-plots-ML.pdf")
+# for (i in seq(length(names(snfiles)))){
+# 
+#   corPlot(SnMl[[i]], pollutants = c("correctedNO", "no.ML", "no2", "no2.ML",  "co", "co.ML", "o3", "o3.ML", "co2", "bin0", "pm1", "pm25", "pm10", "temp_manifold", "rh_manifold", "pressure", "ws"), main = paste0(names(snfiles)[i], " CorPlot Profile"))
+# 
+# }
+# 
+# dev.off()
 ```
 
 ```{r}
-corPlot(snfiles[[7]], pollutants = c("correctedNO", "no2", "co", "o3","co2", "bin0", "pm1", "temp_manifold", "rh_manifold", "pressure", "ws"), main = paste0(names(snfiles)[7], " CorPlot Profile"))
+# pdf("timeplots-ML.pdf")
+# for (i in seq(length(names(snfiles)))){
+# 
+#   timePlot(SnMl[[i]], pollutant = c("correctedNO", "no.ML", "no2", "no2.ML",  "co", "co.ML", "o3", "o3.ML"), y.relation = "free", main = paste0(names(snfiles)[i], "Time Plots"))
+#            
+# }
+# dev.off()
+```
+
+```{r}
+# corPlot(snfiles[[7]], pollutants = c("correctedNO", "no2", "co", "o3","co2", "bin0", "pm1", "temp_manifold", "rh_manifold", "pressure", "ws"), main = paste0(names(snfiles)[7], " CorPlot Profile"))
 ```
 
 
