@@ -2,6 +2,8 @@
 title: "PM Filter"
 ---
 
+In this notebook, we'll evaluate the PM data. We'll remove extreme, explained meteorological phenomena which eclipse a holistic story of PM presence at the sites. 
+
 # Importing 
 
 ```{r, warning= FALSE, error=FALSE}
@@ -36,7 +38,7 @@ set_vector <- function(snfile){
 }
 snfiles <- sapply(snfiles, function(x) set_vector(x), simplify = FALSE,USE.NAMES = TRUE)
 ```
-# Importing Important Functions 
+## Importing Important Functions 
 
 Here, we define a function that prints out the polar plots for the PM data.
 ```{r}
@@ -48,13 +50,14 @@ generate_PM_polarplots <- function(sn, snstring){
 
 }
 ```
+
 # Explore Eastern PM data 
 
 In the polar plots of the PM data, there was an overwhelming easterly component. In this section, we'll filter out that component, and see if there's some temporal pattern between them. 
 
 Based on the polar plots we can estimate what the elevated pollutant levels from the eastern source are. In the following section, we'll filter out the eastern source by wind direction, wind speed and pollutant level. 
 
-We'll create a function that gathers the dates which the wind is coming from the East and exceeds 13 m/s. We also filter those dates for PM values that exceed given values, which are the flag parameters into the function.
+We'll create a function that gathers the dates which the wind is coming from the East and exceeds 13 m/s (high wind/ gale on the Beaufort scale). We also filter those dates for PM values that exceed given values, which are the flag parameters into the function.
 
 ```{r}
 flagFilter <- function(noreaster_data, flag1, flag2, flag3){
@@ -81,10 +84,11 @@ sn67PMdates <- flagFilter(snfiles$sn67, 22, 22, 175)
 sn72PMdates <- flagFilter(snfiles$sn72, 15, 17, 100)
 ```
 
-
 We see that many of the dates listed in the datasets above took place in the mornings of 10/17/2019 and 1/16/2021. A quick google search shows that during these times there were storms with high (~40 mph) E winds. 
 
-# Filter by events 
+Since we know that these are isolated extreme weather events, we can filter them out. Let's try filtering the events themselves, filtering the characteristics that describe the event, and both. 
+
+## Filter by events 
 
 Let's try filtering just the aforementioned dates from the PM data.
 
@@ -104,13 +108,13 @@ eventFilter <- function(noreaster_data, flag1, flag2, flag3){
 }
 
 
-snfilesTest1 <- snfiles
-snfilesTest1$sn45 <- eventFilter(snfiles$sn45, 17, 17, 150)
+snfiles_events_Test <- snfiles
+snfiles_events_Test$sn45 <- eventFilter(snfiles$sn45, 17, 17, 150)
 
-snfilesTest1$sn49 <- eventFilter(snfiles$sn49, 15, 17, 125)
-snfilesTest1$sn62 <- eventFilter(snfiles$sn62, 7, 9, 12)
-snfilesTest1$sn67 <- eventFilter(snfiles$sn67, 22, 22, 175)
-snfilesTest1$sn72 <- eventFilter(snfiles$sn72, 15, 17, 100)
+snfiles_events_Test$sn49 <- eventFilter(snfiles$sn49, 15, 17, 125)
+snfiles_events_Test$sn62 <- eventFilter(snfiles$sn62, 7, 9, 12)
+snfiles_events_Test$sn67 <- eventFilter(snfiles$sn67, 22, 22, 175)
+snfiles_events_Test$sn72 <- eventFilter(snfiles$sn72, 15, 17, 100)
 
 ```
 
@@ -119,13 +123,13 @@ We can print out the polar plots of the resulting data
 ```{r}
 # pdf("PM-events.pdf")
 for (i in seq(length(snfiles))){
- generate_PM_polarplots(snfilesTest1[[i]], names(snfiles)[i])
+ generate_PM_polarplots(snfiles_events_Test[[i]], names(snfiles)[i])
 }
 # dev.off()
 ```
 
 
-# Filter by ws-wd-PMlevels
+## Filter by ws-wd-PMlevels
 
 We can also try filtering the data the same way we found the storms: by filtering wind speed, wind direction and pollutant levels. We do this below 
 
@@ -157,7 +161,7 @@ for (i in seq(length(snfiles))){
 ```
 
 
-# Filter both 
+## Filter both 
 
 What does the data look like if we combine the two filters above? 
 
@@ -198,17 +202,98 @@ for (i in seq(length(snfiles))){
 }
 # dev.off()
 ```
-# Incorporate filter
 
-Now we can save the filtered data that we want to use
+
+# Second pass
+
+After filtering out the two extreme weather events above, we see that there still appears to be a strong influence from the South East. In this section we will determine the source of it, and how to approach it. 
+
+## Determining Temporal Pattern 
+
+Like above, we will create a filter that will tell us when those elevated pollutant levels happen. 
+
 
 ```{r}
-# mapply(
-#   fwrite, #apply function write table
-#   x=snfilesTest2, file=paste(names(snfiles), "-final-w-ML-and-PM", ".csv", sep="")
-# )
+flagFilter2 <- function(noreaster_data, flag1, flag2, flag3){
+  
+  
+  PM1_date <- noreaster_data$date_local[which(noreaster_data$pm1.ML >= flag1 & noreaster_data$wd > 135 & noreaster_data$wd < 190 & noreaster_data$ws > 12)] 
+  
+  PM25_date <- noreaster_data$date_local[which(noreaster_data$pm25.ML >= flag2 & noreaster_data$wd > 135 & noreaster_data$wd < 190 & noreaster_data$ws > 12)] 
+  
+  PM10_date <- noreaster_data$date_local[which(noreaster_data$pm10.ML >= flag3 & noreaster_data$wd > 135 & noreaster_data$wd < 190 & noreaster_data$ws > 12)] 
+  
+  noreaster_dates <- list("PM1 dates"= PM1_date, "PM 2.5 dates"= PM25_date, "PM10 dates"= PM10_date)
+  
+  return(noreaster_dates)
+}
 ```
 
+```{r}
+sn45PMdates <- flagFilter2(snfiles$sn45, 10, 10, 55)
+sn49PMdates <- flagFilter2(snfiles$sn49, 9, 10, 35)
+sn62PMdates <- flagFilter2(snfiles$sn62, 4, 4.5, 12)
+sn67PMdates <- flagFilter2(snfiles$sn67, 10, 10, 35)
+```
+
+
+### Analysis 
+
+Now we see that events happening over multiple days are contributing to the elevated pollutant levels. Because of this, it no longer makes sense to filter by event. 
+
+## Visual Inspection 
+
+In this section we will describe two visual inspection methods we had wanted to employ, but which we ultimately did not end up using. 
+
+We expected that, on a time series plot, nor'easter events appear as elevated PM levels for extended periods of time, accompanied by constant wind direction and high wind speed. We wanted to visually inspect the data for these events. 
+
+### Plotly Visual Inspection
+
+Technically, creating separated time series panels of the different PMs with the plotly interactive feature proved to be difficult. Therefore, we stopped pursuing this option. 
+
+### Inspection of singular event 
+
+Based on the flag filter above, we have a list of possible nor'easters. We will plot one such possible event below. 
+
+## WS filter 
+
+Ultimately, because the above two methods did not address our needs accurately, we have decided to opt for a filter that solely responds to wind speed. We will filter out PM data taken when wind speeds are over 13.5 m/s. According to the Beaufort scale, wind speeds over 13.5 m/s are classified as gale, and cause whole trees to move as well as "white foam from breaking waves begins to be blown in streaks along the direction of the wind". In other words, high windspeeds cause particulates to be blown into the air from the sea. This is especially relevant for us, since a number of our sites are very close to the ocean. Thus, we believe that this filter is justified. 
+
+```{r}
+wsfilter <- function(sensor){
+  sensor$pm1.ML[which(sensor$ws > 13.5)] <- NA
+  sensor$pm25.ML[which(sensor$ws > 13.5)] <- NA
+  sensor$pm10.ML[which(sensor$ws > 13.5)] <- NA
+  
+  return(sensor)
+}
+
+snfiles_ws <- lapply(snfiles, function(x) wsfilter(x))
+```
+
+```{r}
+pdf("ws-filter-PMdata.pdf")
+for (i in seq(length(snfiles))){
+ generate_PM_polarplots(snfiles_ws[[i]], names(snfiles)[i])
+}
+dev.off()
+```
+## Adding event filter 
+
+Since there still appears to be some Southeastern activity, we will also be reapplying our events filter, which we also believe is justified. 
+
+```{r}
+snfiles_ws_events_Test <- lapply(snfiles_events_Test, function(x) wsfilter(x))
+```
+
+
+```{r}
+pdf("ws-and-events-filter-PM.pdf")
+for (i in seq(length(snfiles))){
+ generate_PM_polarplots(snfiles_ws_events_Test[[i]], names(snfiles)[i])
+}
+dev.off()
+```
 
 
 
