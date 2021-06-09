@@ -130,7 +130,6 @@ event for further analysis.
 # Cleaning source 1/13
 auditor_filt <- set_NA(auditor, "2021-01-13 15:35:00", "2021-01-13 15:47:00")
 
-
 # Fine particle source - 1/14
 auditor_indoor_src <- auditor_filt[
   auditor$date1min > as.POSIXct("2021-01-14 08:48:00", tz='America/New_York') &
