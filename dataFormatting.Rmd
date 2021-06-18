@@ -1,0 +1,310 @@
+---
+title: "Creating Data Files"
+---
+
+# Overview 
+
+In this notebook, we will be taking the complete data files from the initial walkthrough-> PM filter pipeline, and reformatting them to make working with data easier and more suited to regime analysis. 
+
+Specifically, we will be merging the files into one labeled dataset. The labels will be mark the sensor, timeframe (ie post or pre covid), and which regime data falls into.
+
+
+# Import 
+
+## Importing Libraries 
+
+```{r}
+library(lubridate)
+library(openair)
+library(data.table)
+library(dplyr)
+library(baseline)
+library(Rmisc)
+library(ggplot2)
+```
+
+## Importing Functions 
+
+```{r}
+# import data 
+source("./functions/import_data.R")
+```
+
+## Importing Data 
+
+We will use a custom function to import the 6 sensor datasets. 
+```{r}
+snfiles <- import_data()
+```
+
+We will also remove data from sn46, since the sensor was moved. 
+```{r}
+snfiles$sn46 <- snfiles$sn46[which(snfiles$sn46$date_local < "2020-08-01 00:00:00")] 
+```
+
+# Creating one dataset 
+
+Currently, there are 6 QuantAQ datasets, which represent QuantAQ data taken at different sets. An alternative to this is would be to have one dataset with data from different sensors labelled as such. The benefit to this would be that the data is more consolidated and it would be easier to run functions on the data as whole. As such, we are going to create such a dataset. 
+
+## Labeling Sensor
+
+The first step in creating this dataset is to mark the separated sensor files with their respective sensor. We can do this with a simple function that will add a column to each dataset, which just contains the sensor name, repeated. 
+
+```{r}
+add_sn_column <- function(sensor, sensorname){
+  sensor$sn <- sensorname
+  return(sensor)
+}
+```
+
+We can use the sapply function to do this all at once. We will iterate on the names of the snfiles, since it is currently in a marked list of datasets. 
+
+```{r}
+snfiles <- sapply(names(snfiles), function(k) add_sn_column(snfiles[[k]], k),  simplify = FALSE,USE.NAMES = TRUE)
+```
+
+
+## Combining the data
+
+Since the variable which differentiated the data is now labeled in each dataset, we can combine the files. We can do this with a simple rbind applied to the list of dataframes. We are using rbindlist, whose description states "makes one data.table from a list of many" (source)[https://www.rdocumentation.org/packages/data.table/versions/1.14.0/topics/rbindlist]. 
+
+Essentially, it is as if we are concatinating the list of datframes together. 
+
+```{r}
+combined_list <- rbindlist(snfiles)
+```
+
+# Additional labels 
+
+Labeling the data is useful for creating regimes, or otherwise doing complicated filtering later on. As mentioned previously, the variables which are important to us are: 
+
+-time : was the data taken before or after covid-19? 
+-wind direction : was the data taken when wind was blowing from the airport?
+-wind speed : was the wind calm (<1.5 m/s)? This is important since wind speed affects particulate dispersal. 
+
+
+## Pre & Post Covid 
+
+We are defining pre covid as all data before 3/1/2020 00:00, and post covid as all data after 4/1/2020 00:00. 
+
+Like for the sensor name, we can create a function that will label the data based on our critera. 
+
+```{r}
+add_covid_regime <- function(sensor){
+  sensor$covid <- NA #create new column
+  sensor$covid[which(sensor$date_local < "2020-03-01 00:00:00")] <- "pre-covid"
+  sensor$covid[which(sensor$date_local > "2020-04-01 00:00:00")] <- "post-covid"
+  
+  return(sensor)
+}
+```
+
+
+```{r}
+combined_list <- add_covid_regime(combined_list)
+```
+
+## Wind direction and speed 
+
+We can apply the same method to the wind direction and wind speed variables. 
+
+```{r}
+add_calm_vector <- function(sensor){
+  sensor$calm <- NA 
+  sensor$calm[which(sensor$ws < 1.5)] <- "calm"
+  sensor$calm[which(sensor$ws >= 1.5)] <- "not calm"
+  
+  return(sensor)
+}
+```
+
+For wind direction, it is a bit more complicated, since all the sensor sites have different downwind (coming from the airport) directions. Thus, we can use parameters to set which wind direction corresponds to each sensor site. 
+
+First, we create a wind direction class column. 
+
+```{r}
+add_wd_vector <- function(sensor){
+  sensor$wd_class <- NA 
+
+  return(sensor)
+}
+```
+
+Now we can label data column as downwind or upwind. Since downwind consists of the wind directions that are coming from the airport, upwind consists of all the wind not coming from those directions - in other words, everything else. So we will be labeling everything that is not downwind as upwind, for wind direction. 
+
+```{r}
+add_downwind_wd_vec <- function(combined_list, snval, wd1, wd2){
+  combined_list$wd_class[which(combined_list$sn == snval & combined_list$wd > wd1 & combined_list$wd < wd2)] <<- "downwind wd"
+  
+  # return(combined_list)
+}
+
+
+add_upwind_wd_vec <- function(combined_list){
+  combined_list$wd_class[which(is.na(combined_list$wd_class))] <<- "upwind wd"
+
+  # return(sensor)
+  }
+```
+
+Below is a function we can use to label wind direction of other pollution sites. We used this function before, but determined that other sources of pollution are not significant compared to airport pollution, so we will not continue to use it. If you would like to use it, use it before running the upwind function, since this function sets wd class values based on wind direction, whereas upwind will set everything that is not labeled to upwind.
+
+```{r}
+add_otherpollution_wd_vec <- function(combined_list, snval,  wd1, wd2){
+  combined_list$wd_class[which(combined_list$sn == snval & combined_list$wd > wd1 & combined_list$wd < wd2)] <<- "other pollution wd"
+  
+  # return(combined_list)
+  }
+```
+
+
+
+```{r}
+combined_list <- add_calm_vector(combined_list)
+combined_list <- add_wd_vector(combined_list)
+```
+
+
+# Creating Regime Labels
+
+Regimes are a specific set of labels which let us divide the data based on the variables we named in the previous section. They represent different paradigms of thinking about the data. We have three sets of regimes which we are using: 
+
+-regime 1: source impacted vs not-source impacted. In this regime, we are only considering pre-covid data. We consider source impacted to be data taken from the downwind direction during not-calm wind and all calm wind. Not source impacted is data taken from the upwind direction during not-calm wind.
+
+-regime 2: upwind and downwind and calm. In this regime, we consider data taken during calm wind speeds on its own. Taking the rest of the data, upwind and downwind are defined based on wind direction alone. In this regime, we are also only considering pre-covid data. 
+
+-regime 3: pre-covid and post covid source impacted vs not source impacted. We are using the same definitions as in regime 1, with the exception that we are including both pre and post covid data. 
+
+The labels for each of these regimes will constitute their own column in the data. The functions to create the labels are below: 
+
+```{r}
+create_reg1 <- function(combined_list){
+  
+  # pre-covid source impacted
+  combined_list$reg1[which(combined_list$wd_class == "downwind wd"& 
+                             combined_list$calm == "not calm" & 
+                             combined_list$covid == "pre-covid")] <<- "source impacted"
+  
+  combined_list$reg1[which(combined_list$wd_class == "upwind wd"& 
+                             combined_list$calm == "not calm" & 
+                             combined_list$covid == "pre-covid")] <<- "not source impacted"
+  
+  combined_list$reg1[which(combined_list$calm == "calm"  & combined_list$covid == "pre-covid")] <<- "source impacted"
+}
+```
+
+```{r}
+create_reg2 <- function(combined_list){
+  
+  
+  # pre-covid, upwind, downwind, and calm
+  combined_list$reg2[which(combined_list$wd_class == "downwind wd"& 
+                             combined_list$calm == "not calm" & 
+                             combined_list$covid == "pre-covid")] <<- "downwind"
+  
+  combined_list$reg2[which(combined_list$wd_class == "upwind wd"& 
+                             combined_list$calm == "not calm" & 
+                             combined_list$covid == "pre-covid")] <<- "upwind"
+  
+  
+  combined_list$reg2[which(combined_list$calm == "calm"  & combined_list$covid == "pre-covid")] <<- "calm"
+  
+}
+```
+
+```{r}
+create_reg3 <- function(combined_list){
+  
+  
+  # pre-covid source impacted / n.s.i. 
+  combined_list$reg3[which(combined_list$wd_class == "downwind wd"& 
+                             combined_list$calm == "not calm" & 
+                             combined_list$covid == "pre-covid")] <<- "pre-covid source impacted"
+  
+  combined_list$reg3[which(combined_list$calm == "calm" & 
+                             combined_list$covid == "pre-covid")] <<- "pre-covid source impacted"
+  
+  combined_list$reg3[which(combined_list$wd_class == "upwind wd"& 
+                             combined_list$calm == "not calm" & 
+                             combined_list$covid == "pre-covid")] <<- "pre-covid not source impacted"
+  
+  
+  
+  # post-covid source impacted / n.s.i. 
+  combined_list$reg3[which(combined_list$wd_class == "downwind wd"& 
+                             combined_list$calm == "not calm" & 
+                             combined_list$covid == "post-covid")] <<- "post-covid source impacted"
+  
+  combined_list$reg3[which(combined_list$calm == "calm" & 
+                             combined_list$covid == "post-covid")] <<- "post-covid source impacted"
+  
+  combined_list$reg3[which(combined_list$wd_class == "upwind wd"& 
+                             combined_list$calm == "not calm" & 
+                             combined_list$covid == "post-covid")] <<- "post-covid not source impacted"
+  
+  
+}
+```
+
+
+Now we will apply them. 
+
+```{r}
+combined_list$reg1 <- NA 
+create_reg1(combined_list)
+combined_list$reg2 <- NA 
+create_reg2(combined_list)
+combined_list$reg3 <- NA 
+create_reg3(combined_list)
+# combined_list$reg4 <- NA 
+# create_reg4(combined_list)
+```
+
+
+```{r}
+add_downwind_wd_vec(combined_list, "sn45", 180, 215)
+add_downwind_wd_vec(combined_list, "sn46", 95, 140)
+add_downwind_wd_vec(combined_list, "sn49", 140, 340)
+add_downwind_wd_vec(combined_list, "sn62", 130, 166)
+add_downwind_wd_vec(combined_list, "sn67", 185, 320)
+add_downwind_wd_vec(combined_list, "sn67", 50, 86)
+
+# add_otherpollution_wd_vec(combined_list, "sn46", 18, 67)
+# add_otherpollution_wd_vec(combined_list, "sn46", 175, 201)
+# add_otherpollution_wd_vec(combined_list, "sn46", 285, 327)
+# add_otherpollution_wd_vec(combined_list, "sn62", 166, 215)
+# add_otherpollution_wd_vec(combined_list, "sn67", 92, 173)
+
+add_upwind_wd_vec(combined_list)
+
+```
+
+# Additional Data Cleaning 
+
+Based on additional consideration, we will add additional changes to the data. 
+
+First, based on experiments we did with the PM data, we have decided that data taken during high wind speeds can be unreliable. Specifically, data taken when wind speed is 13.5 m/s or higher (high wind/ gale on the Beaufort scale). During times of high wind/gale, trees can shake, and there is a lot of seaspray from the ocean. 
+
+```{r}
+combined_list[which(combined_list$ws >= 13.5), c("no.ML", "no2", "co")] <- NA
+```
+
+Also, since openair functions do not give the option to chose the date column, we will rename the date_local column to date, so that openair plots will default to using those time-shifted dates.
+
+```{r}
+combined_list$date_local <- NULL #remove date local column
+
+combined_list$date_UTC <- ymd_hms(sn45$timestamp, tz = "UTC") #create date in UTC column
+combined_list$date <- ymd_hms(sn45$timestamp_local, tz = "America/New_York") #rewrite date column
+```
+
+
+# Export 
+
+We will save the new dataframe to a csv: 
+
+```{r}
+fwrite(combined_list, "combined_list.csv")
+```
+
+
