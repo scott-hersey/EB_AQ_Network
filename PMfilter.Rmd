@@ -32,8 +32,8 @@ names(snfiles) <- lapply(names(snfiles), function(x) substr(x, 3, 6))
 
 ```{r}
 set_vector <- function(snfile){
-  snfile$date <- ymd_hms(snfile$date, tz = "America/New_York")
-  snfile$date_local <- ymd_hms(snfile$date_local, tz = "UTC")
+  snfile$date <- ymd_hms(snfile$date, tz = "UTC")
+  snfile$date_local <- ymd_hms(snfile$date_local, tz = "America/New_York")
   return(snfile)
 }
 snfiles <- sapply(snfiles, function(x) set_vector(x), simplify = FALSE,USE.NAMES = TRUE)
@@ -63,11 +63,11 @@ We'll create a function that gathers the dates which the wind is coming from the
 flagFilter <- function(noreaster_data, flag1, flag2, flag3){
   
   
-  PM1_date <- noreaster_data$date_local[which(noreaster_data$pm1.ML >= flag1 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  PM1_date <- noreaster_data$date_local[which(noreaster_data$pm1.ML >= flag1 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] 
   
-  PM25_date <- noreaster_data$date_local[which(noreaster_data$pm25.ML >= flag2 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  PM25_date <- noreaster_data$date_local[which(noreaster_data$pm25.ML >= flag2 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] 
   
-  PM10_date <- noreaster_data$date_local[which(noreaster_data$pm10.ML >= flag3 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] <- NA
+  PM10_date <- noreaster_data$date_local[which(noreaster_data$pm10.ML >= flag3 & noreaster_data$wd > 45 & noreaster_data$wd < 140 & noreaster_data$ws > 13)] 
   
   noreaster_dates <- list("PM1 dates"= PM1_date, "PM 2.5 dates"= PM25_date, "PM10 dates"= PM10_date)
   
@@ -87,6 +87,11 @@ sn72PMdates <- flagFilter(snfiles$sn72, 15, 17, 100)
 We see that many of the dates listed in the datasets above took place in the mornings of 10/17/2019 and 1/16/2021. A quick google search shows that during these times there were storms with high (~40 mph) E winds. 
 
 Since we know that these are isolated extreme weather events, we can filter them out. Let's try filtering the events themselves, filtering the characteristics that describe the event, and both. 
+
+```{r}
+rm(sn45PMdates, sn49PMdates, sn62PMdates, sn67PMdates, sn72PMdates)
+```
+
 
 ## Filter by events 
 
@@ -129,6 +134,7 @@ for (i in seq(length(snfiles))){
 ```
 
 
+
 ## Filter by ws-wd-PMlevels
 
 We can also try filtering the data the same way we found the storms: by filtering wind speed, wind direction and pollutant levels. We do this below 
@@ -158,6 +164,10 @@ for (i in seq(length(snfiles))){
  generate_PM_polarplots(snfilesTest2[[i]], names(snfiles)[i])
 }
 # dev.off()
+```
+
+```{r}
+rm(snfilesTest2)
 ```
 
 
@@ -203,6 +213,10 @@ for (i in seq(length(snfiles))){
 # dev.off()
 ```
 
+```{r}
+rm(snfilesTest3)
+```
+
 
 # Second pass
 
@@ -230,10 +244,10 @@ flagFilter2 <- function(noreaster_data, flag1, flag2, flag3){
 ```
 
 ```{r}
-sn45PMdates <- flagFilter2(snfiles$sn45, 10, 10, 55)
-sn49PMdates <- flagFilter2(snfiles$sn49, 9, 10, 35)
-sn62PMdates <- flagFilter2(snfiles$sn62, 4, 4.5, 12)
-sn67PMdates <- flagFilter2(snfiles$sn67, 10, 10, 35)
+# sn45PMdates <- flagFilter2(snfiles$sn45, 10, 10, 55)
+# sn49PMdates <- flagFilter2(snfiles$sn49, 9, 10, 35)
+# sn62PMdates <- flagFilter2(snfiles$sn62, 4, 4.5, 12)
+# sn67PMdates <- flagFilter2(snfiles$sn67, 10, 10, 35)
 ```
 
 
@@ -295,7 +309,136 @@ for (i in seq(length(snfiles))){
 dev.off()
 ```
 
+# Third filter 
 
+Another filter method we are trying out is the following: 
+
+- filter out dates where PM 10 levels are elevated from 90-180 during times when ws > 13.5
+- set the PM values for those dates to NA 
+
+Since there is the same SE signature on all the sites, we still believe there is a noreaster event. If there is a noreaster event, then PM 10 is most effected, since PM 10 captures seaspray. This way, we can indirectly search for noreaster events 
+
+
+```{r}
+seasprayflagFilter <- function(noreaster_data, flag){
+  
+  
+  
+  PM10_date <- noreaster_data$date_local[which(noreaster_data$pm10.ML >= flag & noreaster_data$wd > 90 & noreaster_data$wd < 180 & noreaster_data$ws > 13.5)] 
+  
+
+  
+  return(PM10_date)
+}
+```
+
+```{r}
+sn45PMdates <- seasprayflagFilter(snfiles_events_Test$sn45, 10)
+sn46PMdates <- seasprayflagFilter(snfiles_events_Test$sn46, 30)
+sn49PMdates <- seasprayflagFilter(snfiles_events_Test$sn49, 40)
+sn62PMdates <- seasprayflagFilter(snfiles_events_Test$sn62, 15)
+sn67PMdates <- seasprayflagFilter(snfiles_events_Test$sn67, 40)
+sn72PMdates <- seasprayflagFilter(snfiles_events_Test$sn72, 40)
+
+```
+
+```{r}
+incommon <- Reduce(intersect, list(sn45PMdates,  
+                       
+                       sn67PMdates, sn72PMdates))
+```
+
+```{r}
+for(ind in incommon){
+  print(sn45PMdates[which(sn45PMdates==ind)])
+}
+```
+
+
+```{r}
+rm(sn45PMdates, sn49PMdates, sn62PMdates, sn67PMdates, sn72PMdates)
+```
+
+
+```{r}
+thirdFilter <- function(noreaster_data){
+  
+  
+  noreaster_data$pm1.ML[which(noreaster_data$date_local > "2020-08-04 10:00:00" & noreaster_data$date_local < "2020-08-04 24:00:00")] <- NA
+  noreaster_data$pm25.ML[which(noreaster_data$date_local >"2020-08-04 10:00:00" & noreaster_data$date_local < "2020-08-04 24:00:00")] <- NA
+  noreaster_data$pm10.ML[which(noreaster_data$date_local >"2020-08-04 10:00:00" & noreaster_data$date_local < "2020-08-04 24:00:00")] <- NA
+  
+  noreaster_data$pm1.ML[which(noreaster_data$date_local > "2020-12-25 00:00:00" & noreaster_data$date_local < "2020-12-25 12:00:00")] <- NA
+  noreaster_data$pm25.ML[which(noreaster_data$date_local > "2020-12-25 00:00:00" & noreaster_data$date_local < "2020-12-25 12:00:00")] <- NA
+  noreaster_data$pm10.ML[which(noreaster_data$date_local > "2020-12-25 00:00:00" & noreaster_data$date_local < "2020-12-25 12:00:00")] <- NA
+  
+  noreaster_data$pm1.ML[which(noreaster_data$date_local > "2020-11-30 10:00:00" & noreaster_data$date_local < "2020-11-30 22:00:00")] <- NA
+  noreaster_data$pm25.ML[which(noreaster_data$date_local > "2020-11-30 10:00:00" & noreaster_data$date_local < "2020-11-30 22:00:00")] <- NA
+  noreaster_data$pm10.ML[which(noreaster_data$date_local > "2020-11-30 10:00:00" & noreaster_data$date_local < "2020-11-30 22:00:00")] <- NA
+  
+  return(noreaster_data)
+}
+```
+
+```{r}
+snfilesTest3 <- snfiles_events_Test
+snfilesTest3$sn45 <- thirdFilter(snfiles_events_Test$sn45)
+snfilesTest3$sn49 <- thirdFilter(snfiles_events_Test$sn49)
+snfilesTest3$sn62 <- thirdFilter(snfiles_events_Test$sn62)
+snfilesTest3$sn67 <- thirdFilter(snfiles_events_Test$sn67)
+snfilesTest3$sn72 <- thirdFilter(snfiles_events_Test$sn72)
+```
+
+
+```{r}
+pdf("PM-with-thirdfilters.pdf")
+for (i in seq(length(snfiles))){
+ generate_PM_polarplots(snfilesTest3[[i]], names(snfiles)[i])
+}
+dev.off()
+```
+
+# Heatmap 
+
+```{r}
+# combined_list$dayOfMonth <- format(combined_list$date_local, format="%d")
+```
+
+```{r}
+# trendLevel(combined_list, x = "month", y = "dayOfMonth", pollutant = "pm10.ML", type = "sn")
+```
+```{r}
+# pdf("heatmap.pdf")
+# trendLevel(subset(combined_list, sn == "sn45"), x = "month", y = "dayOfMonth", pollutant = "pm10.ML", main = "sn45")
+# trendLevel(subset(combined_list, sn == "sn46"), x = "month", y = "dayOfMonth", pollutant = "pm10.ML", main = "sn46")
+# trendLevel(subset(combined_list, sn == "sn49"), x = "month", y = "dayOfMonth", pollutant = "pm10.ML", main = "sn49")
+# trendLevel(subset(combined_list, sn == "sn62"), x = "month", y = "dayOfMonth", pollutant = "pm10.ML", main = "sn62")
+# trendLevel(subset(combined_list, sn == "sn67"), x = "month", y = "dayOfMonth", pollutant = "pm10.ML", main = "sn67")
+# trendLevel(subset(combined_list, sn == "sn72"), x = "month", y = "dayOfMonth", pollutant = "pm10.ML", main = "sn72")
+# dev.off()
+```
+
+
+
+```{r}
+# trendLevel(snfiles$sn45, pollutant = "pm10.ML", y = "weekday")
+# trendLevel(snfiles$sn46, pollutant = "pm10.ML", y = "weekday")
+# trendLevel(snfiles$sn49, pollutant = "pm10.ML", y = "weekday")
+# trendLevel(snfiles$sn62, pollutant = "pm10.ML", y = "weekday")
+# trendLevel(snfiles$sn67, pollutant = "pm10.ML", y = "weekday")
+# trendLevel(snfiles$sn72, pollutant = "pm10.ML", y = "weekday")
+```
+
+# Export Cleaned PM data 
+
+We can export the sensor data with the newly filtered PM. We can do so below: 
+
+```{r}
+# mapply(
+#   fwrite, #apply function write table
+#   x=snfiles_ws_events_Test, file=paste(names(snfiles), "-final-w-ML-PM", ".csv", sep="")
+# )
+```
 
 
 
