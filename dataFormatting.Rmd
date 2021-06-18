@@ -306,5 +306,3 @@ We will save the new dataframe to a csv:
 ```{r}
 fwrite(combined_list, "combined_list.csv")
 ```
-
-

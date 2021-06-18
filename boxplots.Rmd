@@ -1,0 +1,185 @@
+---
+title: "Boxplots"
+---
+
+# Overview 
+
+In this notebook, we will be creating the final boxplots for our paper. 
+
+# Import 
+
+## Import packages 
+
+```{r}
+library(data.table)
+library(ggplot2)
+```
+
+
+## Import functions 
+
+```{r}
+# import boxplot function
+source("./functions/calc_stat.R")
+```
+
+
+## Import Data 
+
+```{r}
+combined_df <- fread("combined_list.csv")
+```
+
+# Boxplot Creation 
+
+
+Below we create a function to easily create boxplots, given our current dataframe. Essentially, the function puts the data in the right format for boxplot plots, and takes in input from the user to label it correctly. This function assumes that the regime provided will either be "reg1", "reg2" or "reg3", according to the regimes defined in the dataFormatting notebook. 
+Furthermore, chosen_labeller and measure_vars are options that define whether the plot will be of PM or gas phase. I will explain these parameters more in the next chunk of code. 
+
+```{r}
+create_plot <- function(combined_list, regime, title, chosen_labeller, measure_vars){
+  
+  # put data in right format for boxplots
+  snfiles.melted <-  melt.data.table(combined_list, id.vars = c("sn", regime), measure.vars = measure_vars)
+  #make "group" column, which is sensor site and regime concatinated
+  snfiles.melted$group <- paste(snfiles.melted$sn, snfiles.melted[[regime]])
+  
+  #based on which regime we are plotting, we will generate the correct labels
+  if(regime == "reg1"){
+    snfiles.melted[[regime]] <- factor(snfiles.melted[[regime]],
+    levels = c("source impacted", "not source impacted"),ordered = TRUE)
+  
+    snfiles.melted$group <- factor(snfiles.melted$group,
+        levels = c("sn45 source impacted", "sn45 not source impacted",
+                   "sn46 source impacted", "sn46 not source impacted",
+                   "sn49 source impacted", "sn49 not source impacted",
+                   "sn62 source impacted", "sn62 not source impacted",
+                   "sn67 source impacted", "sn67 not source impacted",
+                   "sn72 source impacted", "sn72 not source impacted"),
+        ordered = TRUE)
+
+  }
+  
+  if(regime == "reg2"){
+    snfiles.melted[[regime]] <- factor(snfiles.melted[[regime]],
+    levels = c("calm", "downwind", "upwind"),ordered = TRUE)
+  
+    snfiles.melted$group <- factor(snfiles.melted$group,
+      levels = c("sn45 calm", "sn45 downwind", "sn45 upwind",
+                 "sn46 calm", "sn46 downwind", "sn46 upwind",
+                "sn49 calm", "sn49 downwind", "sn49 upwind",
+                "sn62 calm",  "sn62 downwind", "sn62 upwind",
+                "sn67 calm" , "sn67 downwind", "sn67 upwind"),
+      ordered = TRUE)
+  }
+  
+  if(regime == "reg3"){
+    snfiles.melted[[regime]] <- factor(snfiles.melted[[regime]],
+    levels = c("pre-covid source impacted", "post-covid source impacted",
+               "pre-covid not source impacted", "post-covid not source impacted"),
+    ordered = TRUE)
+      
+    snfiles.melted$group <- factor(snfiles.melted$group,
+    levels = c("sn45 pre-covid source impacted", "sn45 post-covid source impacted", 
+               "sn45 pre-covid not source impacted", "sn45 post-covid not source impacted",
+           "sn46 pre-covid source impacted", "sn46 post-covid source impacted",
+           "sn46 pre-covid not source impacted", "sn46 post-covid not source impacted",
+           "sn46 other pollution pre-covid", "sn46 other pollution post-covid",
+           "sn49 pre-covid source impacted",  "sn49 post-covid source impacted", "sn49 pre-covid not source impacted", "sn49 post-covid not source impacted",
+           "sn62 pre-covid source impacted", "sn62 post-covid source impacted",
+           "sn62 pre-covid not source impacted", "sn62 post-covid not source impacted",
+           "sn62 other pollution pre-covid","sn62 other pollution post-covid",
+           "sn67 pre-covid source impacted", "sn67 post-covid source impacted",
+           "sn67 pre-covid not source impacted",  "sn67 post-covid not source impacted",
+           "sn67 other pollution pre-covid","sn67 other pollution post-covid"),
+ordered = TRUE)
+  }
+
+
+
+  #make sure that there is no NA data
+  snfiles.melted <- snfiles.melted %>% filter(!is.na(group))
+  snfiles.melted <- filter(snfiles.melted, !is.na(snfiles.melted[[regime]]))
+  snfiles.melted <- snfiles.melted %>% filter(!is.na(sn))
+
+
+  #plot 
+
+  # if you want to filter the data further, use subset. ie: 
+  # subset(snfiles.melted, sn != "sn72")
+  
+  # aes(x=group, y=value, fill= snfiles.melted[[regime]], group = group),
+  #           position = position_dodge(width = 0.9))
+  
+  g <- ggplot(data = snfiles.melted, x= group,
+            aes(x=group, y=value, fill= snfiles.melted[[regime]], group = group)) +
+    stat_summary(fun.data = calc_stat, geom="boxplot")
+  
+  #formatting the plot
+  g+ theme( axis.text.x = element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank()) +
+  facet_wrap(vars(variable,sn),
+             scales="free",
+             ncol = 6,
+             labeller = chosen_labeller) + labs(title = title, color = "Regimes", fill = "Regimes") + scale_fill_brewer(palette="Set1")  #remove text from the x axis and stack the plots so there are 5 columns
+
+}
+```
+
+
+The labeller labels the boxplots. measure_vars refers to which variables we will subset from the data to make the graphs. Therefore, the labeller and the vars should either both be PM or both be gas phase (GP). I create variables for both below. When plotting, choose one of the two options. 
+
+```{r}
+labellerGP<- labeller(
+  variable =
+      c("no.ML" = "NO", 
+        "no2" = expression("NO"[2]), 
+        "co" = "CO"),
+    sn =
+      c("sn45" = "SN 45",
+        "sn46" = "SN 46",
+        "sn49" = "SN 49",
+        "sn62" = "SN 62",
+        "sn67" = "SN 67", 
+        "sn72" = "SN 72")
+  )
+
+labellerPM <- labeller(
+  variable =
+    c("pm1.ML" = "PM1",
+      "pm25.ML" = "PM2.5",
+      "pm10.ML" = "PM10"),
+
+    sn =
+      c("sn45" = "SN 45",
+        "sn46" = "SN 46",
+        "sn49" = "SN 49",
+        "sn62" = "SN 62",
+        "sn67" = "SN 67", 
+        "sn72" = "SN 72")
+  )
+  
+```
+
+```{r}
+GPvars <- c("no.ML", "no2", "co")
+
+PMvars <- c("pm1.ML", "pm25.ML", "pm10.ML")
+```
+
+
+Now we can plot: 
+
+```{r}
+# pdf("boxplot-regimes3.pdf")
+# 
+create_plot(combined_df, "reg1",  "Boxplots of gas phase data, pre-covid and post-covid", labellerGP, GPvars)
+# 
+# dev.off()
+```
+
+
+
+
+
