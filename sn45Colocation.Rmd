@@ -1,0 +1,559 @@
+---
+title: "SN 45 Colocation"
+---
+
+# Overview 
+
+In this dataset, we will be merging the SN45 QuantAQ data with data taken on reference grade instruments. 
+
+# Importing 
+
+## Importing Necessary Libraries 
+
+```{r}
+library(data.table)
+library(lubridate)
+library(dplyr)
+library(tidyr)
+library(openair)
+```
+
+
+## Importing QuantAQ Data 
+
+Note that we have moved to using one dataset, where each data point is marked as to which sensor it came from. 
+```{r}
+combined_df <- fread("combined_list.csv")
+```
+
+Here we will also reduce the data, to just contain SN 45, since that is the sensor we are colocating with. 
+```{r}
+sn45 <- subset(combined_df, sn == "sn45")
+rm(combined_df)
+```
+
+We will also make sure that the dates are in the right timezones and reformat the date vector names, to make data processing easier 
+```{r}
+sn45$date_local <- NULL
+
+sn45$date_UTC <- ymd_hms(sn45$timestamp, tz = "UTC")
+sn45$date <- ymd_hms(sn45$timestamp_local, tz = "America/New_York")
+
+sn45$date <- round_date(sn45$date, unit = "minute")
+```
+
+
+Finally, since the colocation data was taken between 9/22/2020 and 11/1/2020, we can reduce the sn45 dataset to approximate those dates and save on space: 
+```{r}
+sn45 <- sn45[which(sn45$date > "2020-09-20 23:59:00" & sn45$date < "2020-11-03 00:00:00")]
+```
+
+
+## Importing CPC and BC Reference Instrument Data 
+
+
+### Importing CPC Data 
+
+First we import the files themselves. Since there's a lot of files that all contribute to one dataframe, we're going to find all the CPC files and append them to one dataframe, as we read them in. 
+
+All the CPC data are saved as TXT files to the CPC folder from the Dropbox files. We can find all the CPC data by finding all the txt files in that folder.
+
+```{r}
+nm <- list.files(path="./data/reference_data/MCPC data", pattern="*.TXT", full.names = TRUE)
+```
+
+Since we've identified which files are CPC data and saved them to a list, we can run through that list and import the dataframes one by one. In R, you can layer functions together. We'll do that in this case, by overlaying the read function with rbind. What this does is that immediately after a dataframe is imported, it's bounded by row to a dataframe. This way, when the data imports, it all goes to one place. 
+
+```{r}
+cpcData <- do.call(rbind, lapply(nm, function(x) read.delim(file=x, header = TRUE, skip = 13) ) )
+```
+
+
+Then we can further prepare the data by removing unnecessary variables and formatting the datetime object. For the latter, we're going to format the hour/minute/second column and the year/month/day columns separately, using functions ymd and hms. Then, we'll combine the vectors with the function "with". Since the timezone is already local, we can define it using the tz function.
+
+```{r}
+cpcData <- cpcData[ , c("X.YY.MM.DD", "HR.MN.SC", "concent", "fillcnt"  )]   ## removing unnecessary variables 
+cpcData$date <- with(cpcData, ymd(`X.YY.MM.DD`) + hms(`HR.MN.SC`)) ##formatting datetime
+tz(cpcData$date) <- "America/New_York" # define timezone
+```
+
+### Importing Aethlometer Data 
+
+The aethlometer data import is very similar to the CPC data import. Again, we find all of the aethlometer data and put it into one dataframe.
+
+```{r}
+aeth_files <- list.files(path="./data/reference_data/AETHLOMETER", all.files = TRUE, full.names = TRUE, pattern="*.csv")
+aethData <- do.call(rbind, lapply(aeth_files, function(x) fread(file=x) ) )
+```
+
+The variables we care about from this sensor are the datetimes, the status of the sensor, and all the black carbon concentration data. 
+
+```{r}
+aethData <- aethData[ , c( "Date / time local",  "Timezone offset (mins)" , "Date local (yyyy/MM/dd)", "Time local (hh:mm:ss)", "Status" ,  "UV BC1", "Blue BC1", "Green BC1", "Red BC1", "IR BC1")]
+```
+
+
+We also format the datetime vector. Since the date and time are already combined into one vector, we're just going to put it in the standard format using the ymd_hms format. Since the data is in local time, we'll define the timezone to EST/EDT as well. 
+
+```{r}
+aethData$date <- ymd_hms(aethData$`Date / time local`)   ## formatting date time 
+tz(aethData$date) <- "America/New_York"
+
+aethData$date <- round_date(aethData$date, unit = "1 minute") # for merging later
+```
+
+
+## Importing Reference Gas Phase Data 
+
+The reference gas phase data was taken from the [drop box](https://quant-aq.app.box.com/s/8qizu5u6oykhts4ztcukcvwfg39450at). We will import the (renamed) file here: 
+```{r}
+referenceGasPhase <- fread("./data/sn45_colocation.csv")
+referenceGasPhase$date <- mdy_hms(referenceGasPhase$timestamp_iso, tz = "UTC")
+```
+Note that the output of this code reads "23 failed to parse". There are 23 entries with erroneous entries at the end of the file. 
+
+We assume that the timezone is in UTC, however, let's confirm with a quick graph. We're going to plot some gas phase pollutants from both sn45 and the reference gas phase datasets. If the peaks are shifted from each other, they are not in the same timezone. 
+
+Since merge automatically changes dates' timezones to merge, we're going to change the reference gas phase date to EST/EDT timezone beforehand (changing the datetime values). 
+
+```{r}
+referenceGasPhase$date <- round_date(referenceGasPhase$date, unit = "10 second")
+referenceGasPhase$date <- with_tz(referenceGasPhase$date, "America/New_York")
+testDf <- merge(sn45, referenceGasPhase,by = "date", all = FALSE, suffixes = c(".sn45", ".referenceGasPhase"))
+```
+
+```{r}
+timePlot(selectByDate(testDf, start = "28/9/2020", end = "28/9/2020"), pollutant = c("no.ML", "no.referenceGasPhase"), group = TRUE)
+```
+
+Since the peaks line up and sn45's date is in EST/EDT time, that must mean that reference gas phase's data was in UTC and was correctly converted to EST/EDT. 
+
+
+# Data Cleaning 
+
+While we cleaned the quantAQ data beforehand, we haven't cleaned the other datasets. Therefore, we will make sure there are no erroneous values before we start the merge. 
+
+## Vector Types 
+
+We will check that the columns we expect to be numeric are not given as strings. Like in the HEPA analysis, we will check this with the typeof function. 
+
+```{r}
+sapply(list("cpc" = cpcData, "aeth" = aethData, "referenceGasPhase" = referenceGasPhase), function(x) sapply(x,typeof))
+```
+
+Everything looks correct. Let's remove the old time vectors, which are strings, since that will hinder our merging later. 
+
+```{r}
+cpcData <-  subset(cpcData, select = -c(`X.YY.MM.DD`, `HR.MN.SC`)) 
+aethData <-  subset(aethData, select = -c(`Date local (yyyy/MM/dd)`, `Time local (hh:mm:ss)`)) 
+referenceGasPhase <-  subset(referenceGasPhase, select = -c(`timestamp_iso`)) 
+```
+
+
+## Checking and removing zero and negative values 
+
+First, we'll check how many values in each dataset are negative or zero.
+
+```{r}
+sprintf("Number of negative and zero values in cpc data: %d", sum(cpcData$concent <= 0, na.rm = TRUE))
+
+lapply(c( "UV BC1", "Blue BC1", "Green BC1", "Red BC1", "IR BC1"), function(x) sprintf("Number of negative and zero values in aethlometer data, %s : %d",x, sum(aethData[[x]] <= 0, na.rm = TRUE)))
+
+lapply(c( "co.referenceGasPhase", "no.referenceGasPhase", "no2.referenceGasPhase", "pm1.referenceGasPhase", "pm25.referenceGasPhase"), function(x) sprintf("Number of negative and zero values in reference grade gas phase data, %s : %d",x, sum(referenceGasPhase[[x]] <= 0, na.rm = TRUE)))
+
+
+
+sprintf("Percent of negative and zero values in cpc data: %f", 100*sum(cpcData$concent <= 0, na.rm = TRUE)/ nrow(cpcData))
+
+lapply(c( "UV BC1", "Blue BC1", "Green BC1", "Red BC1", "IR BC1"), function(x) sprintf("Percent of negative and zero values in aethlometer data, %s : %f",x, 100*sum(aethData[[x]] <= 0, na.rm = TRUE)/ nrow(aethData[[x]])))
+
+
+```
+
+These aren't high values, so we don't have to check the data, and can just set them to NA. 
+
+```{r}
+#set zero and negative cpc data to NA
+cpcData$concent[which(cpcData$concent <= 0)] <- NA
+
+#set zero and negative aethlometer data to NA
+bc <- list("UV BC1", "Blue BC1" ,  "Green BC1" , "Red BC1" , "IR BC1" )   
+for(col in bc){
+  aethData[[col]] <- replace(aethData[[col]], aethData[[col]] <= 0, NA)
+}
+rm(bc)
+
+#set zero and negative referenceGasPhase data to NA
+referenceGasPhase$co[which(referenceGasPhase$co <= 0)] <- NA
+```
+
+## Checking NA values
+
+Let's make sure we don't have too many NA values 
+
+```{r}
+sprintf("Number of NA values in cpc: %d", sum(is.na(cpcData$concent)))
+sprintf("Percentage of NA values in cpc: %f", 100*sum(is.na(cpcData$concent))/ nrow(cpcData))
+```
+
+# Merging 
+
+We will be creating three datasets: 1s, 10s and 1 minute based ones.
+
+The data itself was taken with the following frequencies: 
+
+- meteorology data (ws,wd) : 1 datapt/5 minutes (this is already downsampled to 1 datapt/1 minute)
+- QuantAQ data : 1 datapt/1 minute 
+- CPC/BC data: 1datapt/1s
+- reference gas phase data : 1 datapt/10s 
+
+
+Thus, for each dataset, we will either need to upsample or downsample. 
+Here, upsampling refers to taking some data and repeating it a given number of times. For instance, if I wanted to upsample 5 minute resolution data to 1 minute resolution data (ie artifically increasing the sampling rate), then I would repeat the 5 minute data 5 times. If the data value was 2 at 10:00 and 3 at 10:05, then the new data would be 10:00 - 2; 10:01 - 2 ... 10:04 - 2; 10:05 - 3 ...10:09 - 3. 
+On the other hand, time averaging (or downsampling) refers to decreasing the sampling rate. If I had 1s data that I wanted to downsample to 1 minute, then I would group the data for every minute (ie 10:00 data would take all the datapoints between 10:00:00 and 10:00:59 inclusive), take their mean, and set that to be the new datapoint. 
+
+
+Below we will create the functions we'll use to upsample and downsample. 
+
+
+```{r}
+downsample <- function(df, timeUnit){
+  
+  df$date <- round_date(df$date, timeUnit) #creating date1min vector. Turns 00:00:01 and 00:00:59 into 00:00 and 00:01, respectively.
+  dfDT <- setDT(df)[, lapply(.SD, mean), by = .(date)] #applies mean function to each data group created from the "date" column
+
+  
+  return(dfDT)
+}
+
+
+upsample <- function(df, timeUnit){
+  
+  newDf <- df %>% 
+  na.omit("date") %>% #if any dates are NA, the following function won't work
+  complete(date = seq(from = min(date), to= max(date),  by = timeUnit)) %>%#add entries so that there is a data pt from the min date to max date with intervals of the specified time unit
+  fill(names(df)) # copies previous entries into the newly created data points
+}
+```
+
+## Upsampling and Downsampling Walkthrough 
+
+Here, we'll briefly demonstrate how the downsample and upsample work: 
+
+The downsampling function has two steps. First, we round the dates: 
+
+```{r}
+print("Original cpc dates: ")
+print(cpcData$date[1:20])
+print("Rounded cpc dates: ")
+print(round_date(cpcData$date[1:20], "10 sec"))
+```
+Because there are repeats of certain datetimes now, we can group and average all the values that have the same datetime. 
+
+```{r}
+testDf <- cpcData[1:10, c("date", "concent")] # creating a sample dataframe to explain grouping
+print(testDf)
+testDf$date <- round_date(testDf$date, "10 sec")
+testDfAvg <- setDT(testDf)[, lapply(.SD, mean), by = .(date)]
+print(testDfAvg)
+```
+
+Upsampling also involves two main steps which we will explore. For upsampling, first we create empty columns with all the desired datetimes: 
+
+```{r}
+print("original data")
+print(sn45[1:3, c("date", "no.ML")])
+testDf <- sn45[1:3, c("date", "no.ML")] 
+testDf <- complete(testDf, date = seq(from = min(date), to= max(date),  by = "10 sec")) # create columns
+print("new data")
+print(testDf)
+```
+Note that the new data spans two pages in the output. 
+
+
+Now we just copy previous data into those new rows: 
+
+```{r}
+testDf <- fill(testDf, names(testDf))
+print(testDf)
+```
+
+
+## Preprocessing
+
+We'll also pre-assign the dataframe name to each variable ahead of time, so that we can easily differentiate the columns in the merged dataframe. This also makes plotting easier in R, since you only have to change the dataframe when plotting a given variable, as opposed to changing the variable name as well. 
+
+```{r}
+colnames(referenceGasPhase)[colnames(referenceGasPhase) != "date"] <- paste(colnames(referenceGasPhase)[colnames(referenceGasPhase) != "date"], "referenceGasPhase", sep = ".")
+colnames(aethData)[colnames(aethData) != "date"] <- paste(colnames(aethData)[colnames(aethData) != "date"], "aeth", sep = ".")
+colnames(cpcData)[colnames(cpcData) != "date"] <- paste(colnames(cpcData)[colnames(cpcData) != "date"], "cpc", sep = ".")
+colnames(sn45)[colnames(sn45) != "date"] <- paste(colnames(sn45)[colnames(sn45) != "date"], "sn45", sep = ".")
+```
+
+# 1 s dataset 
+
+First, we'll upsample the necessary dataframes. 
+
+```{r}
+referenceGasPhaseUpsampled1s <- upsample(referenceGasPhase, "1 sec")
+aethUpsampled1s <- upsample(aethData, "1 sec")
+sn45Upsampled1s <- upsample(sn45, "1 sec")
+```
+
+Next, we'll merge the upsampled dataframes. We are using the "reduce" function, which sequentially applies a function to all the elements in a list. In our case, we are merging cpcData and aethUpsampled1s first, then merging that output with referenceGasPhaseUpsampled1s, and so on. The parameter "all= FALSE" ensures that only datetimes which have entries in all four dataframes will be included. 
+
+```{r}
+Df1s <- Reduce(function(x, y) merge(x, y, by="date", all = FALSE), list(cpcData, aethUpsampled1s, referenceGasPhaseUpsampled1s, sn45Upsampled1s))
+```
+
+
+## Data Validation 
+
+Before we use this data, we need to make sure it is correct. Assuming that the imported data is correct and that the importing itself is correct, there are four things we need to check for correctedness: 
+
+1. upsampling
+2. downsampling 
+3. merging
+4. timezones 
+
+In the following sections, we will conduct tests for correctedness
+
+### Upsampling and Downsampling
+
+With these two processes, when we check for correctedness, we are checking that the data is incrementing at the desired interval (ie 1 s, 10 s, 1 min). In other words, the difference between the "date" column's data points should equal one of those fixed amounts. In the following code, we will do that: print out the datapoints whose time difference don't equal the assumed amount, and validate them. 
+
+R's difftime function takes in two datetimes and subtracts them from each other such that time1 - time2 = result. If we want the difference between consecutive data points, we can subtract a vector from its shifted self. For example, if we have a vector v = [00:00, 00:01, 00:02] and v[-1] = [00:01, 00:02], then difftime(v[-1], v) = [1min, 1min]. We will show this below with a quick example: 
+
+```{r}
+sprintf("date vector: %s", head(sn45Upsampled1s$date))
+print(" ")
+sprintf("date vector shifted: %s ", head(sn45Upsampled1s$date[-1]))
+print(" ")
+sprintf("time diff of these two vectors: %f", head(difftime(sn45Upsampled1s$date[-1], sn45Upsampled1s$date)))
+
+```
+Now, we'll wrap this logic in a function. We'll change the functionality, so that it will only print dates which don't have the fixed time difference. 
+
+```{r}
+testUpsampleDownsample <- function(df, fixed_time){
+  df$group <- ifelse(difftime(df$date,
+                                  shift(df$date, fill = df$date[1]), 
+                                  units = "secs") > fixed_time 
+                         ,1, 0) # if time between datapts is greater than fixed time, mark as 1
+
+
+  rows = which(df$group == 1) # find marked rows
+  rowsminusone = rows - 1 #find preceding rows 
+  
+  timesDf <- data.frame(df$date[rowsminusone], df$date[rows], difftime(df$date[rows],df$date[rowsminusone] )) #to print the rows and their diff
+  View(timesDf)
+}
+```
+
+
+In the function, for the first time-shifted vector, we're adding a date at the end, so the vectors could be the same length. 
+
+Now let's see when the data is not upsampled to 1 second:
+
+
+```{r}
+testUpsampleDownsample(Df1s, 1)
+```
+
+There are some data entries which are more than 1 second apart, but it's mostly 2 seconds apart, or it seems like at most a few minutes. Since these are small gaps in time, I believe that the upsampling and downsampling are all right. 
+
+### Merging
+
+Next, we'll check the merging. If we consider the merging as a merging of 2 matrices, then we want to make sure all the correct columns (vectors) and current rows (data points) are in the new matrix. 
+
+To check if all the correct columns are in the new dataframe, we can simply check if all the columns from the merged dataframes are present: 
+
+```{r}
+all(c(colnames(sn45), colnames(aethData), colnames(cpcData), colnames(referenceGasPhase)) %in% colnames(Df1s))
+```
+
+In the case where the column names do not match, you can use the following code to find which is the missing column(s).
+
+```{r}
+# `%!in%` <- Negate(`%in%`)
+# c(colnames(sn45), colnames(aethData), colnames(cpcData), colnames(referenceGasPhase))[which(c(colnames(sn45), colnames(aethData), colnames(cpcData), colnames(referenceGasPhase)) %!in% colnames(Df10s))]
+```
+
+
+Next we check if all the correct data points are in the new data frame. Another way to think about this is to check if there are dates that all the dataframes share, but which aren't in the merged dataframe. 
+
+Intersect gives the intersection between the lists given; if we take the intersect of all the merged dataframe dates, those should be all the dates in the new dataframe. 
+
+```{r}
+all(Reduce(intersect, list(aethUpsampled1s$date,
+                       referenceGasPhaseUpsampled1s$date,
+                       cpcData$date, 
+                       sn45Upsampled1s$date)) == unique(Df1s$date)) 
+```
+
+### Time zones 
+
+For one, we would like to make sure that the new gas phase data taken on reference grade instruments is still synced with QuantAQ's gas phase data. Again, we can plot them together ; if the time zone is off, we will see the same trends, but shifted. 
+
+```{r}
+timePlot(selectByDate(Df1s, start = "28/9/2020", end = "28/9/2020"), pollutant = c("no.ML.sn45", "no.referenceGasPhase"), group = TRUE)
+```
+```{r}
+timePlot(selectByDate(Df1s, start = "28/9/2020", end = "28/9/2020", hour = 21:22), pollutant = c("no.ML.sn45", "no.referenceGasPhase", "concent.cpc", "IR BC1.aeth"), group = TRUE, normalise = "mean")
+```
+```{r}
+timePlot(selectByDate(Df1s, start = "28/9/2020", end = "30/9/2020"), pollutant = c("no.ML.sn45", "no.referenceGasPhase", "concent.cpc", "IR BC1.aeth"), group = TRUE, normalise = "mean")
+```
+It seems like CPC picks up on trends that aren't on the other sensors (which is expected) and otherwise the peaks line up. Therefore, we can say that the timezones are correct. Because we will not be working with timezones or manipulating dates anymore, we will not check for timezones again. 
+
+### Overall Trends in the Data 
+
+As our last data validation check, we will plot the new data, and compare it against the not-merged dataframes. 
+
+First, we plot the original data. Note that you can save the plots to a pdf by uncommenting the first and last lines. 
+
+```{r}
+# pdf("originalgraphs.pdf")
+timePlot(sn45, pollutant = c("no.ML.sn45", "co.sn45",
+                             "pm1.ML.sn45"), y.relation = "free")
+timePlot(aethData, pollutant = c( "Blue BC1.aeth" , "Green BC1.aeth","Red BC1.aeth","IR BC1.aeth", "UV BC1.aeth" ), y.relation = "free")
+timePlot(cpcData, pollutant = c("concent.cpc"))
+timePlot(referenceGasPhase, pollutant =  c("no.referenceGasPhase", "co.referenceGasPhase",
+                             "pm1.referenceGasPhase"), y.relation = "free")
+
+# dev.off()
+```
+
+Now, let's plot some variables in the merged dataframe to compare. 
+
+```{r}
+timePlot(Df1s, pollutant = c("no.ML.sn45", "no.referenceGasPhase",
+                             "co.sn45", "co.referenceGasPhase",
+                             "IR BC1.aeth", "Blue BC1.aeth",
+                             "concent.cpc"), y.relation = "free")
+```
+
+
+
+## Exporting
+
+Once we are satisfied with the result, we can export the data to a csv. 
+
+```{r}
+fwrite(Df1s, "df-1sec.csv") #write dataframe to csv file
+rm(Df1s, referenceGasPhaseUpsampled1s, sn45Upsampled1s, aethUpsampled1s) #remove env items that are no longer necessary
+```
+
+
+# 10 s dataset 
+
+Let us do the same process for the 10 s dataframe. 
+
+```{r}
+cpcDownsampled10s <- downsample(cpcData, "10 sec")
+aethUpsampled10s <- upsample(aethData, "10 sec")
+sn45Upsampled10s <- upsample(sn45, "10 sec")
+```
+
+
+```{r}
+Df10s <- Reduce(function(x, y) merge(x, y, by="date", all = FALSE), list(cpcDownsampled10s, aethUpsampled10s, referenceGasPhase, sn45Upsampled10s))
+```
+
+## Validation 
+
+We will run the same validation tests from above.
+
+
+```{r}
+all(c(colnames(sn45), colnames(aethData), colnames(cpcData), colnames(referenceGasPhase)) %in% colnames(Df10s))
+```
+
+
+```{r}
+all(Reduce(intersect, list(aethUpsampled10s$date,
+                       referenceGasPhase$date,
+                       cpcDownsampled10s$date, 
+                       sn45Upsampled10s$date)) == unique(Df10s$date)) 
+
+
+```
+
+```{r}
+testUpsampleDownsample(Df10s, 10)
+```
+
+There are about 4000 datapoints that have a time jump greater than 10 seconds, but most of them are about 20 or 30 seconds, and 4000 datapoints makes up about 2% of the data. 
+
+```{r}
+timePlot(Df10s, pollutant = c("no.ML.sn45", "no.referenceGasPhase",
+                              "co.sn45", "co.referenceGasPhase",
+                               "concent.cpc", "Blue BC1.aeth" ), y.relation = "free")
+```
+
+
+## Exporting
+
+```{r}
+fwrite(Df10s, "df-10sec.csv")
+rm(Df10s, cpcDownsampled10s, aethUpsampled10s, sn45Upsampled10s)
+```
+
+
+
+# 1 min Df 
+
+```{r}
+cpcDownsampled1min <- downsample(cpcData, "1 min")
+referenceGasPhaseDownsampled1min <- downsample(referenceGasPhase, "1 min")
+```
+
+
+```{r}
+Df1min <- Reduce(function(x, y) merge(x, y, by="date", all = FALSE), list(cpcDownsampled1min, aethData, referenceGasPhaseDownsampled1min, sn45))
+```
+
+## Validation 
+
+```{r}
+all(c(colnames(sn45), colnames(aethData), colnames(cpcData), colnames(referenceGasPhase)) %in% colnames(Df1min))
+```
+
+
+```{r}
+all(Reduce(intersect, list(aethData$date,
+                       referenceGasPhaseDownsampled1min$date,
+                       cpcDownsampled1min$date, 
+                       sn45$date)) == unique(Df1min$date)) 
+
+```
+
+
+```{r}
+testUpsampleDownsample(Df1min, 60)
+```
+
+Again, there are a couple dozen instances where there is a few minute jump, and again, we see a jump between 10/6 and 10/7. I think these are OK, so I will export the data. 
+
+
+```{r}
+timePlot(Df1min, pollutant = c("no.ML.sn45", "no.referenceGasPhase",
+                               "co.sn45", "co.referenceGasPhase",
+                               "concent.cpc", "Blue BC1.aeth" ), y.relation = "free" )
+```
+
+To me, the NO data in this graph looked a little different than the original data. Luckily, the sn45 data is not upsampled or downsampled in this dataframe, so we can compare the entries directly and see if there are any discrepanies.
+
+```{r}
+all(sn45$no.ML.sn45[which(sn45$date %in% Df1min$date)] == Df1min$no.ML.sn45, na.rm =TRUE)
+```
+
+It looks like all the data matches exactly. 
+
+## Exporting
+
+```{r}
+fwrite(Df1min, "df-1min.csv")
+rm(Df1min, cpcDownsampled1min, referenceGasPhaseDownsampled1min)
+```
+
