@@ -1,0 +1,528 @@
+---
+title: "Revere High Indoor/Outdoor Data Merge"
+author: "Megan Ku"
+date: "3/30/2021"
+output: html_document
+---
+
+# Description
+
+In this notebook, we will clean the data collected from Revere High School in March 2021.
+
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) #this library lets you use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(readr) # to read csv files
+source("merge_data.R") #For importing and merging data
+```
+
+# Prepare CPC Data
+
+## Importing CPC Data
+
+First, let's import the data.
+
+```{r}
+business_cpc <- import_cpc_files(
+  filepath="./Revere High School - Mar 2021/Business - CPC077 MOD099")
+
+# FIRST TIME RUN THROUGH - UNCOMMENT 35-36; COMMENT OUT 39-40
+# principal_cpc <- import_cpc_files(
+#   filepath="./Revere High School - Mar 2021/Principal - In_Out CPC016 MOD114 MOD126")
+
+superintendent_cpc <- import_cpc_files(
+  filepath = "./Revere High School - Mar 2021/Superintendent - CPC015 MOD111")
+
+class210_cpc <- import_cpc_files(
+  filepath = "./Revere High School - Mar 2021/Class 210")
+
+classc11_cpc <- import_cpc_files(
+  filepath = "./Revere High School - Mar 2021/Class C11")
+
+class120_cpc <- import_cpc_files(
+  filepath = c("./Revere High School - Mar 2021/Class120_outdoor/MCPC 016 - indoor 15mar-22mar", "./Revere High School - Mar 2021/Class C120_outdoor/MCPC 015 - indoor 22mar-24mar"), skip_key = 13) #Had to hard-code this value, not sure why
+
+outdoor_class_cpc <- import_cpc_files(
+  filepath = "./Revere High School - Mar 2021/Class120_outdoor/MCPC 016 - outdoor 22mar-24mar")
+
+
+# combine admin rooms into list
+cpc_admin_list <- list( "business" = business_cpc,
+                        "superintendent" = superintendent_cpc)
+
+# combine classrooms into list
+cpc_classroom_list <- list("class210" = class210_cpc,
+                           "classc11" = classc11_cpc,
+                           "class120" = class120_cpc,
+                           "outdoor" = outdoor_class_cpc)
+```
+
+We need to separate the principal's office CPC data from indoor and outdoor. Useful 3-way valve switching only occurred until midnight on March 12th, 2021. Since we can't tell whether the recorded data after the fact was only indoor or outdoor, we need to scrap that data.
+
+Note: The below code snippet was used to export the raw data for processing using the rough tool sep_valve.py.
+```{r}
+# FIRST TIME RUN THROUGH: UNCOMMENT BELOW THIS LINE
+# cpc_admin_list$principal <- cpc_admin_list$principal %>%
+#   filter(date > as.POSIXct("2021-03-09 9:26:00", tz='America/New_York'),
+#          date < as.POSIXct("2021-03-11 23:59:59", tz='America/New_York'))
+# 
+# write.table(cpc_admin_list$principal, "principal_valve_raw.csv", append = FALSE, sep = ",", dec = ".",
+#             row.names = TRUE, col.names = TRUE)
+# AFTER THIS IS DONE THEN RUN sep_valve.py
+```
+
+After the data is separated, we can add the indoor and outdoor data for the admin offices like so. I've also plotted the data to check that swapping was handled and the switching noise was omitted. Over the course of the three days of data, there was a drift of around 3 minutes.
+```{r}
+# This will only work once code is run through sep_valve.py.
+cpc_admin_list$principal <- read_csv("data/revere_high_principal_cpc.csv")
+cpc_admin_list$outdoor <- read_csv("data/revere_high_outdoor_cpc.csv")
+
+# fix time zones
+cpc_admin_list <- lapply(cpc_admin_list, set_correct_datetime)
+cpc_classroom_list <- lapply(cpc_classroom_list, set_correct_datetime)
+```
+
+
+## Checking for non-numerical errors
+
+Let's make sure the values of the columns are actually numbers. 
+```{r}
+sapply(cpc_admin_list, function(x) sapply(x,typeof))
+```
+
+```{r}
+sapply(cpc_classroom_list, function(x) sapply(x,typeof))
+```
+Looks good.
+
+## Cleaning numerical errors
+
+```{r}
+lapply(cpc_admin_list, function(x) sprintf("Number of negative and zero values: %d", sum(x$concent <= 0, na.rm = TRUE)))
+lapply(cpc_classroom_list, function(x) sprintf("Number of negative and zero values: %d", sum(x$concent <= 0, na.rm = TRUE)))
+```
+There are lots of negative and zero values in classc11 and outdoors.
+
+Let's remove these invalid points.
+
+```{r}
+cpc_admin_list <- sapply(cpc_admin_list, remove_cpc_zero)
+cpc_classroom_list <- sapply(cpc_classroom_list, remove_cpc_zero)
+```
+
+Now let's check the number and percentage of NA values.
+
+```{r}
+lapply(cpc_admin_list, function(x) sprintf("Number of NA values: %d", sum(is.na(x$concent))))
+lapply(cpc_admin_list, function(x) sprintf("Percentage of NA values: %f", 100*(sum(is.na(x$concent)) / nrow(x))))
+
+lapply(cpc_classroom_list, function(x) sprintf("Number of NA values: %d", sum(is.na(x$concent))))
+lapply(cpc_classroom_list, function(x) sprintf("Percentage of NA values: %f", 100*(sum(is.na(x$concent)) / nrow(x))))
+```
+
+
+# Prepare PM data
+
+## Importing PM data 
+
+Now we will import all the PM data, using the same method as for the CPC data. We will combine the PM data frames into lists of dataframes. Lastly, we will clean all the dataframes in the lists of dataframes using the function above. 
+
+
+```{r}
+# import pm data 
+
+business_PM <- import_pm_files(filepath="./Revere High School - Mar 2021/Business - CPC077 MOD099")
+
+business_s1_PM <- import_pm_files(
+  filepath="./data", regex_pattern = "data.mod-pm-00128.final.csv")
+
+business_s2_PM <- import_pm_files(
+  filepath = "./Modulair-PM Data", regex_pattern = "124.*.csv")
+
+principal_PM <- import_pm_files(
+  filepath="./data", regex_pattern = "data.mod-pm-00126.final.csv")
+
+principal_s1_PM <- import_pm_files(
+  filepath = "./Modulair-PM Data", regex_pattern = "112.*.csv")
+
+principal_s2_PM <- import_pm_files(
+  filepath = "./Modulair-PM Data", regex_pattern = "125.*.csv")
+
+superintendent_PM <- import_pm_files(
+  filepath = "./Modulair-PM Data", regex_pattern = "111.*.csv")
+
+superintendent_assist_PM <- import_pm_files(
+  filepath="./Modulair-PM Data", regex_pattern = "130.*.csv")
+
+outdoor_admin_PM <- import_pm_files(
+  filepath = "./Modulair-PM Data", regex_pattern = "114.*.csv") 
+
+class210_PM <- import_pm_files(
+  filepath = "./Modulair-PM Data", regex_pattern = "111.*.csv")
+
+classc11_PM <- import_pm_files(
+  filepath = "./Modulair-PM Data", regex_pattern = "099.*.csv")
+
+class120_PM <- import_pm_files(
+  filepath = "./Modulair-PM Data", regex_pattern = "126.*.csv")
+
+outdoor_class_PM <- import_pm_files(
+  filepath = "./Modulair-PM Data", regex_pattern = "114.*.csv")
+
+# combine PM data 
+# combine admin rooms into list
+pm_admin_list <- list("business" = business_PM, 
+                      "business_s1" = business_s1_PM,
+                      "business_s2" = business_s2_PM, 
+                      "principal" = principal_PM,
+                      "principal_s1" = principal_s1_PM,
+                      "principal_s2" = principal_s2_PM,
+                      "superintendent" = superintendent_PM,
+                      "superintendent_assist" = superintendent_assist_PM,
+                      "outdoor" = outdoor_admin_PM)
+
+# combine classrooms into list
+pm_classroom_list <- list("class210" = class210_PM,
+                           "classc11" = classc11_PM,
+                           "class120" = class120_PM,
+                           "outdoor" = outdoor_class_PM)
+```
+
+## Setting the correct datetime
+
+```{r}
+# convert pm data to local time, round date
+pm_admin_list <- lapply(pm_admin_list,  function(x) clean_PM_data(x)) 
+pm_classroom_list <- lapply(pm_classroom_list,  function(x) clean_PM_data(x))
+```
+
+## Cleaning the data for non-numerical errors
+
+As before, we'll check for non-numerical errors. 
+
+```{r}
+sapply(pm_admin_list, function(x) sapply(x,typeof))
+sapply(pm_classroom_list, function(x) sapply(x,typeof))
+```
+Everything here looks okay, for our purposes.
+
+## Cleaning the data for numerical errors 
+
+According to our spreadsheet, pm1 shouldn't exceed 1 microgram/m3, and should never be negative.
+
+```{r}
+lapply(pm_admin_list, function(x) sprintf("Number of negative values: %d", sum(x$pm1 < 0, na.rm = TRUE)))
+lapply(pm_classroom_list, function(x) sprintf("Number of negative values: %d", sum(x$pm1 < 0, na.rm = TRUE)))
+```
+```{r}
+lapply(pm_admin_list, function(x) sprintf("Number of pm1 values over 1 mg/m3: %d", sum(x$pm1 > 1, na.rm = TRUE)))
+lapply(pm_classroom_list, function(x) sprintf("Number of pm1 values over 1 mg/m3: %d", sum(x$pm1 > 1, na.rm = TRUE)))
+```
+```{r}
+lapply(names(pm_admin_list), function(x) timePlot(pm_admin_list[[x]], pollutant = "pm1", main = x ))
+lapply(names(pm_classroom_list), function(x) timePlot(pm_classroom_list[[x]], pollutant = "pm1", main = x ))
+```
+
+As we can see, the outdoor data zeroes out. Let's drop those values.
+
+```{r}
+pm_admin_list$outdoor[date > as.POSIXct("2021-03-11 06:36:00", tz='America/New_York') & 
+         date < as.POSIXct("2021-03-11 14:08:00", tz='America/New_York'), ] <- NA
+
+pm_classroom_list$outdoor[date > as.POSIXct("2021-03-11 06:36:00", tz='America/New_York') & 
+         date < as.POSIXct("2021-03-11 14:08:00", tz='America/New_York'), ] <- NA
+
+pm_admin_list$outdoor[pm_admin_list$pm1 == 0,] <- NA
+
+pm_classroom_list$outdoor[pm_admin_list$pm1 == 0,] <- NA
+```
+
+# Merging 
+
+## Averaging CPC data 
+
+In order to merge with the PM data, we have to get the data to have the same time intervals. This way, we will be able to match datapoints based on what time they were taken. Since the PM data has a smaller resolution than the CPC data (1 min opposed to 1 sec), we will average the CPC data so that it will be on a 1 minute time basis. 
+
+To do this, we will create a date1min vector in the CPC data; this vector gives the datetime rounded to the nearest minute for each datapoint. Then we will take all of the numeric data, group them into categories so that each category has the same date1min, and then taking the mean of each group. 
+
+Let's check that all the columns are in the right format, again. 
+
+```{r}
+sapply(cpc_admin_list, function(x) sapply(x,typeof))
+sapply(cpc_classroom_list, function(x) sapply(x,typeof))
+```
+And making sure there aren't any rows that could stop us from taking the mean: 
+
+```{r}
+sapply(cpc_admin_list, function(x) which(is.na(x$date)))
+sapply(cpc_classroom_list, function(x) which(is.na(x$date)))
+```
+
+```{r}
+cpc_admin_list$business <- cpc_admin_list$business %>%
+  drop_na("date")
+cpc_admin_list$superintendent <- cpc_admin_list$superintendent %>%
+  drop_na("date")
+cpc_classroom_list$class210 <- cpc_classroom_list$class210 %>%
+  drop_na("date")
+cpc_classroom_list$classc11 <- cpc_classroom_list$classc11 %>%
+  drop_na("date")
+cpc_classroom_list$outdoor <- cpc_classroom_list$outdoor %>%
+  drop_na("date")
+```
+
+```{r}
+cpc_admin_list2 <- lapply(cpc_admin_list, average_cpc)
+cpc_classroom_list2 <- lapply(cpc_classroom_list, average_cpc)
+```
+
+Lastly, we're going to add 5 minutes to the times in the outdoor dataset such that they line up with the indoor data for the principal's office. This is to compensate
+for the 3-way valve used at Revere High.
+
+```{r}
+cpc_admin_list2$outdoor$date1min <- cpc_admin_list2$outdoor$date1min + minutes(5)
+```
+
+## Merging Function 
+
+```{r}
+admin_rooms <- sapply(names(cpc_admin_list), function(k) merge(cpc_admin_list2[[k]], pm_admin_list[[k]], by.x = "date1min", by.y = "date", all = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+
+class_rooms <- sapply(names(cpc_classroom_list), function(k) merge(cpc_classroom_list2[[k]], pm_classroom_list[[k]], by.x = "date1min", by.y = "date", all = TRUE), simplify = FALSE,USE.NAMES = TRUE)
+```
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+# Apply Correction Factor 
+
+As stated in the HEPA Analysis powerpoint, here we will "multiply CPC concentrations by a static value to account for noise from the sensors." We do this by creating a function, which takes in a dataframe and a correction factor. It multiplies that dataframe's concent vector by the input correction factor.  
+
+The correction data is based on which sensor is used. Below, we list which sensor is used in each location.
+
+015 [0.9449454] - superintendent's office, classroom 210, classroom 120 (after March 22)
+016 [1.005473] - class120 (before March 22) outdoor (after March 22), principal's office
+077 [1.100486] - business office, C11
+
+We apply that function to all of the dataframes:
+```{r}
+admin_rooms_previous = admin_rooms # replicating the list, to check the function
+class_rooms_previous = class_rooms # replicating the list, to check the function
+
+admin_rooms["superintendent"] <- apply_correction(
+  admin_rooms["superintendent"], 0.9449454)
+class_rooms["class210"] <- apply_correction(
+  class_rooms["class210"], 0.9449454)
+class_rooms["class120"][class_rooms["class120"]$date1min > as.POSIXct("2021-03-22 07:13:00", tz='America/New_York')] <- apply_correction(
+  class_rooms["class120"][class_rooms["class120"]$date1min > as.POSIXct("2021-03-22 07:13:00", tz='America/New_York')], 0.9449454)
+
+admin_rooms["outdoor"] <- apply_correction(admin_rooms["outdoor"], 1.005473)
+admin_rooms["principal"] <- apply_correction(admin_rooms["principal"], 1.005473)
+class_rooms["outdoor"] <- apply_correction(class_rooms["outdoor"], 1.005473)
+class_rooms["class120"][class_rooms["class120"]$date1min <= as.POSIXct("2021-03-22 07:13:00", tz='America/New_York')] <- apply_correction(class_rooms["class120"][class_rooms["class120"]$date1min <= as.POSIXct("2021-03-22 07:13:00", tz='America/New_York')], 1.005473)
+
+admin_rooms["business"] <- apply_correction(admin_rooms["business"],  1.100486)
+class_rooms["classc11"] <- apply_correction(class_rooms["classc11"],  1.100486)
+```
+
+
+We can check that the concentration vector still stays the same: 
+
+```{r}
+all(admin_rooms_previous$superindentent$concent ==
+      admin_rooms$superintendent$concent, na.rm = TRUE)
+all(admin_rooms_previous$principal$concent == 
+      admin_rooms$principal$concent, na.rm = TRUE)
+all(admin_rooms_previous$business$concent == 
+      admin_rooms$business$concent, na.rm = TRUE)
+all(class_rooms_previous$class210$concent == 
+      class_rooms$class210$concent, na.rm = TRUE)
+all(class_rooms_previous$classc11$concent == 
+      class_rooms$classc11$concent, na.rm = TRUE)
+all(class_rooms_previous$class120$concent == 
+      class_rooms$class120$concent, na.rm = TRUE)
+all(class_rooms_previous$outdoor$concent == 
+      class_rooms$outdoor$concent, na.rm = TRUE)
+```
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+# Generating indoor/outdoor ratios 
+
+```{r}
+principal_merged <- ratio_merge(
+  admin_rooms$principal, admin_rooms$outdoor, cpc = TRUE)
+business_merged <- ratio_merge(
+  admin_rooms$business, admin_rooms$outdoor, cpc = TRUE)
+superintendent_merged <- ratio_merge(
+  admin_rooms$superintendent, admin_rooms$outdoor, cpc = TRUE)
+
+class210_merged <- ratio_merge(
+  class_rooms$class210, class_rooms$outdoor, cpc = TRUE)
+classc11_merged <- ratio_merge(
+  class_rooms$classc11, class_rooms$outdoor, cpc = TRUE)
+class120_merged <- ratio_merge(
+  class_rooms$class120, class_rooms$outdoor, cpc = TRUE)
+
+principal_s1_merged <- ratio_merge(
+  pm_admin_list$principal_s1, admin_rooms$outdoor, cpc = FALSE)
+principal_s2_merged <- ratio_merge(
+  pm_admin_list$principal_s2, admin_rooms$outdoor, cpc = FALSE)
+business_s1_merged <- ratio_merge(
+  pm_admin_list$business_s1, admin_rooms$outdoor, cpc = FALSE)
+business_s2_merged <- ratio_merge(
+  pm_admin_list$business_s2, admin_rooms$outdoor, cpc = FALSE)
+superintendent_assist_merged <- ratio_merge(
+  pm_admin_list$superintendent_assist, admin_rooms$outdoor, cpc = FALSE)
+```
+
+# Isolating experiment time periods
+
+We keep only the data points relevant to the respective experiments.
+
+```{r}
+# Principal's office
+principal_merged <- principal_merged %>%
+  filter(date1min > as.POSIXct("2021-03-09 09:20:00", tz='America/New_York'),
+         date1min < as.POSIXct("2021-03-15 07:55:00", tz='America/New_York'))
+# Business office
+business_merged <- business_merged %>%
+  filter(date1min > as.POSIXct("2021-03-09 08:22:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 08:11:00", tz='America/New_York'))
+
+# Superintendent's office
+superintendent_merged <- superintendent_merged %>%
+  filter(date1min > as.POSIXct("2021-03-09 08:06:00", tz='America/New_York'),
+         date1min < as.POSIXct("2021-03-15 08:26:00", tz='America/New_York'))
+
+# Classroom 120
+class120_merged <- class120_merged %>%
+  filter(date1min > as.POSIXct("2021-03-15 09:20:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-25 15:00:00", tz='America/New_York'))
+
+# Classroom C11 - stopped counting 3/20 @8pm
+classc11_merged <- classc11_merged %>%
+  filter(date1min > as.POSIXct("2021-03-15 09:49:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-20 20:00:00", tz='America/New_York'))
+
+# Classroom 210
+class210_merged <- class210_merged %>%
+  filter(date1min > as.POSIXct("2021-03-15 09:32:00", tz='America/New_York'),
+         date1min < as.POSIXct("2021-03-25 15:00:00", tz='America/New_York'))
+
+
+# Principal's Office side rooms
+principal_s1_merged <- principal_s1_merged %>%
+  filter(date1min > as.POSIXct("2021-03-09 09:33:00", tz='America/New_York'),
+         date1min < as.POSIXct("2021-03-15 07:55:00", tz='America/New_York'))
+
+principal_s2_merged <- principal_s2_merged %>%
+  filter(date1min > as.POSIXct("2021-03-09 09:33:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 07:55:00", tz='America/New_York'))
+
+# Business office side rooms
+business_s1_merged <- business_s1_merged %>%
+  filter(date1min > as.POSIXct("2021-03-09 08:28:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 08:11:00", tz='America/New_York'))
+
+business_s2_merged <- business_s2_merged %>%
+  filter(date1min > as.POSIXct("2021-03-09 08:28:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 08:11:00", tz='America/New_York'))
+
+
+# Assistant superintendent room
+superintendent_assist_merged <- superintendent_assist_merged %>%
+  filter(date1min > as.POSIXct("2021-03-09 08:12:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-03-15 08:26:00", tz='America/New_York'))
+
+```
+
+# Set Pre-Post HEPA Tags
+
+We'll use a simple 0/1 indicator, where
+  0 - HEPA purifier off, and
+  1 - HEPA purifier on,
+to signify pre/post purifier data.
+
+
+```{r}
+principal_merged$HEPA_on = ifelse(
+  principal_merged$date1min > 
+    as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 1, 0)
+
+business_merged$HEPA_on = ifelse(
+  business_merged$date1min > 
+    as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 1, 0)
+
+superintendent_merged$HEPA_on = ifelse(
+  superintendent_merged$date1min > 
+    as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 1, 0)
+
+class120_merged$HEPA_on = ifelse(
+  class120_merged$date1min > 
+    as.POSIXct("2021-03-17 12:20:00", tz='America/New_York'), 1, 0)
+
+classc11_merged$HEPA_on = ifelse(
+  classc11_merged$date1min > 
+    as.POSIXct("2021-03-17 12:20:00", tz='America/New_York'), 1, 0)
+
+class210_merged$HEPA_on = ifelse(
+  class210_merged$date1min > 
+    as.POSIXct("2021-03-17 12:20:00", tz='America/New_York'), 1, 0)
+
+principal_s1_merged$HEPA_on = ifelse(
+  principal_s1_merged$date1min > 
+    as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 1, 0)
+
+principal_s2_merged$HEPA_on = ifelse(
+  principal_s2_merged$date1min > 
+    as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 1, 0)
+
+#TODO:UPDATE DATE
+business_s1_merged$HEPA_on = ifelse(
+  business_s1_merged$date1min > 
+    as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 1, 0)
+
+business_s2_merged$HEPA_on = ifelse(
+  business_s2_merged$date1min > 
+    as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 1, 0)
+
+superintendent_assist_merged$HEPA_on = ifelse(
+  superintendent_assist_merged$date1min > 
+    as.POSIXct("2021-03-11 08:30:00", tz='America/New_York'), 1, 0)
+```
+
+
+# Exporting csvs
+
+Make a list of the new dataframes: 
+
+```{r}
+merged <- list("RH_principal_merged" = principal_merged, 
+               "RH_business_merged" = business_merged, 
+               "RH_superintendent_merged" = superintendent_merged, 
+               "RH_class210_merged" = class210_merged, 
+               "RH_classc11_merged" = classc11_merged, 
+               "RH_class120_merged" = class120_merged, 
+               "RH_principal_s1_merged" = principal_s1_merged, 
+               "RH_principal_s2_merged" = principal_s2_merged, 
+               "RH_business_s1_merged" = business_s1_merged,
+               "RH_business_s2_merged" = business_s2_merged, 
+               "RH_superintendent_assist_merged" = superintendent_assist_merged)
+```
+
+Export them:
+
+```{r}
+mapply(
+  write.table, #apply function write table
+  #for each dataframe, use its name to make a csv of it
+  x=merged, file=paste("data", paste(names(merged), "csv", sep="."), sep="/"), 
+  MoreArgs=list(row.names=FALSE, sep=",")
+)
+```
+
+---------------------------------------------------------------------------------------------------------------------------------------------

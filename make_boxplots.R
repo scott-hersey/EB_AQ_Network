@@ -8,7 +8,7 @@ important_cols <- c ('bin0_ratio', 'bin0.indoor', 'bin0.outdoor',
                     'neph_bin0_ratio', 'neph_bin0.indoor', 'neph_bin0.outdoor',
                     'pm1_ratio', 'pm1.indoor', 'pm1.outdoor',
                     'pm25_ratio', 'pm25.indoor', 'pm25.outdoor',
-                    'pm10_ratio', 'pm10.indoor', 'pm10.outdoor')
+                    'pm10_ratio', 'pm10.indoor', 'pm10.outdoor', 'HEPA_on')
 
 simplify_ratio_data <- function(room, is_CPC=FALSE) {
   if(is_CPC) {
@@ -20,7 +20,7 @@ simplify_ratio_data <- function(room, is_CPC=FALSE) {
              neph_bin0_ratio, neph_bin0.indoor, neph_bin0.outdoor,
              pm1_ratio, pm1.indoor, pm1.outdoor,
              pm25_ratio, pm25.indoor, pm25.outdoor,
-             pm10_ratio, pm10.indoor, pm10.outdoor) 
+             pm10_ratio, pm10.indoor, pm10.outdoor, HEPA_on) 
       # drop_na(important_cols_CPC)
   }
   else {
@@ -31,7 +31,7 @@ simplify_ratio_data <- function(room, is_CPC=FALSE) {
              neph_bin0_ratio, neph_bin0.indoor, neph_bin0.outdoor,
              pm1_ratio, pm1.indoor, pm1.outdoor,
              pm25_ratio, pm25.indoor, pm25.outdoor,
-             pm10_ratio, pm10.indoor, pm10.outdoor)
+             pm10_ratio, pm10.indoor, pm10.outdoor, HEPA_on)
   }
   
   room <- room %>%
@@ -45,8 +45,18 @@ simplify_ratio_data <- function(room, is_CPC=FALSE) {
 }
 
 tidy_data <- function(room) {
-  room <- room %>%
+  tidy_room <- room %>%
+    select(-HEPA_on)
+  tidy_room <- tidy_room %>%
     pivot_longer(-date1min, names_to = "source", values_to = "ratio")
+  
+  HEPA_room <- room %>%
+    select(date1min, HEPA_on)
+  tidy_room <- tidy_room %>%
+    left_join(HEPA_room)
+  
+  
+  return(tidy_room)
 }
 
 filter_hours <- function(room, start_hour, end_hour, start_day, end_day) {

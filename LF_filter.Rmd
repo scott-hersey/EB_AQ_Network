@@ -52,8 +52,6 @@ cues, including the presence of indoor sources (a sharp increase followed by a
 decay) and RF interfereence (sharp concentrated spikes much higher than the 
 underlying trend).
 
-## Outdoor data
-
 ## Indoor data
 
 With the indoor data, we sought to identify and remove signs of indoor sources
@@ -94,6 +92,9 @@ admin_filt <- set_NA(admin_filt, "2021-03-29 05:55:00", "2021-03-29 14:52:00")
 # Cleaning source - 3/30
 admin_filt <- set_NA(admin_filt, "2021-03-30 11:23:00", "2021-03-30 14:15:00")
 
+# Outdoor outlier source - 4/2
+admin_filt <- set_NA(admin_filt, "2021-04-02 16:20:00", "2021-04-02 16:38:00")
+
 admin_merged <- complete(admin_merged, date1min = seq(min(date1min, na.rm=TRUE), 
                                     max(date1min, na.rm=TRUE), 
                                     by = "min"))
@@ -133,7 +134,6 @@ class1_indoor_src <- complete(class1_indoor_src, date1min = seq(min(class1_filt$
 plot_time_resolved(class1_merged)
 plot_time_resolved(class1_indoor_src)
 plot_time_resolved(class1_filt)
-
 ```
 
 ### Class 2
@@ -276,5 +276,33 @@ class4_merged <- complete(class4_merged, date1min = seq(min(date1min, na.rm=TRUE
 plot_time_resolved(class4_merged, TRUE)
 plot_time_resolved(class4_indoor_src, TRUE)
 plot_time_resolved(class4_filt, TRUE)
+```
+
+```{r}
+filtered <- list(
+  "LF_admin_filt" = admin_filt, 
+  "LF_class1_filt" = class1_filt, 
+  "LF_class2_filt" = class2_filt, 
+  "LF_class3_filt" = class3_filt, 
+  "LF_class4_filt" = class4_filt)
+
+indoor_src <- list(
+  # "LF_admin_indoor_src" = admin_indoor_src, 
+  "LF_class1_indoor_src" = class1_indoor_src, 
+  "LF_class2_indoor_src" = class2_indoor_src, 
+  "LF_class3_indoor_src" = class3_indoor_src, 
+  "LF_class4_indoor_src" = class4_indoor_src)
+
+mapply(
+  write.table, #apply function write table
+  x=indoor_src, file=paste("data", paste(names(indoor_src), "csv", sep="."), sep="/"), #for each dataframe, use its name to make a csv of it
+  MoreArgs=list(row.names=FALSE, sep=",")
+)
+
+mapply(
+  write.table, #apply function write table
+  x=filtered, file=paste("data", paste(names(filtered), "csv", sep="."), sep="/"), #for each dataframe, use its name to make a csv of it
+  MoreArgs=list(row.names=FALSE, sep=",")
+)
 ```
 

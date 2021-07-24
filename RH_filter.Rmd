@@ -1,0 +1,190 @@
+---
+title: "Revere High School Indoor/Outdoor Data Outlier Filtering"
+author: "Megan Ku"
+---
+# Description
+
+This code filters data from the Revere High School pilot, removing 
+outliers.
+
+# Environment Setup 
+
+Beforehand, we will import the necessary libraries. 
+
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) # use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(ggplot2)
+library(gtable)
+library(grid)
+source("filter_data.R") #For filtering data
+```
+
+# Import Data
+
+```{r}
+business_merged <- import_ratio_data("./data/RH_business_merged.csv")
+business_s1_merged <- import_ratio_data("./data/RH_business_s1_merged.csv")
+business_s2_merged <- import_ratio_data("./data/RH_business_s2_merged.csv")
+class120_merged <- import_ratio_data("./data/RH_class120_merged.csv")
+class210_merged <- import_ratio_data("./data/RH_class210_merged.csv")
+classc11_merged <- import_ratio_data("./data/RH_classc11_merged.csv")
+principal_merged <- import_ratio_data("./data/RH_principal_merged.csv")
+principal_s1_merged <- import_ratio_data("./data/RH_principal_s1_merged.csv")
+principal_s2_merged <- import_ratio_data("./data/RH_principal_s2_merged.csv")
+superintendent_merged <- import_ratio_data("./data/RH_superintendent_merged.csv")
+superintendent_assist_merged <- import_ratio_data("./data/RH_superintendent_assist_merged.csv")
+```
+
+# Removing Outliers
+
+We're going to manually remove outliers from each dataset according to visual 
+cues, including the presence of indoor sources (a sharp increase followed by a 
+decay) and RF interference (sharp concentrated spikes much higher than the 
+underlying trend).
+
+## Outdoor
+
+```{r}
+business <- set_NA(business_merged, "2021-03-11 01:38:00", "2021-03-11 06:37:00")
+business_s1 <- set_NA(business_s1_merged, "2021-03-11 01:38:00", "2021-03-11 06:37:00")
+business_s2 <- set_NA(business_s2_merged, "2021-03-11 01:38:00", "2021-03-11 06:37:00")
+principal <- set_NA(principal_merged, "2021-03-11 01:38:00", "2021-03-11 06:37:00")
+principal_s1 <- set_NA(principal_s1_merged, "2021-03-11 01:38:00", "2021-03-11 06:37:00")
+principal_s2 <- set_NA(principal_s2_merged, "2021-03-11 01:38:00", "2021-03-11 06:37:00")
+```
+
+
+## Indoor
+
+### Business
+
+```{r, fig.height=10}
+plot_time_resolved(business, TRUE)
+
+business_indoor_src <- business[
+  business$date1min > as.POSIXct("2021-03-10 11:20:00", tz='America/New_York') &
+  business$date1min < as.POSIXct("2021-03-10 13:20:00", tz='America/New_York'), ]
+
+business_filt <- set_NA(business, "2021-03-10 11:14:00", "2021-03-10 13:20:00")
+
+business_indoor_src <- rbind(business_indoor_src, business[
+  business$date1min > as.POSIXct("2021-03-12 11:20:00", tz='America/New_York') &
+  business$date1min < as.POSIXct("2021-03-12 16:11:00", tz='America/New_York'), ])
+
+business_filt <- set_NA(business_filt, "2021-03-12 11:12:00", "2021-03-12 16:11:00")
+
+business_indoor_src <- complete(business_indoor_src, date1min = seq(min(business_filt$date1min, na.rm=TRUE), 
+                                    max(business_filt$date1min, na.rm=TRUE), 
+                                    by = "min"))
+
+plot_time_resolved(business_filt, TRUE)
+plot_time_resolved(business_indoor_src, TRUE)
+```
+### Business S1
+
+```{r, fig.height=10}
+plot_time_resolved(business_s1, FALSE)
+
+# business_s1_indoor_src <- business_s1[
+#   business_s1$date1min > as.POSIXct("2021-03-10 11:20:00", tz='America/New_York') &
+#   business_s1$date1min < as.POSIXct("2021-03-10 13:20:00", tz='America/New_York'), ]
+# 
+# business_filt <- set_NA(business_s1, "2021-03-10 11:14:00", "2021-03-10 13:20:00")
+# 
+# business_s1_indoor_src <- rbind(business_s1_indoor_src, business[
+#   business_s1$date1min > as.POSIXct("2021-03-12 11:20:00", tz='America/New_York') &
+#   business_s1$date1min < as.POSIXct("2021-03-12 16:11:00", tz='America/New_York'), ])
+# 
+# business_s1_filt <- set_NA(business_s1_filt, "2021-03-12 11:12:00", "2021-03-12 16:11:00")
+# 
+# business_s1_indoor_src <- complete(business_s1_indoor_src, date1min = seq(min(business_s1_filt$date1min, na.rm=TRUE), 
+#                                     max(business_s1_filt$date1min, na.rm=TRUE), 
+#                                     by = "min"))
+
+# plot_time_resolved(business_s1_filt, FALSE)
+# plot_time_resolved(business_s1_indoor_src, FALSE)
+```
+
+```{r, fig.height=10}
+plot_time_resolved(business_s2, FALSE)
+
+# business_s1_indoor_src <- business_s1[
+#   business_s1$date1min > as.POSIXct("2021-03-10 11:20:00", tz='America/New_York') &
+#   business_s1$date1min < as.POSIXct("2021-03-10 13:20:00", tz='America/New_York'), ]
+# 
+# business_filt <- set_NA(business_s1, "2021-03-10 11:14:00", "2021-03-10 13:20:00")
+# 
+# business_s1_indoor_src <- rbind(business_s1_indoor_src, business[
+#   business_s1$date1min > as.POSIXct("2021-03-12 11:20:00", tz='America/New_York') &
+#   business_s1$date1min < as.POSIXct("2021-03-12 16:11:00", tz='America/New_York'), ])
+# 
+# business_s1_filt <- set_NA(business_s1_filt, "2021-03-12 11:12:00", "2021-03-12 16:11:00")
+# 
+# business_s1_indoor_src <- complete(business_s1_indoor_src, date1min = seq(min(business_s1_filt$date1min, na.rm=TRUE), 
+#                                     max(business_s1_filt$date1min, na.rm=TRUE), 
+#                                     by = "min"))
+
+# plot_time_resolved(business_s1_filt, FALSE)
+# plot_time_resolved(business_s1_indoor_src, FALSE)
+```
+```{r, fig.height=10}
+plot_time_resolved(principal, TRUE)
+
+principal_indoor_src <- principal[
+  principal$date1min > as.POSIXct("2021-03-11 19:12:00", tz='America/New_York') &
+  principal$date1min < as.POSIXct("2021-03-11 19:48:00", tz='America/New_York'), ]
+
+principal_filt <- set_NA(principal, "2021-03-11 19:08:00", "2021-03-11 19:48:00")
+
+principal_indoor_src <- complete(principal_indoor_src, date1min = seq(min(principal_filt$date1min, na.rm=TRUE),
+                                    max(principal_filt$date1min, na.rm=TRUE),
+                                    by = "min"))
+
+plot_time_resolved(principal_filt, TRUE)
+plot_time_resolved(principal_indoor_src, TRUE)
+```
+
+```{r, fig.height=10}
+plot_time_resolved(principal_s1, FALSE)
+
+# principal_s1_indoor_src <- principal_s1[
+#   principal_s1$date1min > as.POSIXct("2021-03-11 19:12:00", tz='America/New_York') &
+#   principal_s1$date1min < as.POSIXct("2021-03-11 19:48:00", tz='America/New_York'), ]
+# 
+# principal_s1_filt <- set_NA(principal_s1, "2021-03-11 19:08:00", "2021-03-11 19:48:00")
+# 
+# principal_s1_indoor_src <- complete(principal_s1_indoor_src, date1min = seq(min(principal_s1_filt$date1min, na.rm=TRUE),
+#                                     max(principal_s1_filt$date1min, na.rm=TRUE),
+#                                     by = "min"))
+# 
+# plot_time_resolved(principal_s1_filt, TRUE)
+# plot_time_resolved(principal_s1_indoor_src, TRUE)
+```
+
+
+
+```{r, fig.height=10}
+# plot_time_resolved(business_s1_merged, FALSE)
+# plot_time_resolved(business_s2_merged, FALSE)
+plot_time_resolved(class120_merged, TRUE)
+# plot_time_resolved(class210_merged, TRUE)
+# plot_time_resolved(classc11_merged, TRUE)
+```
+```{r, fig.height=10}
+plot_time_resolved(principal_merged, TRUE)
+plot_time_resolved(principal_s1_merged, FALSE)
+plot_time_resolved(principal_s2_merged, FALSE)
+plot_time_resolved(superintendent_merged, TRUE)
+plot_time_resolved(superintendent_assist_merged, FALSE)
+```
+
+
+
+# Removing Outliers
+
+# TODO!

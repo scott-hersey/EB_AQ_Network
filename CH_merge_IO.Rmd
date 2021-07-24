@@ -416,14 +416,54 @@ clerk_merged <- clerk_merged %>%
          date1min < as.POSIXct("2021-01-25 08:51:00", tz='America/New_York'))
 ```
 
----------------------------------------------------------------------------------------------------------------------------------------------
+
+# Set Pre-Post HEPA Tags
+
+We'll use a simple 0/1 indicator, where
+  0 - HEPA purifier off, and
+  1 - HEPA purifier on,
+to signify pre/post purifier data.
+  
+```{r}
+auditor_merged$HEPA_on = ifelse(
+  auditor_merged$date1min > 
+    as.POSIXct("2021-01-19 09:20:00", tz='America/New_York'), 1, 0)
+
+mainroom_merged$HEPA_on = ifelse(
+  mainroom_merged$date1min > 
+    as.POSIXct("2021-01-27 12:30:00", tz='America/New_York'), 1, 0)
+
+waterdept_merged$HEPA_on = ifelse(
+  waterdept_merged$date1min > 
+    as.POSIXct("2021-01-11 10:05:00", tz='America/New_York'), 1, 0)
+
+engineering_merged$HEPA_on = ifelse(
+  engineering_merged$date1min > 
+    as.POSIXct("2021-01-11 10:45:00", tz='America/New_York'), 1, 0)
+
+veterans_merged$HEPA_on = ifelse(
+  veterans_merged$date1min > 
+    as.POSIXct("2021-01-27 09:30:00", tz='America/New_York'), 1, 0)
+
+clerk_merged$HEPA_on = ifelse(
+  clerk_merged$date1min > 
+    as.POSIXct("2021-01-19 09:11:00", tz='America/New_York'), 1, 0)
+```
+
+  
+--------------------------------------------------------------------------------
 
 # Exporting csvs
 
 Make a list of the new dataframes: 
 
 ```{r}
-merged <- list("CH_engineering_merged" = engineering_merged, "CH_waterdept_merged" = waterdept_merged, "CH_mainroom_merged" = mainroom_merged, "CH_auditor_merged" = auditor_merged, "CH_veterans_merged" = veterans_merged, "CH_clerk_merged" = clerk_merged)
+merged <- list("CH_engineering_merged" = engineering_merged, 
+               "CH_waterdept_merged" = waterdept_merged, 
+               "CH_mainroom_merged" = mainroom_merged, 
+               "CH_auditor_merged" = auditor_merged, 
+               "CH_veterans_merged" = veterans_merged, 
+               "CH_clerk_merged" = clerk_merged)
 ```
 
 Export them:

@@ -1,5 +1,5 @@
 ---
-title: "Little Folks Indoor/Outdoor Data Merge"
+title: "Shining Star Indoor/Outdoor Data Merge"
 author: "Megan Ku"
 ---
 
@@ -34,16 +34,16 @@ source("merge_data.R") #For importing and merging data
 We're going to take the CPC from every day of the experiment (each day's data is given as a TXT file), and combine in into one data frame that represents all the CPC data from a given room. 
 
 ```{r}
-outdoor_cpc <- import_cpc_files(filepath="./Little Folks/Outdoor") 
+outdoor_cpc <- import_cpc_files(filepath="./Shining Star/Outdoor") 
 
-class2_cpc <- import_cpc_files(
-  filepath="./Little Folks/Class 2 - paired outdoor") 
+infant_cpc <- import_cpc_files(
+  filepath="./Shining Star/Infant Room") 
+preschool_cpc <- import_cpc_files(filepath="./Shining Star/Preschool Room") 
 
-class4_cpc <- import_cpc_files(filepath="./Little Folks/Class 4") 
-
-cpc_list <- list( "outdoor" = outdoor_cpc, 
-                     "class2" = class2_cpc, 
-                     "class4" = class4_cpc)
+cpc_list <- list(
+  "outdoor" = outdoor_cpc, 
+  "infant" = infant_cpc,
+  "preschool" = preschool_cpc)
 ```
 Now, we will combine the CPC data from all three locations into one list of dataframes, similar to how we created a list of dataframes in the initial walkthrough of Eastie, on line 119. We will do this so we can apply functions to the data with greater ease. 
 
@@ -112,31 +112,32 @@ Now we will import all the PM data, using the same method as for the CPC data. W
 # import pm data 
 
 outdoor_PM <- import_pm_files(
-  filepath="./Modulair-PM Data", regex_pattern="114.*.csv")
+  filepath="./Shining Star/Modulair-PM Data", regex_pattern="114.*.csv")
 
-class1_PM <- import_pm_files(
-  filepath="./Modulair-PM Data", regex_pattern="104.*.csv")
-
-class2_PM <- import_pm_files(
+preschool_PM <- import_pm_files(
   filepath="./data", regex_pattern = "data.mod-pm-00126.final.csv")
 
-class3_PM <- import_pm_files(
-  filepath="./Modulair-PM Data", regex_pattern="125.*.csv")
+infant_PM <- import_pm_files(
+  filepath="./Shining Star/Modulair-PM Data", regex_pattern="099.*.csv")
 
-class4_PM <- import_pm_files(
-  filepath="./Modulair-PM Data", regex_pattern="099.*.csv")
+toddler_PM <- import_pm_files(
+  filepath="./Shining Star/Modulair-PM Data", regex_pattern="125.*.csv")
 
-admin_PM <- import_pm_files(
-  filepath="./Modulair-PM Data", regex_pattern="111.*.csv")
+front_PM <- import_pm_files(
+  filepath="./Shining Star/Modulair-PM Data", regex_pattern="104.*.csv")
+
+kitchen_PM <- import_pm_files(
+  filepath="./Shining Star/Modulair-PM Data", regex_pattern="111.*.csv")
 
 # combine PM data 
 
-pm_list = list("outdoor" = outdoor_PM,
-                  "class1" = class1_PM,
-                  "class2" = class2_PM,
-                  "class3" = class3_PM,
-                  "class4" = class4_PM,
-                  "admin" = admin_PM)
+pm_list = list(
+  "outdoor" = outdoor_PM,
+  "preschool" = preschool_PM,
+  "infant" = infant_PM,
+  "toddler" = toddler_PM,
+  "front" = front_PM,
+  "kitchen" = kitchen_PM)
 ```
 
 ## Setting the correct datetime
@@ -188,6 +189,12 @@ And making sure there aren't any rows that could stop us from taking the mean:
 ```{r}
 sapply(cpc_list, function(x) which(is.na(x$date)))
 ```
+```{r}
+cpc_list$preschool[c(240996, 240997)]
+cpc_list$preschool <- cpc_list$preschool[-c(240996, 240997),]
+```
+
+
 Since there aren't any issues, we can apply the function.
 ```{r}
 cpc_list2 <- lapply(cpc_list, average_cpc)
@@ -210,27 +217,27 @@ As stated in the HEPA Analysis powerpoint, here we will "multiply CPC concentrat
 
 The correction data is based on which sensor is used. Below, we list which sensor is used in each location.
 
-015 - class2
-016 - outdoor
-077 - class4
+015 [0.9449454] - preschool
+016 [1.005473] - outdoor
+077 [1.100486] - infant
 
 We apply that function to all of the dataframes:
 ```{r}
 rooms_previous = rooms # replicating the list, to check the function
 
-rooms["class2"] <- apply_correction(rooms["class2"], 0.9449454)
+rooms["preschool"] <- apply_correction(rooms["preschool"], 0.9449454)
 
 rooms["outdoor"] <- apply_correction(rooms["outdoor"], 1.005473)
 
-rooms["class4"] <- apply_correction(rooms["class4"],  1.100486)
+rooms["infant"] <- apply_correction(rooms["infant"],  1.100486)
 ```
 
 We can check that the concentration vector still stays the same: 
 
 ```{r}
-all(rooms_previous$class2$concent == rooms$class2$concent, na.rm = TRUE)
+all(rooms_previous$preschool$concent == rooms$preschool$concent, na.rm = TRUE)
 all(rooms_previous$outdoor$concent == rooms$outdoor$concent, na.rm = TRUE)
-all(rooms_previous$class4$concent == rooms$class4$concent)
+all(rooms_previous$infant$concent == rooms$infant$concent)
 ```
 
 
@@ -243,40 +250,38 @@ We will create a function that merges two dataframes (a dataframe from a testing
 We'll run this function on the datasets. 
 
 ```{r}
-class1_merged <- ratio_merge(pm_list$class1, rooms$outdoor, cpc = FALSE)
-class2_merged <- ratio_merge(rooms$class2, rooms$outdoor, cpc = TRUE)
-class3_merged <- ratio_merge(pm_list$class3, rooms$outdoor, cpc = FALSE)
-class4_merged <- ratio_merge(rooms$class4, rooms$outdoor, cpc = TRUE)
-
-admin_merged <- ratio_merge(pm_list$admin, rooms$outdoor, cpc = FALSE)
+preschool_merged <- ratio_merge(rooms$preschool, rooms$outdoor, cpc = TRUE)
+infant_merged <- ratio_merge(rooms$infant, rooms$outdoor, cpc = TRUE)
+toddler_merged <- ratio_merge(pm_list$toddler, rooms$outdoor, cpc = FALSE)
+front_merged <- ratio_merge(pm_list$front, rooms$outdoor, cpc = FALSE)
+kitchen_merged <- ratio_merge(pm_list$kitchen, rooms$outdoor, cpc = FALSE)
 ```
 
 ```{r}
-# Class 2
-class2_merged <- class2_merged %>%
-  filter(date1min > as.POSIXct("2021-03-24 09:00:00", tz='America/New_York'),
-         date1min < as.POSIXct("2021-04-07 07:08:00", tz='America/New_York'))
+# Preschool Room
+preschool_merged <- preschool_merged %>%
+  filter(date1min > as.POSIXct("2021-04-07 08:50:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-04-23 13:21:00", tz='America/New_York'))
 
-# Class 4
-class4_merged <- class4_merged %>%
-  filter(date1min > as.POSIXct("2021-03-24 09:28:00", tz='America/New_York'), 
-         date1min < as.POSIXct("2021-04-07 07:21:00", tz='America/New_York'))
+# Infant Room
+infant_merged <- infant_merged %>%
+  filter(date1min > as.POSIXct("2021-04-07 09:10:00", tz='America/New_York'),
+         date1min < as.POSIXct("2021-04-23 13:21:00", tz='America/New_York'))
 
-# Admin
-admin_merged <- admin_merged %>%
-  filter(date1min > as.POSIXct("2021-03-24 09:30:00", tz='America/New_York'), 
-         date1min < as.POSIXct("2021-04-07 07:29:00", tz='America/New_York'))
+# Toddler Room
+toddler_merged <- toddler_merged %>%
+  filter(date1min > as.POSIXct("2021-04-07 09:15:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-04-23 13:21:00", tz='America/New_York'))
 
-# Class 1
-class1_merged <- class1_merged %>%
-  filter(date1min > as.POSIXct("2021-03-24 09:15:00", tz='America/New_York'), 
-         date1min < as.POSIXct("2021-04-07 07:29:00", tz='America/New_York'))
+# Front Room
+front_merged <- front_merged %>%
+  filter(date1min > as.POSIXct("2021-04-07 09:15:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-04-23 13:21:00", tz='America/New_York'))
 
-# Class 3
-class3_merged <- class3_merged %>%
-  filter(date1min > as.POSIXct("2021-03-24 09:34:00", tz='America/New_York'), 
-         date1min < as.POSIXct("2021-04-07 07:27:00", tz='America/New_York'))
-
+# Kitchen
+kitchen_merged <- kitchen_merged %>%
+  filter(date1min > as.POSIXct("2021-04-07 09:34:00", tz='America/New_York'), 
+         date1min < as.POSIXct("2021-04-23 13:21:00", tz='America/New_York'))
 ```
 
 # Set Pre-Post HEPA Tags
@@ -287,31 +292,27 @@ We'll use a simple 0/1 indicator, where
 to signify pre/post purifier data.
 
 ```{r}
-# Class 2
-class2_merged$HEPA_on = ifelse(
-  class2_merged$date1min > 
-    as.POSIXct("2021-03-31 06:15:00", tz='America/New_York'), 1, 0)
+front_merged$HEPA_on = ifelse(
+  front_merged$date1min > 
+    as.POSIXct("2021-04-14 07:45:00", tz='America/New_York'), 1, 0)
 
-# Class 4
-class4_merged$HEPA_on = ifelse(
-  class4_merged$date1min > 
-    as.POSIXct("2021-03-31 06:30:00", tz='America/New_York'), 1, 0)
+preschool_merged$HEPA_on = ifelse(
+  preschool_merged$date1min > 
+    as.POSIXct("2021-04-14 07:45:00", tz='America/New_York'), 1, 0)
 
-# Admin
-admin_merged$HEPA_on = ifelse(
-  admin_merged$date1min > 
-    as.POSIXct("2021-03-31 06:45:00", tz='America/New_York'), 1, 0)
+kitchen_merged$HEPA_on = ifelse(
+  kitchen_merged$date1min > 
+    as.POSIXct("2021-04-14 07:45:00", tz='America/New_York'), 1, 0)
 
-# Class 1
-class1_merged$HEPA_on = ifelse(
-  class1_merged$date1min > 
-    as.POSIXct("2021-03-31 06:22:00", tz='America/New_York'), 1, 0)
+infant_merged$HEPA_on = ifelse(
+  infant_merged$date1min > 
+    as.POSIXct("2021-04-14 07:45:00", tz='America/New_York'), 1, 0)
 
-# Class 3
-class3_merged$HEPA_on = ifelse(
-  class3_merged$date1min > 
-    as.POSIXct("2021-03-31 06:36:00", tz='America/New_York'), 1, 0)
+toddler_merged$HEPA_on = ifelse(
+  toddler_merged$date1min > 
+    as.POSIXct("2021-04-14 07:45:00", tz='America/New_York'), 1, 0)
 ```
+
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -320,11 +321,11 @@ class3_merged$HEPA_on = ifelse(
 Make a list of the new dataframes: 
 
 ```{r}
-merged <- list("LF_class1_merged" = class1_merged,
-               "LF_class2_merged" = class2_merged,
-               "LF_class3_merged" = class3_merged,
-               "LF_class4_merged" = class4_merged,
-               "LF_admin_merged" = admin_merged)
+merged <- list("SS_preschool_merged" = preschool_merged,
+               "SS_infant_merged" = infant_merged,
+               "SS_toddler_merged" = toddler_merged,
+               "SS_front_merged" = front_merged,
+               "SS_kitchen_merged" = kitchen_merged)
 ```
 
 Export them:
@@ -339,7 +340,3 @@ mapply(
 ```
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
