@@ -1,0 +1,119 @@
+---
+title: "R Notebook"
+---
+
+# Overview 
+
+This is a script I wrote to integrate bin data that was missing. 
+
+# Main
+
+## Import
+
+```{r}
+library(lubridate)
+library(openair)
+library(data.table)
+library(dplyr)
+library(baseline)
+library(Rmisc)
+library(ggplot2)
+library(openair)
+```
+
+
+```{r}
+# import data 
+source("./functions/import_data.R")
+```
+
+```{r}
+snfiles <- import_data()
+```
+
+```{r}
+combined_df <- fread("combined_df.csv")
+combined_df$date <- ymd_hms(combined_df$timestamp_local, tz = "America/New_York")
+```
+
+## Merge
+
+
+```{r}
+snfiles$sn46 <- snfiles$sn46[which(snfiles$sn46$date_local < "2020-08-01 00:00:00")] 
+```
+
+```{r}
+add_sn_column <- function(sensor, sensorname){
+  sensor$sn <- sensorname
+  return(sensor)
+}
+```
+
+We can use the sapply function to do this all at once. We will iterate on the names of the snfiles, since it is currently in a marked list of datasets. 
+
+```{r}
+snfiles <- sapply(names(snfiles), function(k) add_sn_column(snfiles[[k]], k),  simplify = FALSE,USE.NAMES = TRUE)
+```
+
+
+```{r}
+combined_dfNewBinData <- rbindlist(snfiles, fill = TRUE)
+
+combined_dfNewBinData$date <- ymd_hms(combined_dfNewBinData$timestamp_local, tz = "America/New_York")
+```
+
+```{r}
+rm(snfiles)
+```
+
+
+```{r}
+combined_dfNewBinData1 <- combined_dfNewBinData[,c("date", "timestamp_local", "bin0", "bin1",
+                                                                  "bin2", "bin3", "bin4", "bin5",
+                                                   "no_ae", "co_ae", "no2_ae")]
+```
+
+```{r}
+dfdates1 <- combined_dfNewBinData1[combined_dfNewBinData1$date <= "2020-05-20 00:00:00 EDT"]
+dfdates2 <- combined_dfNewBinData1[combined_dfNewBinData1$date >= "2020-07-31 23:59:00 EDT"]
+combined_df2 <- rbind(dfdates1, dfdates2)
+rm(dfdates1, dfdates2)
+rm(combined_dfNewBinData1)
+```
+
+
+```{r}
+combined_df$rounded_date <- round_date(combined_df$date, "1 min")
+combined_df2$rounded_date <- round_date(combined_df2$date, "1 min")
+```
+
+
+```{r}
+merged_df <- merge(unique(combined_df), unique(combined_df2), by = "rounded_date", suffixes = c("", ".newBin"), all = FALSE)
+```
+
+## Test
+
+```{r}
+timePlot(merged_df, pollutant = "co_ae.newBin", type = "sn")
+```
+
+```{r}
+timePlot(merged_df, pollutant = c("no.ML", "no2", "co", "pm1.ML"), type = "sn", group = FALSE)
+```
+
+```{r}
+merged_df %>%
+  group_by(sn) %>%
+  summary(.)
+```
+```{r}
+summary(combined_df)
+```
+## Write
+
+```{r}
+fwrite(merged_df, "combined_df_bin_ae.csv")
+```
+

@@ -1,0 +1,35 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Overview 
+
+This is a script to use the skimr library to generate a data summary of the Eastie data.
+
+# Main
+
+
+```{r}
+library(data.table)
+fread("combined_list.csv")
+```
+
+
+```{r}
+library(skimr)
+library(dplyr)
+
+skimmed <- combined_list %>% 
+  select(no.ML, no2, co, pm1.ML, pm25.ML, pm10.ML, covid, wd_class, sn) %>%
+  filter(!is.na(covid)) %>%
+  dplyr::group_by( sn, wd_class, covid) %>% 
+  skim() 
+```
+
+```{r}
+print(skimmed)
+```
+

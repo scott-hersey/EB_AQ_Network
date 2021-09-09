@@ -207,9 +207,9 @@ snfilesTest3$sn72 <- bothFilter(snfiles$sn72, 15, 17, 100)
 
 ```{r}
 # pdf("PM-with-bothfilters.pdf")
-for (i in seq(length(snfiles))){
- generate_PM_polarplots(snfilesTest3[[i]], names(snfiles)[i])
-}
+# for (i in seq(length(snfiles))){
+#  generate_PM_polarplots(snfilesTest3[[i]], names(snfiles)[i])
+# }
 # dev.off()
 ```
 
@@ -286,11 +286,11 @@ snfiles_ws <- lapply(snfiles, function(x) wsfilter(x))
 ```
 
 ```{r}
-pdf("ws-filter-PMdata.pdf")
-for (i in seq(length(snfiles))){
- generate_PM_polarplots(snfiles_ws[[i]], names(snfiles)[i])
-}
-dev.off()
+# pdf("ws-filter-PMdata.pdf")
+# for (i in seq(length(snfiles))){
+#  generate_PM_polarplots(snfiles_ws[[i]], names(snfiles)[i])
+# }
+# dev.off()
 ```
 ## Adding event filter 
 
@@ -302,11 +302,11 @@ snfiles_ws_events_Test <- lapply(snfiles_events_Test, function(x) wsfilter(x))
 
 
 ```{r}
-pdf("ws-and-events-filter-PM.pdf")
-for (i in seq(length(snfiles))){
- generate_PM_polarplots(snfiles_ws_events_Test[[i]], names(snfiles)[i])
-}
-dev.off()
+# pdf("ws-and-events-filter-PM.pdf")
+# for (i in seq(length(snfiles))){
+#  generate_PM_polarplots(snfiles_ws_events_Test[[i]], names(snfiles)[i])
+# }
+# dev.off()
 ```
 
 # Third filter 
@@ -391,11 +391,11 @@ snfilesTest3$sn72 <- thirdFilter(snfiles_events_Test$sn72)
 
 
 ```{r}
-pdf("PM-with-thirdfilters.pdf")
-for (i in seq(length(snfiles))){
- generate_PM_polarplots(snfilesTest3[[i]], names(snfiles)[i])
-}
-dev.off()
+# pdf("PM-with-thirdfilters.pdf")
+# for (i in seq(length(snfiles))){
+#  generate_PM_polarplots(snfilesTest3[[i]], names(snfiles)[i])
+# }
+# dev.off()
 ```
 
 # Heatmap 
@@ -434,10 +434,10 @@ dev.off()
 We can export the sensor data with the newly filtered PM. We can do so below: 
 
 ```{r}
-# mapply(
-#   fwrite, #apply function write table
-#   x=snfiles_ws_events_Test, file=paste(names(snfiles), "-final-w-ML-PM", ".csv", sep="")
-# )
+mapply(
+  fwrite, #apply function write table
+  x=snfiles_ws_events_Test, file=paste(names(snfiles), "-final-w-ML-PM", ".csv", sep="")
+)
 ```
 
 
