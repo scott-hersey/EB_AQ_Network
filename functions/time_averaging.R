@@ -13,6 +13,3 @@ average_cpc <- function(cpc){
 }
 
 
-time_avg_1min <- function(sensor){
-  
-}

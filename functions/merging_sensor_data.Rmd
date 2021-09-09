@@ -31,18 +31,18 @@ clean_sensor_data <- function(sensor){
 
 ```{r}
 # #defining which variables we'll keep
- final_vars <- c( "timestamp","timestamp_local","temp_box",  "temp_manifold", "rh_manifold", "pressure",
+box_vars <- c( "timestamp","timestamp_local","temp_box",  "temp_manifold", "rh_manifold", "pressure",
                   "noise", "solar", "wind_dir", "wind_speed", "co", "no" , "no2", "o3" ,  "pm1" , "pm25",
                   "pm10", "co2" ,"bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "no_ae", "co_ae", "no2_ae") #raw variables to keep
 ```
 
 ```{r}
-temp = list.files(path = "./data/boxdata/", pattern = "^.*-f0.*\\.csv", full.names = TRUE) #specify files we're looking for
-boxfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE) 
+temp = list.files(path = "../data/boxdata/", pattern = "^.*-f0.*\\.csv", full.names = TRUE) #specify files we're looking for
+boxfiles = sapply(temp,  FUN = function(x) fread(file=x,  data.table = TRUE, select = box_vars), simplify = FALSE,USE.NAMES = TRUE) 
 ```
 
 ```{r}
-new_names <- lapply(names(boxfiles), function(x) substr(x, 16, 25)) #extract the real sensor names from the current names used in the list
+new_names <- lapply(names(boxfiles), function(x) substr(x, 17, 26)) #extract the real sensor names from the current names used in the list
 names(boxfiles) <- new_names #rename list names
 names(boxfiles)
 ```
@@ -71,19 +71,19 @@ raw_vars <- c("timestamp","bin0", "bin1", "bin2", "bin3", "bin4", "bin5", "no_ae
 
 ```{r}
 #finding all final datasets
-temp2 = list.files(path = "./data/quantAQwebsitedata/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
+temp2 = list.files(path = "../data/quantAQwebsitedata/", pattern = "^.*_final.*\\.csv", full.names = TRUE)
 finalfiles = sapply(temp2,  FUN = function(x) fread(file=x,  data.table = TRUE, select = final_vars), simplify = FALSE,USE.NAMES = TRUE)
 #finalfiles = sapply(temp, function(x) fread(file=x , data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 
 #finding all raw datasets
-temp3 = list.files(path = "./data/quantAQwebsitedata/", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
+temp3 = list.files(path = "../data/quantAQwebsitedata/", pattern = "^.*_raw.*\\.csv", full.names = TRUE)
 rawfiles = sapply(temp3, function(x) fread(file=x, data.table = TRUE, select = raw_vars) , simplify = FALSE,USE.NAMES = TRUE)
 #rawfiles = sapply(temp, function(x) fread(file=x,  data.table = TRUE) , simplify = FALSE,USE.NAMES = TRUE)
 ```
 
 ```{r}
-names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 9+18, 9+21)) #extract the real sensor names from the current names used in the list
-names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 10+17, 10+20))
+names(finalfiles)<- lapply(names(finalfiles), function(x) substr(x, 10+18, 10+21)) #extract the real sensor names from the current names used in the list
+names(rawfiles)<- lapply(names(rawfiles), function(x) substr(x, 10+18, 11+20))
 names(finalfiles)
 names(rawfiles)
 ``` 
@@ -130,14 +130,14 @@ joined_files <- list("sn45" = sn45joined, "sn46" = sn46joined, "sn49" = sn49join
 ```{r}
 mapply(
   fwrite, #apply function write table
-  x=joined_files, file=paste("./data/joined/", names(joined_files), ".csv", sep = ""), #for each dataframe, use its name to make a csv of it
+  x=joined_files, file=paste("../data/joined/", names(joined_files), ".csv", sep = ""), #for each dataframe, use its name to make a csv of it
   MoreArgs=list(row.names=FALSE, sep=",")
 )
 ```
 
 
 ```{r}
-lapply(joined_files, function(x) fread(x, file = paste(x, "csv", sep=".")))
+# lapply(joined_files, function(x) fread(x, file = paste(x, "csv", sep=".")))
 ```
 
 # Combining SN 49 raw files 

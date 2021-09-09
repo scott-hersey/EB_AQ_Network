@@ -60,7 +60,7 @@ gen_regime <- function(sn, flightdf, runwaystring, wd1, wd2){
   intervals_other <- filter(intervals, Opr == "Other") #same for departures
   
   #create df for arrival intervals
-  sn_arrivals <- sn[which(sn45$date %within% intervals_arrival$intervals_list[1]) , ] #extracting all the sensor data in the first interval
+  sn_arrivals <- sn[which(sn$date %within% intervals_arrival$intervals_list[1]) , ] #extracting all the sensor data in the first interval
   for (indx in 2:length(intervals_arrival$intervals_list)){
     sn_arrivals <- rbind(sn_arrivals, sn[which(sn$date %within% intervals_arrival$intervals_list[indx]) , ]) 
   }

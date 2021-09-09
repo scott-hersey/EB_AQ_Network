@@ -13,6 +13,10 @@ In this notebook, we will be creating the final boxplots for our paper.
 ```{r}
 library(data.table)
 library(ggplot2)
+library(dplyr)
+library(ggh4x)
+library(openair)
+library(lubridate)
 ```
 
 
@@ -27,7 +31,50 @@ source("./functions/calc_stat.R")
 ## Import Data 
 
 ```{r}
-combined_df <- fread("combined_list.csv")
+combined_df <- fread("combined_df.csv")
+combined_df$date <- ymd_hms(combined_df$timestamp_local, tz = "America/New_York")
+```
+# Normalize data 
+
+```{r}
+norm_func <- function(pol){
+  pol <- pol/mean(pol, na.rm = TRUE)
+  return(pol)
+}
+```
+
+
+```{r}
+
+combined_df_norm <- combined_df %>% 
+                      group_by(sn) %>% 
+                      mutate_each_(list(~scale(.) %>% as.vector),
+                                  vars = c(PMvars, GPvars))
+
+combined_df_norm2 <- combined_df %>% 
+                      group_by(sn) %>% 
+                      mutate_each_(list(~norm_func(.) %>% as.vector),
+                                  vars = c(PMvars, GPvars))
+
+combined_df_norm2 <- setDT(combined_df_norm2)
+```
+
+```{r}
+mean(subset(combined_df, sn == "sn45")$pm1.ML, na.rm = TRUE)
+mean(subset(combined_df, sn == "sn49")$pm1.ML, na.rm = TRUE)
+```
+```{r}
+mean(subset(combined_df_norm, sn == "sn45")$pm1.ML, na.rm = TRUE)
+mean(subset(combined_df_norm, sn == "sn49")$pm1.ML, na.rm = TRUE)
+```
+
+```{r}
+mean(subset(combined_df_norm2, sn == "sn45")$pm1.ML, na.rm = TRUE)
+mean(subset(combined_df_norm2, sn == "sn49")$pm1.ML, na.rm = TRUE)
+```
+```{r}
+min(subset(combined_df_norm2, sn == "sn45")$pm1.ML, na.rm = TRUE)
+min(subset(combined_df_norm2, sn == "sn49")$pm1.ML, na.rm = TRUE)
 ```
 
 # Boxplot Creation 
@@ -35,6 +82,15 @@ combined_df <- fread("combined_list.csv")
 
 Below we create a function to easily create boxplots, given our current dataframe. Essentially, the function puts the data in the right format for boxplot plots, and takes in input from the user to label it correctly. This function assumes that the regime provided will either be "reg1", "reg2" or "reg3", according to the regimes defined in the dataFormatting notebook. 
 Furthermore, chosen_labeller and measure_vars are options that define whether the plot will be of PM or gas phase. I will explain these parameters more in the next chunk of code. 
+
+```{r}
+reg4List <- c()
+for(sensor in unique(combined_df$sn)){
+  for(regs in c(" pre-covid calm", " post-covid calm", " pre-covid downwind", " post-covid downwind", " pre-covid upwind",   " post-covid upwind")){
+    reg4List <- c(reg4List, paste0(sensor, regs, sep = ""))
+  }
+}
+```
 
 ```{r}
 create_plot <- function(combined_list, regime, title, chosen_labeller, measure_vars){
@@ -69,30 +125,44 @@ create_plot <- function(combined_list, regime, title, chosen_labeller, measure_v
                  "sn46 calm", "sn46 downwind", "sn46 upwind",
                 "sn49 calm", "sn49 downwind", "sn49 upwind",
                 "sn62 calm",  "sn62 downwind", "sn62 upwind",
-                "sn67 calm" , "sn67 downwind", "sn67 upwind"),
+                "sn67 calm" , "sn67 downwind", "sn67 upwind", 
+                "sn72 calm" , "sn72 downwind", "sn72 upwind"),
       ordered = TRUE)
   }
   
   if(regime == "reg3"){
     snfiles.melted[[regime]] <- factor(snfiles.melted[[regime]],
-    levels = c("pre-covid source impacted", "post-covid source impacted",
-               "pre-covid not source impacted", "post-covid not source impacted"),
+    levels = c("pre-covid source impacted", "pre-covid not source impacted",
+               "post-covid source impacted",  "post-covid not source impacted"),
     ordered = TRUE)
       
     snfiles.melted$group <- factor(snfiles.melted$group,
-    levels = c("sn45 pre-covid source impacted", "sn45 post-covid source impacted", 
-               "sn45 pre-covid not source impacted", "sn45 post-covid not source impacted",
-           "sn46 pre-covid source impacted", "sn46 post-covid source impacted",
-           "sn46 pre-covid not source impacted", "sn46 post-covid not source impacted",
-           "sn46 other pollution pre-covid", "sn46 other pollution post-covid",
-           "sn49 pre-covid source impacted",  "sn49 post-covid source impacted", "sn49 pre-covid not source impacted", "sn49 post-covid not source impacted",
-           "sn62 pre-covid source impacted", "sn62 post-covid source impacted",
-           "sn62 pre-covid not source impacted", "sn62 post-covid not source impacted",
-           "sn62 other pollution pre-covid","sn62 other pollution post-covid",
-           "sn67 pre-covid source impacted", "sn67 post-covid source impacted",
-           "sn67 pre-covid not source impacted",  "sn67 post-covid not source impacted",
-           "sn67 other pollution pre-covid","sn67 other pollution post-covid"),
+    levels = c("sn45 pre-covid source impacted", "sn45 pre-covid not source impacted", 
+               "sn45 post-covid source impacted", "sn45 post-covid not source impacted",
+           "sn46 pre-covid source impacted",  "sn46 pre-covid not source impacted",
+           "sn46 post-covid source impacted",
+           "sn46 post-covid not source impacted",
+           
+           "sn49 pre-covid source impacted", "sn49 pre-covid not source impacted",  "sn49 post-covid source impacted", "sn49 post-covid not source impacted",
+           "sn62 pre-covid source impacted", "sn62 pre-covid not source impacted", "sn62 post-covid source impacted",
+           "sn62 post-covid not source impacted",
+          
+           "sn67 pre-covid source impacted", "sn67 pre-covid not source impacted",  "sn67 post-covid source impacted",
+           "sn67 post-covid not source impacted",
+           
+           "sn72 pre-covid source impacted", "sn72 pre-covid not source impacted", "sn72 post-covid source impacted",
+            "sn72 post-covid not source impacted"
+           ),
 ordered = TRUE)
+  }
+  if(regime == "reg4"){
+    # combined_df$reg4[is.na(combined_df$reg4)] <- ""
+    snfiles.melted[[regime]] <- factor(snfiles.melted[[regime]],
+    levels = c("pre-covid calm", "post-covid calm", 
+               "pre-covid downwind", "post-covid downwind", 
+               "pre-covid upwind", "post-covid upwind"),
+    ordered = TRUE)
+    snfiles.melted$group <- factor(snfiles.melted$group, levels = reg4List, ordered = TRUE)
   }
 
 
@@ -116,16 +186,32 @@ ordered = TRUE)
     stat_summary(fun.data = calc_stat, geom="boxplot")
   
   #formatting the plot
-  g+ theme( axis.text.x = element_blank(),
-          axis.title.x=element_blank(),
-          axis.title.y=element_blank()) +
+  g+ theme(panel.grid.major = element_blank(), 
+           panel.grid.minor = element_blank(),
+           panel.background = element_blank(),
+           axis.line = element_line(colour = "black"),
+           axis.title = element_text(size = 18),
+           plot.title = element_text(size = 20),
+           axis.text.y = element_text(size = 18),
+           axis.text.x = element_blank(),
+           axis.ticks.x = element_blank(),
+           axis.title.x=element_blank(),
+           axis.title.y=element_blank(),
+           legend.text=element_text(size=20),
+           # panel.border = element_blank(),
+           # panel.spacing.x = unit(0,"line"),
+          legend.position="bottom") +
   facet_wrap(vars(variable,sn),
              scales="free",
              ncol = 6,
-             labeller = chosen_labeller) + labs(title = title, color = "Regimes", fill = "Regimes") + scale_fill_brewer(palette="Set1")  #remove text from the x axis and stack the plots so there are 5 columns
+             labeller = chosen_labeller) + labs(title = title, color = "Regimes", fill = "Regimes") + scale_fill_brewer(palette="Paired")  #remove text from the x axis and stack the plots so there are 5 columns
+  
+  
 
 }
 ```
+
+
 
 
 The labeller labels the boxplots. measure_vars refers to which variables we will subset from the data to make the graphs. Therefore, the labeller and the vars should either both be PM or both be gas phase (GP). I create variables for both below. When plotting, choose one of the two options. 
@@ -134,8 +220,9 @@ The labeller labels the boxplots. measure_vars refers to which variables we will
 labellerGP<- labeller(
   variable =
       c("no.ML" = "NO", 
-        "no2" = expression("NO"[2]), 
-        "co" = "CO"),
+        "no2" = "NO2", 
+        "co" = "CO", 
+        "o3" = "O3"),
     sn =
       c("sn45" = "SN 45",
         "sn46" = "SN 46",
@@ -163,7 +250,7 @@ labellerPM <- labeller(
 ```
 
 ```{r}
-GPvars <- c("no.ML", "no2", "co")
+GPvars <- c("no.ML", "no2", "co", "o3")
 
 PMvars <- c("pm1.ML", "pm25.ML", "pm10.ML")
 ```
@@ -172,14 +259,212 @@ PMvars <- c("pm1.ML", "pm25.ML", "pm10.ML")
 Now we can plot: 
 
 ```{r}
-# pdf("boxplot-regimes3.pdf")
-# 
-create_plot(combined_df, "reg1",  "Boxplots of gas phase data, pre-covid and post-covid", labellerGP, GPvars)
-# 
+# pdf("boxplot-regimes3-PM.pdf")
+
+
+m <- create_plot(combined_df, "reg4",  "Upwind vs. Downwind Boxplots of PM w/ constant limits", labellerPM, PMvars)
+
+# g +
+#   facetted_pos_scales(
+#     y = rep(list(
+#       scale_y_continuous(limits = c(0, 15)),
+#       scale_y_continuous(limits = c(0, 15)),
+#       scale_y_continuous(limits = c(0, 50))
+#     ), each = 3)
+#   )
+# dev.off()
+```
+
+```{r}
+# png("NN-NL-PM.png", width = 1920, height = 1080, units = "px")
+m
 # dev.off()
 ```
 
 
 
 
+
+
+```{r}
+# pdf("new-reg4-GP-limits.pdf")
+m +  facetted_pos_scales(
+    y = rep(list(
+      scale_y_continuous(limits = c(0, 40)),
+      scale_y_continuous(limits = c(0, 60)),
+      scale_y_continuous(limits = c(0, 60))
+    ), each = 6)
+  )
+
+# dev.off()
+```
+
+```{r}
+n1 <- create_plot(combined_df_norm2, "reg4",  "Upwind vs. Downwind Boxplots of GP", labellerGP, GPvars)
+```
+
+
+```{r}
+n  +  facetted_pos_scales(
+    y = rep(list(
+      scale_y_continuous(limits = c(0, 6)),
+      scale_y_continuous(limits = c(0, 6)),
+      scale_y_continuous(limits = c(0, 4))
+    ), each = 6)
+  )  + labs(y = "Pollutant Concentration / Mean Pollutant Concentration")
+
+```
+```{r}
+n1 +  facetted_pos_scales(
+    y = rep(list(
+      scale_y_continuous(limits = c(0, 6)),
+      scale_y_continuous(limits = c(0, 3)),
+      scale_y_continuous(limits = c(0, 3)),
+      scale_y_continuous(limits = c(0, 1.5))
+    ), each = 6)
+  )
+```
+
+
+# Summary Stats 
+
+## Create Regime Dataframes
+
+```{r}
+reg1colnames <- c("sn45 source impacted", "sn45 not source impacted",
+                   "sn46 source impacted", "sn46 not source impacted",
+                   "sn49 source impacted", "sn49 not source impacted",
+                   "sn62 source impacted", "sn62 not source impacted",
+                   "sn67 source impacted", "sn67 not source impacted",
+                   "sn72 source impacted", "sn72 not source impacted") 
+
+reg2colnames <-  c("sn45 calm", "sn45 downwind", "sn45 upwind",
+                 "sn46 calm", "sn46 downwind", "sn46 upwind",
+                "sn49 calm", "sn49 downwind", "sn49 upwind",
+                "sn62 calm",  "sn62 downwind", "sn62 upwind",
+                "sn67 calm" , "sn67 downwind", "sn67 upwind", 
+                "sn72 calm" , "sn72 downwind", "sn72 upwind")
+
+reg3colnames <- c("sn45 pre-covid source impacted", "sn45 pre-covid not source impacted", 
+               "sn45 post-covid source impacted", "sn45 post-covid not source impacted",
+           "sn46 pre-covid source impacted",  "sn46 pre-covid not source impacted",
+           "sn46 post-covid source impacted",
+           "sn46 post-covid not source impacted",
+           
+           "sn49 pre-covid source impacted", "sn49 pre-covid not source impacted",  "sn49 post-covid source impacted", "sn49 post-covid not source impacted",
+           "sn62 pre-covid source impacted", "sn62 pre-covid not source impacted", "sn62 post-covid source impacted",
+           "sn62 post-covid not source impacted",
+          
+           "sn67 pre-covid source impacted", "sn67 pre-covid not source impacted",  "sn67 post-covid source impacted",
+           "sn67 post-covid not source impacted",
+           
+           "sn72 pre-covid source impacted", "sn72 pre-covid not source impacted", "sn72 post-covid source impacted",
+            "sn72 post-covid not source impacted"
+           )
+
+reg4colnames <- reg4List
+```
+
+```{r}
+reg1Df <- data.frame(matrix(nrow = 0, ncol = length(reg1colnames))) 
+reg2Df <- data.frame(matrix(nrow = 0, ncol = length(reg2colnames))) 
+reg3Df <- data.frame(matrix(nrow = 0, ncol = length(reg3colnames))) 
+reg4Df <- data.frame(matrix(nrow = 0, ncol = length(reg4colnames))) 
+```
+
+```{r}
+colnames(reg1Df) <- reg1colnames
+colnames(reg2Df) <- reg2colnames
+colnames(reg3Df) <- reg3colnames
+colnames(reg4Df) <- reg4colnames
+```
+
+for(snval in snvals)
+for(regval in regvals)
+i += 1
+for(j in seq(length(polvals)))
+
+```{r}
+snvals <- unique(combined_df$sn)
+polvals <- c("no.ML", "no2", "co", "pm1.ML", "pm25.ML", "pm10.ML")
+```
+
+
+
+```{r}
+
+regvals1 <- c("source impacted", "not source impacted")
+
+i = 0
+
+for(snval in snvals){
+  for(regval in regvals1){
+    i = i + 1
+    for(j in seq(length(polvals))){
+      reg1Df[j,i] <- toString(calc_stat(subset(combined_df, reg1 == regval & sn == snval)[[polvals[j]]]))
+}
+  }
+}
+
+
+```
+
+```{r}
+regvals2 <- c("upwind", "downwind", "calm")
+i = 0
+
+for(snval in snvals){
+  for(regval in regvals2){
+    i = i + 1
+    for(j in seq(length(polvals))){
+      reg2Df[j,i] <- toString(calc_stat(subset(combined_df, reg2 == regval & sn == snval)[[polvals[j]]]))
+}
+  }
+}
+
+```
+
+```{r}
+regvals3 <- c("pre-covid not source impacted",  "pre-covid source impacted" , "post-covid not source impacted", "post-covid source impacted" )
+i = 0
+
+for(snval in snvals){
+  for(regval in regvals3){
+    i = i + 1
+    for(j in seq(length(polvals))){
+      reg3Df[j,i] <- toString(calc_stat(subset(combined_df, reg3 == regval & sn == snval)[[polvals[j]]]))
+}
+  }
+}
+
+```
+
+
+```{r}
+regvals4 <- c("pre-covid calm", "post-covid calm", "pre-covid downwind", "post-covid downwind", "pre-covid upwind", "post-covid upwind")
+i = 0
+
+for(snval in snvals){
+  for(regval in regvals4){
+    i = i + 1
+    for(j in seq(length(polvals))){
+      reg4Df[j,i] <- toString(calc_stat(subset(combined_df, reg4 == regval & sn == snval)[[polvals[j]]]))
+}
+  }
+}
+```
+
+```{r}
+rownames(reg1Df) <- polvals
+rownames(reg2Df) <- polvals
+rownames(reg3Df) <- polvals
+rownames(reg4Df) <- polvals
+```
+
+```{r}
+fwrite(reg1Df, "reg1boxdata.csv")
+fwrite(reg2Df, "reg2boxdata.csv")
+fwrite(reg3Df, "reg3boxdata.csv")
+fwrite(reg4Df, "reg4boxdata.csv")
+```
 

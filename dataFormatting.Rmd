@@ -71,7 +71,50 @@ Since the variable which differentiated the data is now labeled in each dataset,
 Essentially, it is as if we are concatinating the list of datframes together. 
 
 ```{r}
-combined_list <- rbindlist(snfiles)
+combined_df2 <- rbindlist(snfiles, fill = TRUE)
+```
+
+
+# adding new bin data
+
+```{r}
+clean_bins <- function(sensor){
+  num_zeros <- which(sensor$bin0 == 0)
+  if(length(num_zeros) > 0){
+    sprintf("deleting %f entries", sum(which(sensor$bin0 == 0)))
+    sensor$bin0[which(sensor$bin0 == 0)] <- NA
+    sensor$bin1[which(sensor$bin0 == 0)] <- NA
+    sensor$bin2[which(sensor$bin0 == 0)] <- NA
+    sensor$bin3[which(sensor$bin0 == 0)] <- NA
+    sensor$bin4[which(sensor$bin0 == 0)] <- NA
+  }
+
+  sensor$bin1[which(sensor$bin1 == 0)] <- NA
+  sensor$bin2[which(sensor$bin2 == 0)] <- NA
+  sensor$bin3[which(sensor$bin3 == 0)] <- NA
+  sensor$bin4[which(sensor$bin4 == 0)] <- NA
+
+  return(sensor)
+}
+```
+
+
+```{r}
+combined_df2$bin0 <- replace(combined_df2$bin0, combined_df2$bin0 <0, NA)
+combined_df2 <- clean_bins(combined_df2)
+```
+
+```{r}
+combined_df1 <- fread("combined_df.csv")
+combined_df1$date <- ymd_hms(combined_df1$timestamp_local, tz = "America/New_York")
+```
+
+
+```{r}
+timePlot(combined_df2, pollutant = c("no.ML", "no2", "co", "bin0"), type = "sn")
+```
+```{r}
+timePlot(combined_df1, pollutant = c("no.ML", "no2", "co", "bin0"), type = "sn")
 ```
 
 # Additional labels 
@@ -101,7 +144,7 @@ add_covid_regime <- function(sensor){
 
 
 ```{r}
-combined_list <- add_covid_regime(combined_list)
+combined_df <- add_covid_regime(combined_df)
 ```
 
 ## Wind direction and speed 
@@ -133,15 +176,15 @@ add_wd_vector <- function(sensor){
 Now we can label data column as downwind or upwind. Since downwind consists of the wind directions that are coming from the airport, upwind consists of all the wind not coming from those directions - in other words, everything else. So we will be labeling everything that is not downwind as upwind, for wind direction. 
 
 ```{r}
-add_downwind_wd_vec <- function(combined_list, snval, wd1, wd2){
-  combined_list$wd_class[which(combined_list$sn == snval & combined_list$wd > wd1 & combined_list$wd < wd2)] <<- "downwind wd"
+add_downwind_wd_vec <- function(combined_df, snval, wd1, wd2){
+  combined_df$wd_class[which(combined_df$sn == snval & combined_df$wd > wd1 & combined_df$wd < wd2)] <<- "downwind wd"
   
-  # return(combined_list)
+  # return(combined_df)
 }
 
 
-add_upwind_wd_vec <- function(combined_list){
-  combined_list$wd_class[which(is.na(combined_list$wd_class))] <<- "upwind wd"
+add_upwind_wd_vec <- function(combined_df){
+  combined_df$wd_class[which(is.na(combined_df$wd_class))] <<- "upwind wd"
 
   # return(sensor)
   }
@@ -150,18 +193,18 @@ add_upwind_wd_vec <- function(combined_list){
 Below is a function we can use to label wind direction of other pollution sites. We used this function before, but determined that other sources of pollution are not significant compared to airport pollution, so we will not continue to use it. If you would like to use it, use it before running the upwind function, since this function sets wd class values based on wind direction, whereas upwind will set everything that is not labeled to upwind.
 
 ```{r}
-add_otherpollution_wd_vec <- function(combined_list, snval,  wd1, wd2){
-  combined_list$wd_class[which(combined_list$sn == snval & combined_list$wd > wd1 & combined_list$wd < wd2)] <<- "other pollution wd"
+add_otherpollution_wd_vec <- function(combined_df, snval,  wd1, wd2){
+  combined_df$wd_class[which(combined_df$sn == snval & combined_df$wd > wd1 & combined_df$wd < wd2)] <<- "other pollution wd"
   
-  # return(combined_list)
+  # return(combined_df)
   }
 ```
 
 
 
 ```{r}
-combined_list <- add_calm_vector(combined_list)
-combined_list <- add_wd_vector(combined_list)
+combined_df <- add_calm_vector(combined_df)
+combined_df <- add_wd_vector(combined_df)
 ```
 
 
@@ -178,106 +221,140 @@ Regimes are a specific set of labels which let us divide the data based on the v
 The labels for each of these regimes will constitute their own column in the data. The functions to create the labels are below: 
 
 ```{r}
-create_reg1 <- function(combined_list){
+create_reg1 <- function(combined_df){
   
   # pre-covid source impacted
-  combined_list$reg1[which(combined_list$wd_class == "downwind wd"& 
-                             combined_list$calm == "not calm" & 
-                             combined_list$covid == "pre-covid")] <<- "source impacted"
+  combined_df$reg1[which(combined_df$wd_class == "downwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "pre-covid")] <<- "source impacted"
   
-  combined_list$reg1[which(combined_list$wd_class == "upwind wd"& 
-                             combined_list$calm == "not calm" & 
-                             combined_list$covid == "pre-covid")] <<- "not source impacted"
+  combined_df$reg1[which(combined_df$wd_class == "upwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "pre-covid")] <<- "not source impacted"
   
-  combined_list$reg1[which(combined_list$calm == "calm"  & combined_list$covid == "pre-covid")] <<- "source impacted"
+  combined_df$reg1[which(combined_df$calm == "calm"  & combined_df$covid == "pre-covid")] <<- "source impacted"
 }
 ```
 
 ```{r}
-create_reg2 <- function(combined_list){
+create_reg2 <- function(combined_df){
   
   
   # pre-covid, upwind, downwind, and calm
-  combined_list$reg2[which(combined_list$wd_class == "downwind wd"& 
-                             combined_list$calm == "not calm" & 
-                             combined_list$covid == "pre-covid")] <<- "downwind"
+  combined_df$reg2[which(combined_df$wd_class == "downwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "pre-covid")] <<- "downwind"
   
-  combined_list$reg2[which(combined_list$wd_class == "upwind wd"& 
-                             combined_list$calm == "not calm" & 
-                             combined_list$covid == "pre-covid")] <<- "upwind"
+  combined_df$reg2[which(combined_df$wd_class == "upwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "pre-covid")] <<- "upwind"
   
   
-  combined_list$reg2[which(combined_list$calm == "calm"  & combined_list$covid == "pre-covid")] <<- "calm"
+  combined_df$reg2[which(combined_df$calm == "calm"  & combined_df$covid == "pre-covid")] <<- "calm"
   
 }
 ```
 
 ```{r}
-create_reg3 <- function(combined_list){
+create_reg3 <- function(combined_df){
   
   
   # pre-covid source impacted / n.s.i. 
-  combined_list$reg3[which(combined_list$wd_class == "downwind wd"& 
-                             combined_list$calm == "not calm" & 
-                             combined_list$covid == "pre-covid")] <<- "pre-covid source impacted"
+  combined_df$reg3[which(combined_df$wd_class == "downwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "pre-covid")] <<- "pre-covid source impacted"
   
-  combined_list$reg3[which(combined_list$calm == "calm" & 
-                             combined_list$covid == "pre-covid")] <<- "pre-covid source impacted"
+  combined_df$reg3[which(combined_df$calm == "calm" & 
+                             combined_df$covid == "pre-covid")] <<- "pre-covid source impacted"
   
-  combined_list$reg3[which(combined_list$wd_class == "upwind wd"& 
-                             combined_list$calm == "not calm" & 
-                             combined_list$covid == "pre-covid")] <<- "pre-covid not source impacted"
+  combined_df$reg3[which(combined_df$wd_class == "upwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "pre-covid")] <<- "pre-covid not source impacted"
   
   
   
   # post-covid source impacted / n.s.i. 
-  combined_list$reg3[which(combined_list$wd_class == "downwind wd"& 
-                             combined_list$calm == "not calm" & 
-                             combined_list$covid == "post-covid")] <<- "post-covid source impacted"
+  combined_df$reg3[which(combined_df$wd_class == "downwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "post-covid")] <<- "post-covid source impacted"
   
-  combined_list$reg3[which(combined_list$calm == "calm" & 
-                             combined_list$covid == "post-covid")] <<- "post-covid source impacted"
+  combined_df$reg3[which(combined_df$calm == "calm" & 
+                             combined_df$covid == "post-covid")] <<- "post-covid source impacted"
   
-  combined_list$reg3[which(combined_list$wd_class == "upwind wd"& 
-                             combined_list$calm == "not calm" & 
-                             combined_list$covid == "post-covid")] <<- "post-covid not source impacted"
+  combined_df$reg3[which(combined_df$wd_class == "upwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "post-covid")] <<- "post-covid not source impacted"
   
   
 }
 ```
 
+```{r}
+create_reg4 <- function(combined_df){
+  
+  
+  # pre-covid, upwind, downwind, and calm
+  combined_df$reg4[which(combined_df$wd_class == "downwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "pre-covid")] <<- "pre-covid downwind"
+  
+  combined_df$reg4[which(combined_df$wd_class == "upwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "pre-covid")] <<- "pre-covid upwind"
+  
+  
+  combined_df$reg4[which(combined_df$calm == "calm"  & combined_df$covid == "pre-covid")] <<- "pre-covid calm"
+  
+  # pre-covid, upwind, downwind, and calm
+  combined_df$reg4[which(combined_df$wd_class == "downwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "post-covid")] <<- "post-covid downwind"
+  
+  combined_df$reg4[which(combined_df$wd_class == "upwind wd"& 
+                             combined_df$calm == "not calm" & 
+                             combined_df$covid == "post-covid")] <<- "post-covid upwind"
+  
+  
+  combined_df$reg4[which(combined_df$calm == "calm"  & combined_df$covid == "post-covid")] <<- "post-covid calm"
+  
+}
+```
+
+
 
 Now we will apply them. 
 
-```{r}
-combined_list$reg1 <- NA 
-create_reg1(combined_list)
-combined_list$reg2 <- NA 
-create_reg2(combined_list)
-combined_list$reg3 <- NA 
-create_reg3(combined_list)
-# combined_list$reg4 <- NA 
-# create_reg4(combined_list)
-```
 
 
 ```{r}
-add_downwind_wd_vec(combined_list, "sn45", 180, 215)
-add_downwind_wd_vec(combined_list, "sn46", 95, 140)
-add_downwind_wd_vec(combined_list, "sn49", 140, 340)
-add_downwind_wd_vec(combined_list, "sn62", 130, 166)
-add_downwind_wd_vec(combined_list, "sn67", 185, 320)
-add_downwind_wd_vec(combined_list, "sn67", 50, 86)
+add_downwind_wd_vec(combined_df, "sn45", 180, 215)
+add_downwind_wd_vec(combined_df, "sn46", 95, 140)
+add_downwind_wd_vec(combined_df, "sn49", 140, 340)
+add_downwind_wd_vec(combined_df, "sn62", 130, 166)
+add_downwind_wd_vec(combined_df, "sn67", 185, 320)
+add_downwind_wd_vec(combined_df, "sn72", 200, 250)
 
-# add_otherpollution_wd_vec(combined_list, "sn46", 18, 67)
-# add_otherpollution_wd_vec(combined_list, "sn46", 175, 201)
-# add_otherpollution_wd_vec(combined_list, "sn46", 285, 327)
-# add_otherpollution_wd_vec(combined_list, "sn62", 166, 215)
-# add_otherpollution_wd_vec(combined_list, "sn67", 92, 173)
+# add_otherpollution_wd_vec(combined_df, "sn46", 18, 67)
+# add_otherpollution_wd_vec(combined_df, "sn46", 175, 201)
+# add_otherpollution_wd_vec(combined_df, "sn46", 285, 327)
+# add_otherpollution_wd_vec(combined_df, "sn62", 166, 215)
+# add_otherpollution_wd_vec(combined_df, "sn67", 92, 173)
 
-add_upwind_wd_vec(combined_list)
+add_upwind_wd_vec(combined_df)
 
 ```
+
+```{r}
+combined_df$reg1 <- NA 
+create_reg1(combined_df)
+combined_df$reg2 <- NA 
+create_reg2(combined_df)
+combined_df$reg3 <- NA 
+create_reg3(combined_df)
+combined_df$reg4 <- NA 
+create_reg4(combined_df)
+```
+
 
 # Additional Data Cleaning 
 
@@ -286,16 +363,33 @@ Based on additional consideration, we will add additional changes to the data.
 First, based on experiments we did with the PM data, we have decided that data taken during high wind speeds can be unreliable. Specifically, data taken when wind speed is 13.5 m/s or higher (high wind/ gale on the Beaufort scale). During times of high wind/gale, trees can shake, and there is a lot of seaspray from the ocean. 
 
 ```{r}
-combined_list[which(combined_list$ws >= 13.5), c("no.ML", "no2", "co")] <- NA
+combined_df[which(combined_df$ws >= 13.5), c("no.ML", "no2", "co")] <- NA
 ```
 
 Also, since openair functions do not give the option to chose the date column, we will rename the date_local column to date, so that openair plots will default to using those time-shifted dates.
 
 ```{r}
-combined_list$date_local <- NULL #remove date local column
+combined_df$date_local <- NULL #remove date local column
 
-combined_list$date_UTC <- ymd_hms(sn45$timestamp, tz = "UTC") #create date in UTC column
-combined_list$date <- ymd_hms(sn45$timestamp_local, tz = "America/New_York") #rewrite date column
+combined_df$date_UTC <- ymd_hms(combined_df$timestamp, tz = "UTC") #create date in UTC column
+combined_df$date <- ymd_hms(combined_df$timestamp_local, tz = "America/New_York") #rewrite date column
+```
+
+We will also additionally clean the ML pm data 
+
+```{r}
+View(combined_df[combined_df$pm1.ML == 0])
+combined_df[combined_df$pm1.ML == 0 , c("pm1.ML", "pm25.ML", "pm10.ML", "bin0", "bin1")] <- NA
+View(combined_df[combined_df$pm1.ML == 0])
+```
+
+And make sure the calibration period is removed: 
+
+```{r}
+dfdates1 <- combined_df[combined_df$date <= "2020-05-20 00:00:00 EDT"]
+dfdates2 <- combined_df[combined_df$date >= "2020-07-31 23:59:00 EDT"]
+combined_df <- rbind(dfdates1, dfdates2)
+rm(dfdates1, dfdates2)
 ```
 
 
@@ -304,5 +398,5 @@ combined_list$date <- ymd_hms(sn45$timestamp_local, tz = "America/New_York") #re
 We will save the new dataframe to a csv: 
 
 ```{r}
-fwrite(combined_list, "combined_list.csv")
+fwrite(combined_df, "combined_df2.csv")
 ```

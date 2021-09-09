@@ -9,4 +9,6 @@
 *.xlsx
 *.rtf
 *.pxp
+*.html
+*.PNG
 .RDataTmp
