@@ -27,17 +27,17 @@ source("filter_data.R") #For filtering data
 # Import Data
 
 ```{r}
-business_merged <- import_ratio_data("./data/RH_business_merged.csv")
-business_s1_merged <- import_ratio_data("./data/RH_business_s1_merged.csv")
-business_s2_merged <- import_ratio_data("./data/RH_business_s2_merged.csv")
-class120_merged <- import_ratio_data("./data/RH_class120_merged.csv")
-class210_merged <- import_ratio_data("./data/RH_class210_merged.csv")
-classc11_merged <- import_ratio_data("./data/RH_classc11_merged.csv")
-principal_merged <- import_ratio_data("./data/RH_principal_merged.csv")
-principal_s1_merged <- import_ratio_data("./data/RH_principal_s1_merged.csv")
-principal_s2_merged <- import_ratio_data("./data/RH_principal_s2_merged.csv")
-superintendent_merged <- import_ratio_data("./data/RH_superintendent_merged.csv")
-superintendent_assist_merged <- import_ratio_data("./data/RH_superintendent_assist_merged.csv")
+business_merged <- import_ratio_data("./data/merged/RH_business_merged.csv")
+business_s1_merged <- import_ratio_data("./data/merged/RH_business_s1_merged.csv")
+business_s2_merged <- import_ratio_data("./data/merged/RH_business_s2_merged.csv")
+class120_merged <- import_ratio_data("./data/merged/RH_class120_merged.csv")
+class210_merged <- import_ratio_data("./data/merged/RH_class210_merged.csv")
+classc11_merged <- import_ratio_data("./data/merged/RH_classc11_merged.csv")
+principal_merged <- import_ratio_data("./data/merged/RH_principal_merged.csv")
+principal_s1_merged <- import_ratio_data("./data/merged/RH_principal_s1_merged.csv")
+principal_s2_merged <- import_ratio_data("./data/merged/RH_principal_s2_merged.csv")
+superintendent_merged <- import_ratio_data("./data/merged/RH_superintendent_merged.csv")
+superintendent_assist_merged <- import_ratio_data("./data/merged/RH_superintendent_assist_merged.csv")
 ```
 
 # Removing Outliers
@@ -85,53 +85,21 @@ business_indoor_src <- complete(business_indoor_src, date1min = seq(min(business
 plot_time_resolved(business_filt, TRUE)
 plot_time_resolved(business_indoor_src, TRUE)
 ```
+
 ### Business S1
 
 ```{r, fig.height=10}
 plot_time_resolved(business_s1, FALSE)
-
-# business_s1_indoor_src <- business_s1[
-#   business_s1$date1min > as.POSIXct("2021-03-10 11:20:00", tz='America/New_York') &
-#   business_s1$date1min < as.POSIXct("2021-03-10 13:20:00", tz='America/New_York'), ]
-# 
-# business_filt <- set_NA(business_s1, "2021-03-10 11:14:00", "2021-03-10 13:20:00")
-# 
-# business_s1_indoor_src <- rbind(business_s1_indoor_src, business[
-#   business_s1$date1min > as.POSIXct("2021-03-12 11:20:00", tz='America/New_York') &
-#   business_s1$date1min < as.POSIXct("2021-03-12 16:11:00", tz='America/New_York'), ])
-# 
-# business_s1_filt <- set_NA(business_s1_filt, "2021-03-12 11:12:00", "2021-03-12 16:11:00")
-# 
-# business_s1_indoor_src <- complete(business_s1_indoor_src, date1min = seq(min(business_s1_filt$date1min, na.rm=TRUE), 
-#                                     max(business_s1_filt$date1min, na.rm=TRUE), 
-#                                     by = "min"))
-
-# plot_time_resolved(business_s1_filt, FALSE)
-# plot_time_resolved(business_s1_indoor_src, FALSE)
 ```
+
+### Business S2
 
 ```{r, fig.height=10}
 plot_time_resolved(business_s2, FALSE)
-
-# business_s1_indoor_src <- business_s1[
-#   business_s1$date1min > as.POSIXct("2021-03-10 11:20:00", tz='America/New_York') &
-#   business_s1$date1min < as.POSIXct("2021-03-10 13:20:00", tz='America/New_York'), ]
-# 
-# business_filt <- set_NA(business_s1, "2021-03-10 11:14:00", "2021-03-10 13:20:00")
-# 
-# business_s1_indoor_src <- rbind(business_s1_indoor_src, business[
-#   business_s1$date1min > as.POSIXct("2021-03-12 11:20:00", tz='America/New_York') &
-#   business_s1$date1min < as.POSIXct("2021-03-12 16:11:00", tz='America/New_York'), ])
-# 
-# business_s1_filt <- set_NA(business_s1_filt, "2021-03-12 11:12:00", "2021-03-12 16:11:00")
-# 
-# business_s1_indoor_src <- complete(business_s1_indoor_src, date1min = seq(min(business_s1_filt$date1min, na.rm=TRUE), 
-#                                     max(business_s1_filt$date1min, na.rm=TRUE), 
-#                                     by = "min"))
-
-# plot_time_resolved(business_s1_filt, FALSE)
-# plot_time_resolved(business_s1_indoor_src, FALSE)
 ```
+
+### Principal
+
 ```{r, fig.height=10}
 plot_time_resolved(principal, TRUE)
 
@@ -149,42 +117,205 @@ plot_time_resolved(principal_filt, TRUE)
 plot_time_resolved(principal_indoor_src, TRUE)
 ```
 
+### Principal S1
+
 ```{r, fig.height=10}
 plot_time_resolved(principal_s1, FALSE)
 
-# principal_s1_indoor_src <- principal_s1[
-#   principal_s1$date1min > as.POSIXct("2021-03-11 19:12:00", tz='America/New_York') &
-#   principal_s1$date1min < as.POSIXct("2021-03-11 19:48:00", tz='America/New_York'), ]
-# 
-# principal_s1_filt <- set_NA(principal_s1, "2021-03-11 19:08:00", "2021-03-11 19:48:00")
-# 
-# principal_s1_indoor_src <- complete(principal_s1_indoor_src, date1min = seq(min(principal_s1_filt$date1min, na.rm=TRUE),
-#                                     max(principal_s1_filt$date1min, na.rm=TRUE),
-#                                     by = "min"))
-# 
-# plot_time_resolved(principal_s1_filt, TRUE)
-# plot_time_resolved(principal_s1_indoor_src, TRUE)
+principal_s1_indoor_src <- principal_s1[
+  principal_s1$date1min > as.POSIXct("2021-03-11 19:12:00", tz='America/New_York') &
+  principal_s1$date1min < as.POSIXct("2021-03-11 19:48:00", tz='America/New_York'), ]
+
+principal_s1_filt <- set_NA(principal_s1, "2021-03-11 19:08:00", "2021-03-11 19:48:00")
+
+principal_s1_indoor_src <- complete(principal_s1_indoor_src, date1min = seq(min(principal_s1_filt$date1min, na.rm=TRUE),
+                                    max(principal_s1_filt$date1min, na.rm=TRUE),
+                                    by = "min"))
+
+plot_time_resolved(principal_s1_filt, FALSE)
+plot_time_resolved(principal_s1_indoor_src, FALSE)
 ```
 
-
+### Principal S2
 
 ```{r, fig.height=10}
-# plot_time_resolved(business_s1_merged, FALSE)
-# plot_time_resolved(business_s2_merged, FALSE)
-plot_time_resolved(class120_merged, TRUE)
-# plot_time_resolved(class210_merged, TRUE)
-# plot_time_resolved(classc11_merged, TRUE)
+plot_time_resolved(principal_s2, FALSE)
 ```
-```{r, fig.height=10}
-plot_time_resolved(principal_merged, TRUE)
-plot_time_resolved(principal_s1_merged, FALSE)
-plot_time_resolved(principal_s2_merged, FALSE)
+
+### Superintendent
+
+```{r, fig.height = 10}
 plot_time_resolved(superintendent_merged, TRUE)
+
+superintendent_filt <- superintendent_merged %>% 
+  set_NA("2021-03-11 16:22:00", "2021-03-11 16:30:00")
+
+superintendent_indoor_src <- superintendent_filt %>%
+  filter(
+    date1min > as.POSIXct("2021-03-10 16:54:00", tz='America/New_York') &
+    date1min < as.POSIXct("2021-03-10 17:27:00", tz='America/New_York')
+  )
+
+superintendent_filt <- superintendent_filt %>% 
+  set_NA("2021-03-10 16:42:00", "2021-03-10 17:27:00")
+
+superintendent_filt <- superintendent_filt %>% 
+  set_NA("2021-03-09 16:54:00", "2021-03-09 17:46:00")
+
+superintendent_filt <- superintendent_filt %>% 
+  set_NA("2021-03-09 8:00:00", "2021-03-09 10:00:00")
+
+superintendent_filt <- superintendent_filt %>% 
+  set_NA("2021-03-11 1:36:00", "2021-03-11 6:37:00")
+
+superintendent_indoor_src <- superintendent_indoor_src %>%
+  complete(date1min = seq(
+    min(superintendent_filt$date1min, na.rm=TRUE),
+    max(superintendent_filt$date1min, na.rm=TRUE),
+    by = "min")
+  )
+
+plot_time_resolved(superintendent_filt, TRUE)
+plot_time_resolved(superintendent_indoor_src, TRUE)
+```
+
+### Superintendent Assist
+
+```{r, fig.height=10}
 plot_time_resolved(superintendent_assist_merged, FALSE)
+
+superintendent_assist_filt <- superintendent_assist_merged %>% 
+  set_NA("2021-03-11 1:36:00", "2021-03-11 6:37:00")
+
+plot_time_resolved(superintendent_assist_filt, FALSE)
 ```
 
 
+### Class 120
 
-# Removing Outliers
+```{r, fig.height = 10}
+plot_time_resolved(class120_merged, TRUE)
 
-# TODO!
+class120_filt <- class120_merged %>% 
+  set_NA("2021-03-19 18:00:00", "2021-03-22 07:00:00") %>%
+  set_NA("2021-03-23 18:00:00", "2021-03-25 23:00:00")
+
+plot_time_resolved(class120_filt, TRUE)
+```
+### Class 210
+
+```{r, fig.height = 10}
+plot_time_resolved(class210_merged, TRUE)
+
+class210_filt <- class210_merged %>% 
+  set_NA("2021-03-25 11:56:00", "2021-03-25 12:06:00")
+
+class210_filt <- class210_filt %>% 
+  set_NA("2021-03-15 17:28:00", "2021-03-15 17:50:00")
+
+class210_indoor_src <- class210_filt %>%
+  filter(
+    date1min > as.POSIXct("2021-03-20 09:10:00", tz='America/New_York') &
+    date1min < as.POSIXct("2021-03-20 12:00:00", tz='America/New_York')
+  )
+
+class210_filt <- class210_filt %>% 
+  set_NA("2021-03-20 09:04:00", "2021-03-20 12:00:00")
+
+class210_filt <- class210_filt %>% 
+  set_NA("2021-03-22 19:11:00", "2021-03-22 19:56:00")
+
+
+class210_filt <- class210_filt %>% 
+  set_NA("2021-03-23 17:35:00", "2021-03-23 18:54:00")
+
+class210_filt <- class210_filt %>% 
+  set_NA("2021-03-17 18:57:00", "2021-03-17 20:19:00")
+
+class210_indoor_src <- class210_indoor_src %>%
+  complete(date1min = seq(
+    min(class210_filt$date1min, na.rm=TRUE),
+    max(class210_filt$date1min, na.rm=TRUE),
+    by = "min")
+  )
+
+plot_time_resolved(class210_filt, TRUE)
+plot_time_resolved(class210_indoor_src, TRUE)
+```
+### Class C11
+
+```{r, fig.height=10}
+plot_time_resolved(classc11_merged, FALSE)
+
+classc11_indoor_src <- classc11_merged %>%
+  filter(
+    date1min > as.POSIXct("2021-03-20 10:00:00", tz='America/New_York') &
+    date1min < as.POSIXct("2021-03-20 13:35:00", tz='America/New_York')
+  )
+
+classc11_filt <- classc11_merged %>% 
+  set_NA("2021-03-20 08:50:00", "2021-03-20 13:35:00")
+
+classc11_filt <- classc11_filt %>% 
+  set_NA("2021-03-17 19:59:00", "2021-03-17 21:52:00")
+
+classc11_indoor_src <- classc11_indoor_src %>%
+  complete(date1min = seq(
+    min(classc11_filt$date1min, na.rm=TRUE),
+    max(classc11_filt$date1min, na.rm=TRUE),
+    by = "min")
+  )
+
+plot_time_resolved(classc11_filt, FALSE)
+plot_time_resolved(classc11_indoor_src, FALSE)
+```
+
+## Export Data
+
+```{r}
+filtered <- list(
+  "RH_business_filt" = business_filt, 
+  "RH_business_s1_filt" = business_s1,
+  "RH_business_s2_filt" = business_s2, 
+  "RH_principal_filt" = principal_filt, 
+  "RH_principal_s1_filt" = principal_s1_filt, 
+  "RH_principal_s2_filt" = principal_s2, 
+  "RH_superintendent_filt" = superintendent_filt,
+  "RH_superintendent_assist_filt" = superintendent_assist_filt,
+  "RH_class120_filt" = class120_filt,
+  "RH_class210_filt" = class210_filt,
+  "RH_classc11_filt" = classc11_filt
+)
+
+indoor_src <- list(
+  "RH_business_indoor_src" = business_indoor_src,
+  "RH_principal_indoor_src" = principal_indoor_src,
+  "RH_principal_s1_indoor_src" = principal_s1_indoor_src,
+  "RH_superintendent_indoor_src" = superintendent_indoor_src,
+  "RH_class210_indoor_src" = class210_indoor_src,
+  "RH_classc11_indoor_src" = classc11_indoor_src
+)
+```
+
+```{r}
+mapply(
+  write.table, #apply function write table
+  x=filtered, 
+  file=paste("data/filtered", 
+             paste(names(filtered), "csv", sep="."), 
+             sep="/"), #for each dataframe, use its name to make a csv of it
+  MoreArgs=list(row.names=FALSE, sep=",")
+)
+```
+
+```{r}
+mapply(
+  write.table, #apply function write table
+  x=indoor_src, 
+  file=paste("data/indoor_src", 
+             paste(names(indoor_src), "csv", sep="."), 
+             sep="/"), #for each dataframe, use its name to make a csv of it
+  MoreArgs=list(row.names=FALSE, sep=",")
+)
+```
+
