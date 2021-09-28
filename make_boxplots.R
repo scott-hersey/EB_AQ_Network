@@ -248,3 +248,18 @@ calculate_mean_ratio <- function(room, is_CPC=FALSE) {
   }
   return(mean_ratios)
 }
+
+get_quartile <- function(room) {
+  quartile <- room %>% 
+    group_by(source, HEPA_on) %>%
+      summarize(
+        "5th_percentile"  = quantile(ratio, 0.05, na.rm = TRUE),
+        "25th_percentile" = quantile(ratio, 0.25, na.rm = TRUE),
+        "median"          = quantile(ratio, 0.50, na.rm = TRUE),
+        "75th_percentile" = quantile(ratio, 0.75, na.rm = TRUE),
+        "95th_percentile" = quantile(ratio, 0.95, na.rm = TRUE)
+      ) %>%
+    drop_na(HEPA_on)
+  return(quartile)
+}
+  

@@ -1,0 +1,307 @@
+---
+title: "Little Folks Indoor/Outdoor Data Outlier Filtering"
+author: "Megan Ku"
+---
+# Description
+
+This code filters data from the Little Folks pilot, removing 
+outliers.
+
+# Environment Setup 
+
+Beforehand, we will import the necessary libraries. 
+
+```{r, warning= FALSE, error = FALSE}
+library(lubridate) #date and time functions 
+library(data.table) #to use the data.table variable type
+library(dplyr) #this library allows you to use the %>% operator
+library(tidyr) # use the complete function to account for time syncing
+library(openair) #for plotting and analysis
+library(stringr)
+library(ggplot2)
+library(gtable)
+library(grid)
+source("../filter_data.R") #For filtering data
+```
+
+# Import Data
+
+```{r}
+admin_merged <- import_ratio_data("../data/merged/LF_admin_merged.csv")
+class1_merged <- import_ratio_data("../data/merged/LF_class1_merged.csv")
+class2_merged <- import_ratio_data("../data/merged/LF_class2_merged.csv")
+class3_merged <- import_ratio_data("../data/merged/LF_class3_merged.csv")
+class4_merged <- import_ratio_data("../data/merged/LF_class4_merged.csv")
+```
+
+
+Now we will plot all the time series to investigate any data point anomalies.
+
+```{r, fig.height=10}
+plot_time_resolved(admin_merged, FALSE)
+plot_time_resolved(class1_merged, FALSE)
+plot_time_resolved(class2_merged, TRUE)
+plot_time_resolved(class3_merged, FALSE)
+plot_time_resolved(class4_merged, TRUE)
+```
+# Removing Outliers
+
+We're going to manually remove outliers from each dataset according to visual 
+cues, including the presence of indoor sources (a sharp increase followed by a 
+decay) and RF interfereence (sharp concentrated spikes much higher than the 
+underlying trend).
+
+## Indoor data
+
+With the indoor data, we sought to identify and remove signs of indoor sources
+of particulate matter and UFPs. These can be identified by a sharp spike in the 
+indoor particle concentrations, followed by a return to background levels. Note 
+that these spikes have no correlated increases in the outdoor data, leading to 
+the conclusion that the particles were generated indoors
+
+There are two notable shapes that suggest the presence of an indoor source:
+1. Cleaning - this can be identified by a spike in larger particle
+concentrations indoors (PM10 primarily, PM2.5 secondarily).
+
+2. Fine particle source - a fine particle source is easily noticeable by its 
+shape - a near vertical spike upward followed by an exponential decay. This
+spike is noticeable across all particle sizes.
+
+We omit instances of these source spikes, including their related outdoor data, 
+in this step. For fine particle sources, we store only the decay portion of the 
+event for further analysis.
+
+### Admin Room
+
+```{r, fig.height=10}
+admin <- admin_merged
+plot_time_resolved(admin_merged)
+# Cleaning source - 3/25
+admin_filt <- set_NA(admin, "2021-03-25 11:56:00", "2021-03-25 12:54:00")
+
+plot_time_resolved(admin_filt)
+# Temp removal of outdoor spikes to see pm10 data
+admin_filt <- set_NA(admin_filt, "2021-03-27 08:00:00", "2021-03-27 12:45:00")
+
+plot_time_resolved(admin_filt)
+
+# Cleaning source - 3/29
+admin_filt <- set_NA(admin_filt, "2021-03-29 05:55:00", "2021-03-29 14:52:00")
+
+# Cleaning source - 3/30
+admin_filt <- set_NA(admin_filt, "2021-03-30 11:23:00", "2021-03-30 14:15:00")
+
+# Outdoor outlier source - 4/2
+admin_filt <- set_NA(admin_filt, "2021-04-02 16:20:00", "2021-04-02 16:38:00")
+
+admin_merged <- complete(admin_merged, date1min = seq(min(date1min, na.rm=TRUE), 
+                                    max(date1min, na.rm=TRUE), 
+                                    by = "min"))
+
+# plot_time_resolved(admin_merged)
+plot_time_resolved(admin_filt)
+```
+
+### Class 1
+
+```{r, fig.height=10}
+class1 <- class1_merged
+
+# Trim extraneous point - 3/24
+class1_filt <- set_NA(class1, "2021-03-24 09:31:00", "2021-03-24 09:41:00")
+
+# Fine particle sources - 3/29
+class1_indoor_src <- class1[
+  class1$date1min > as.POSIXct("2021-03-29 10:18:00", tz='America/New_York') &
+  class1$date1min < as.POSIXct("2021-03-29 12:34:00", tz='America/New_York'), ]
+
+class1_filt <- set_NA(class1_filt, "2021-03-29 10:02:00", "2021-03-29 12:34:00")
+
+class1_indoor_src <- rbind(class1_indoor_src, class1[
+  class1$date1min > as.POSIXct("2021-03-29 12:43:00", tz='America/New_York') &
+  class1$date1min < as.POSIXct("2021-03-29 15:13:00", tz='America/New_York'), ])
+
+class1_filt <- set_NA(class1_filt, "2021-03-29 12:38:00", "2021-03-29 15:13:00")
+
+# Temp removal of outdoor spikes to see pm10 data
+class1_filt <- set_NA(class1_filt, "2021-03-27 08:00:00", "2021-03-27 12:45:00")
+
+class1_indoor_src <- complete(class1_indoor_src, date1min = seq(min(class1_filt$date1min, na.rm=TRUE), 
+                                    max(class1_filt$date1min, na.rm=TRUE), 
+                                    by = "min"))
+
+plot_time_resolved(class1_merged)
+plot_time_resolved(class1_indoor_src)
+plot_time_resolved(class1_filt)
+```
+
+### Class 2
+
+```{r, fig.height=10}
+class2 <- class2_merged
+
+# Fine particle source - 3/24
+class2_indoor_src <- class2[
+  class2$date1min > as.POSIXct("2021-03-24 12:00:00", tz='America/New_York') &
+  class2$date1min < as.POSIXct("2021-03-24 13:53:00", tz='America/New_York'), ]
+
+class2_filt <- set_NA(class2, "2021-03-24 11:53:00", "2021-03-24 13:53:00")
+
+# Trim extraneous point - 3/25
+class2_filt <- set_NA(class2_filt, "2021-03-25 17:09:00", "2021-03-25 17:11:00")
+
+# Fine particle sources - 3/26
+class2_indoor_src <- rbind(class2_indoor_src, class2[
+  class2$date1min > as.POSIXct("2021-03-26 07:09:00", tz='America/New_York') &
+  class2$date1min < as.POSIXct("2021-03-26 07:32:00", tz='America/New_York'), ])
+
+class2_filt <- set_NA(class2_filt, "2021-03-26 07:06:00", "2021-03-26 07:32:00")
+
+# Temp removal of outdoor spikes to see pm10 data
+class2_filt <- set_NA(class2_filt, "2021-03-27 08:00:00", "2021-03-27 12:45:00")
+
+# Cleaning sources - 3/29
+class2_indoor_src <- rbind(class2_indoor_src, class2[
+  class2$date1min > as.POSIXct("2021-03-29 17:03:00", tz='America/New_York') &
+  class2$date1min < as.POSIXct("2021-03-29 18:33:00", tz='America/New_York'), ])
+
+class2_filt <- set_NA(class2_filt, "2021-03-29 07:31:00", "2021-03-29 18:33:00")
+
+# Cleaning source - 3/30
+class2_filt <- set_NA(class2_filt, "2021-03-30 09:44:00", "2021-03-30 17:17:00")
+
+# Fine particle source - 4/2
+class2_indoor_src <- rbind(class2_indoor_src, class2[
+  class2$date1min > as.POSIXct("2021-04-02 16:43:00", tz='America/New_York') &
+  class2$date1min < as.POSIXct("2021-04-02 17:47:00", tz='America/New_York'), ])
+
+class2_filt <- set_NA(class2_filt, "2021-04-02 16:43:00", "2021-04-02 17:47:00")
+
+# Fine particle source - 4/6
+class2_indoor_src <- rbind(class2_indoor_src, class2[
+  class2$date1min > as.POSIXct("2021-04-06 16:44:00", tz='America/New_York') &
+  class2$date1min < as.POSIXct("2021-04-06 17:42:00", tz='America/New_York'), ])
+
+class2_filt <- set_NA(class2_filt, "2021-04-06 13:58:00", "2021-04-06 17:42:00")
+
+class2_indoor_src <- complete(class2_indoor_src, date1min = seq(min(class2_filt$date1min, na.rm=TRUE), 
+                                    max(class2_filt$date1min, na.rm=TRUE), 
+                                    by = "min"))
+
+plot_time_resolved(class2_merged, TRUE)
+plot_time_resolved(class2_indoor_src, TRUE)
+plot_time_resolved(class2_filt, TRUE)
+```
+### Class 3
+
+```{r, fig.height=10}
+class3 <- class3_merged
+
+# Fine particle source - 3/24
+class3_indoor_src <- class3[
+  class3$date1min > as.POSIXct("2021-03-24 16:38:00", tz='America/New_York') &
+  class3$date1min < as.POSIXct("2021-03-25 02:04:00", tz='America/New_York'), ]
+
+class3_filt <- set_NA(class3, "2021-03-24 16:33:00", "2021-03-25 02:04:00")
+
+# Fine particle source - 3/25
+class3_indoor_src <- rbind(class3_indoor_src, class3[
+  class3$date1min > as.POSIXct("2021-03-25 16:50:00", tz='America/New_York') &
+  class3$date1min < as.POSIXct("2021-03-25 21:51:00", tz='America/New_York'), ])
+
+class3_filt <- set_NA(class3_filt, "2021-03-25 16:40:00", "2021-03-25 21:51:00")
+
+# Fine particle source - 3/26
+class3_indoor_src <- rbind(class3_indoor_src, class3[
+  class3$date1min > as.POSIXct("2021-03-26 16:19:00", tz='America/New_York') &
+  class3$date1min < as.POSIXct("2021-03-26 18:40:00", tz='America/New_York'), ])
+
+class3_filt <- set_NA(class3_filt, "2021-03-26 16:14:00", "2021-03-26 18:40:00")
+
+# Temp removal of outdoor spikes to see pm10 data
+class3_filt <- set_NA(class3_filt, "2021-03-27 08:00:00", "2021-03-27 12:45:00")
+
+#Cleaning source - 3/29
+class3_indoor_src <- rbind(class3_indoor_src, class3[
+  class3$date1min > as.POSIXct("2021-03-29 13:55:00", tz='America/New_York') &
+  class3$date1min < as.POSIXct("2021-03-29 19:50:00", tz='America/New_York'), ])
+
+class3_filt <- set_NA(class3_filt, "2021-03-29 07:12:00", "2021-03-29 19:50:00")
+
+
+
+class3_indoor_src <- complete(class3_indoor_src, date1min = seq(min(class3_filt$date1min, na.rm=TRUE), 
+                                    max(class3_filt$date1min, na.rm=TRUE), 
+                                    by = "min"))
+class3_merged <- complete(class3_merged, date1min = seq(min(date1min, na.rm=TRUE), 
+                                    max(date1min, na.rm=TRUE), 
+                                    by = "min"))
+
+plot_time_resolved(class3_merged)
+plot_time_resolved(class3_indoor_src)
+plot_time_resolved(class3_filt)
+```
+### Class 4
+
+```{r, fig.height=10}
+class4 <- class4_merged
+
+# Cleaning - 3/29
+class4_indoor_src <- class4[
+  class4$date1min > as.POSIXct("2021-03-29 16:50:00", tz='America/New_York') &
+  class4$date1min < as.POSIXct("2021-03-29 19:27:00", tz='America/New_York'), ]
+
+class4_filt <- set_NA(class4, "2021-03-29 07:29:00", "2021-03-29 19:27:00")
+
+# Fine particle source - 3/30
+class4_indoor_src <- rbind(class4_indoor_src, class4[
+  class4$date1min > as.POSIXct("2021-03-30 16:20:00", tz='America/New_York') &
+  class4$date1min < as.POSIXct("2021-03-30 17:58:00", tz='America/New_York'), ])
+
+class4_filt <- set_NA(class4_filt, "2021-03-30 16:09:00", "2021-03-30 17:58:00")
+
+# Temp removal of outdoor spikes to see pm10 data
+class4_filt <- set_NA(class4_filt, "2021-03-27 08:00:00", "2021-03-27 12:45:00")
+
+
+class4_indoor_src <- complete(class4_indoor_src, date1min = seq(min(class4_filt$date1min, na.rm=TRUE),
+                                    max(class4_filt$date1min, na.rm=TRUE),
+                                    by = "min"))
+class4_merged <- complete(class4_merged, date1min = seq(min(date1min, na.rm=TRUE),
+                                    max(date1min, na.rm=TRUE),
+                                    by = "min"))
+
+
+plot_time_resolved(class4_merged, TRUE)
+plot_time_resolved(class4_indoor_src, TRUE)
+plot_time_resolved(class4_filt, TRUE)
+```
+
+```{r}
+filtered <- list(
+  "LF_admin_filt" = admin_filt, 
+  "LF_class1_filt" = class1_filt, 
+  "LF_class2_filt" = class2_filt, 
+  "LF_class3_filt" = class3_filt, 
+  "LF_class4_filt" = class4_filt)
+
+indoor_src <- list(
+  # "LF_admin_indoor_src" = admin_indoor_src, 
+  "LF_class1_indoor_src" = class1_indoor_src, 
+  "LF_class2_indoor_src" = class2_indoor_src, 
+  "LF_class3_indoor_src" = class3_indoor_src, 
+  "LF_class4_indoor_src" = class4_indoor_src)
+
+mapply(
+  write.table, #apply function write table
+  x=indoor_src, file=paste("../data/indoor_src", paste(names(indoor_src), "csv", sep="."), sep="/"), #for each dataframe, use its name to make a csv of it
+  MoreArgs=list(row.names=FALSE, sep=",")
+)
+
+mapply(
+  write.table, #apply function write table
+  x=filtered, file=paste("../data/filtered", paste(names(filtered), "csv", sep="."), sep="/"), #for each dataframe, use its name to make a csv of it
+  MoreArgs=list(row.names=FALSE, sep=",")
+)
+```
+
