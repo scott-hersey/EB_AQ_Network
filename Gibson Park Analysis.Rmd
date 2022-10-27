@@ -69,6 +69,7 @@ library(stringr)
 library(baseline) # for baseline correction
 library(purrr)
 library(tidyverse)
+library(openairmaps)
 
 ```
 
@@ -199,7 +200,6 @@ removeCOspikes <- function(ARISense_met){
 }
 ```
 
-# remove bin0 = 0 for bins 0-4
 
 ```{r}
 # thresholds for removal
@@ -363,8 +363,9 @@ timeVariation(ARISense_met, pollutant = c("co"), local.tz= "America/New_York")
 timeVariation(modPM_met, pollutant = c("pm1", "pm25", "pm10"), local.tz= "America/New_York") 
 
 ```
+
 ```{r}
-# Polar Plots - IQR
+# Remove zero wind speed
 ARISense_met_nz <- ARISense_met
 ARISense_met_nz$ws[ARISense_met_nz$ws==0]<-NA
 
@@ -429,7 +430,24 @@ polarFreq(modPM_met_nz, pollutant = "pm10", ws.int = 30,  offset = 80, trans = F
 
 ```{r}
 # Polar Maps
-library(openairmaps)
+# Gibson Park: 42.440740, -70.969658
+
+modPM_met_nz$lat <- 42.440740
+modPM_met_nz$long <- -70.969658
+
+ARISense_met_nz$lat <- 42.440740
+ARISense_met_nz$long <- -70.969658
+
+
+polarMap(modPM_met_nz,pollutant = "pm1",statistic = "weighted.mean",x = "ws",latitude = "lat",longitude = "long", provider    = "OpenStreetMap",cols = "jet",alpha = 1,key = FALSE,iconWidth = 200,iconHeight = 200,fig.width = 4,fig.height = 4)
+
+polarMap(modPM_met_nz,pollutant = "pm25",statistic = "weighted.mean",x = "ws",latitude = "lat",longitude = "long", provider    = "OpenStreetMap",cols = "jet",alpha = 1,key = FALSE,iconWidth = 200,iconHeight = 200,fig.width = 4,fig.height = 4)
+
+polarMap(modPM_met_nz,pollutant = "pm10",statistic = "weighted.mean",x = "ws",latitude = "lat",longitude = "long", provider    = "OpenStreetMap",cols = "jet",alpha = 1,key = FALSE,iconWidth = 200,iconHeight = 200,fig.width = 4,fig.height = 4)
+
+polarMap(ARISense_met_nz,pollutant = "correctedNO",statistic = "weighted.mean",x = "ws",latitude = "lat",longitude = "long", provider    = "OpenStreetMap",cols = "jet",alpha = 1,key = FALSE,iconWidth = 200,iconHeight = 200,fig.width = 4,fig.height = 4)
+
+polarMap(ARISense_met_nz,pollutant = "co",statistic = "weighted.mean",x = "ws",latitude = "lat",longitude = "long", provider    = "OpenStreetMap",cols = "jet",alpha = 1,key = FALSE,iconWidth = 200,iconHeight = 200,fig.width = 4,fig.height = 4)
 ```
 
 
